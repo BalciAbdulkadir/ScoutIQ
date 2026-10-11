@@ -1,41 +1,35 @@
+using Coravel;
+using ScoutIQ.API.Jobs;
+using Supabase;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+
+// 1. Supabase İstemcisini Singleton olarak enjekte edelim
+var supabaseUrl = builder.Configuration["Supabase:Url"];
+var supabaseKey = builder.Configuration["Supabase:Key"];
+var supabaseOptions = new SupabaseOptions { AutoConnectRealtime = true };
+
+builder.Services.AddSingleton(provider => 
+    new Client(supabaseUrl, supabaseKey, supabaseOptions));
+
+// 2. Coravel Zamanlayıcısını ve Job'ımızı servislere ekleyelim
+builder.Services.AddScheduler();
+builder.Services.AddTransient<DailyQuestionJob>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// 3. Zamanlayıcıyı yapılandıralım
+app.Services.UseScheduler(scheduler =>
 {
-    app.MapOpenApi();
-}
+    // Türkiye saatine göre her gece 00:00'da çalışacak şekilde ayarlıyoruz.
+    // Şimdilik test edebilmen için "EveryMinute()" da yapabilirsin ama orijinali DailyAtHour'dur.
+    scheduler.Schedule<DailyQuestionJob>()
+             .DailyAtHour(0)
+             .Zoned(TimeZoneInfo.Local); 
+});
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
