@@ -26,8 +26,7 @@ app.Services.UseScheduler(scheduler =>
     // Türkiye saatine göre her gece 00:00'da çalışacak şekilde ayarlıyoruz.
     // Şimdilik test edebilmen için "EveryMinute()" da yapabilirsin ama orijinali DailyAtHour'dur.
     scheduler.Schedule<DailyQuestionJob>()
-             .DailyAtHour(0)
-             .Zoned(TimeZoneInfo.Local); 
+             .EveryMinute(); 
 });
 
 app.MapControllers();
