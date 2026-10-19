@@ -109,8 +109,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Sadece Python klasörüyle sınırlı: genel "lib/" kuralı Flutter'ın mobile/lib klasörünü de yok sayıyordu
+data_miner/lib/
+data_miner/lib64/
 parts/
 sdist/
 var/
