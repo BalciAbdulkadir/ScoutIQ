@@ -7,9 +7,9 @@ begin;
 -- 1) Mükerrer ve hatalı yıllı veriyi temizle (veri yeniden çekilecek)
 truncate table kariyer_gecmisi, oyuncular, kulupler;
 
--- İsteğe bağlı: eski test oyunları silinen kulüplerin UUID'lerini içerir, uygulamada çalışmazlar.
--- Silinirse kullanici_oyun_gecmisi'ndeki ilgili kayıtlar da CASCADE ile silinir.
--- delete from gunluk_oyunlar;
+-- Eski test oyunları silinen kulüplerin UUID'lerini içerir, uygulamada çalışmazlar.
+-- kullanici_oyun_gecmisi'ndeki ilgili kayıtlar da CASCADE ile silinir.
+delete from gunluk_oyunlar;
 
 -- 2) Transfermarkt ID'leri: eşleştirme isim yerine bunlarla yapılır
 alter table kulupler add column transfermarkt_id varchar not null;

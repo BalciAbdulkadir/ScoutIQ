@@ -2,8 +2,8 @@
 Transfermarkt API'den kulüp, oyuncu ve kariyer verisini sezon sezon çekip Supabase'e yazar.
 
 Kullanım:
-    python main.py                 # varsayılan sezon (2025 = 2025/2026)
-    python main.py 2023 2024 2025  # birden fazla sezon, eskiden yeniye işlenir
+    python main.py            # varsayılan sezonlar: 2023/2024 - 2026/2027
+    python main.py 2025 2026  # sadece verilen sezonlar, eskiden yeniye işlenir
 
 Önce supabase/migrations/001_temel_veri_duzeltmeleri.sql çalıştırılmış olmalıdır.
 Tekrar çalıştırmak güvenlidir: kayıtlar transfermarkt_id üzerinden güncellenir, çoğalmaz.
@@ -30,8 +30,8 @@ API_BASE_URL = "http://localhost:8000"
 # Hedef: 5 Büyük Lig + Süper Lig
 LIGLER = ["TR1", "GB1", "ES1", "IT1", "L1", "FR1"]
 
-# Rapor 2025/2026 sezonunu baz alıyor. Transfermarkt'ta season_id=2025, 2025/2026 sezonudur.
-VARSAYILAN_SEZON = 2025
+# Transfermarkt'ta season_id=2025, 2025/2026 sezonudur.
+VARSAYILAN_SEZONLAR = [2023, 2024, 2025, 2026]
 MAX_DENEME = 5
 
 def api_istek_at(endpoint):
@@ -127,12 +127,12 @@ def sezonu_isle(sezon):
 
 def sezonlari_oku():
     if len(sys.argv) == 1:
-        return [VARSAYILAN_SEZON]
+        return VARSAYILAN_SEZONLAR
     try:
         # Eskiden yeniye: kulübün "lig" bilgisi en son sezondaki ligi olarak kalır
         return sorted({int(arg) for arg in sys.argv[1:]})
     except ValueError:
-        print("Kullanım: python main.py [sezon ...]   örn: python main.py 2023 2024 2025")
+        print("Kullanım: python main.py [sezon ...]   örn: python main.py 2025 2026")
         exit(1)
 
 if __name__ == "__main__":
