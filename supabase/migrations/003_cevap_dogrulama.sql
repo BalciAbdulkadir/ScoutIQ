@@ -17,7 +17,7 @@ $$;
 revoke execute on function public.bugunun_tarihi() from public, anon;
 grant execute on function public.bugunun_tarihi() to authenticated;
 
--- 2) İsimleri karşılaştırmak için sadeleştirir: büyük/küçük harf, Türkçe ve aksanlı harfler,
+-- 2) İsimleri aramak için sadeleştirir: büyük/küçük harf, Türkçe ve aksanlı harfler,
 --    boşluk, tire ve kesme işareti fark etmez. "N'Golo Kanté" ve "ngolo kante" eşit sayılır.
 create extension if not exists unaccent with schema extensions;
 
@@ -33,11 +33,37 @@ as $$
     );
 $$;
 
--- 3) Kesişim cevabını sunucuda kontrol eder.
+-- 3) Cevap kutusunun altındaki öneri listesi. Cevap sadece bu listeden seçilebilir.
+--    Tüm oyuncular arasında arar, böylece liste doğru cevabı ele vermez.
+--    Aynı isimli oyuncular listede tek satır görünür (listede sadece ad soyad var).
+--    Yazılanla başlayan isimler önce gelir.
+create or replace function public.oyuncu_ara(p_arama text)
+returns table (id uuid, isim text)
+language sql
+stable
+set search_path = ''
+as $$
+    with arama as (
+        select public.isim_sadelestir(p_arama) as metin
+    )
+    select (array_agg(o.id order by o.id))[1] as id, o.isim::text
+    from public.oyuncular o, arama a
+    where length(a.metin) >= 2
+      and public.isim_sadelestir(o.isim) like '%' || a.metin || '%'
+    group by o.isim
+    order by bool_or(public.isim_sadelestir(o.isim) like a.metin || '%') desc, o.isim
+    limit 8;
+$$;
+
+revoke execute on function public.oyuncu_ara(text) from public, anon;
+grant execute on function public.oyuncu_ara(text) to authenticated;
+
+-- 4) Kesişim cevabını sunucuda kontrol eder. Listeden seçilen oyuncunun id'sini alır.
 --    kariyer_gecmisi uygulamaya kapalı olduğu için security definer ile çalışır.
 --    Kulüpler istemciden alınmaz, oyunun kendi sorusundan okunur: böylece fonksiyon
 --    rastgele kulüp çiftlerini sorgulamak için kullanılamaz ve yarının sorularına erişilemez.
-create or replace function public.kesisim_cevap_kontrol(p_oyun_id uuid, p_soru_index integer, p_cevap text)
+--    Listede aynı isimli oyuncular tek satır olduğu için isim eşleşmesi yeterli sayılır.
+create or replace function public.kesisim_cevap_kontrol(p_oyun_id uuid, p_soru_index integer, p_oyuncu_id uuid)
 returns boolean
 language plpgsql
 stable
@@ -46,13 +72,14 @@ set search_path = ''
 as $$
 declare
     v_soru jsonb;
-    v_cevap text := public.isim_sadelestir(p_cevap);
+    v_isim text;
 begin
     if (select auth.uid()) is null then
         raise exception 'Giriş yapılmamış';
     end if;
 
-    if v_cevap = '' then
+    select isim into v_isim from public.oyuncular where id = p_oyuncu_id;
+    if v_isim is null then
         return false;
     end if;
 
@@ -73,19 +100,19 @@ begin
         join public.oyuncular o on o.id = ka.oyuncu_id
         where ka.kulup_id = (v_soru ->> 'kulup_a_id')::uuid
           and kb.kulup_id = (v_soru ->> 'kulup_b_id')::uuid
-          and public.isim_sadelestir(o.isim) = v_cevap
+          and o.isim = v_isim
     );
 end;
 $$;
 
-revoke execute on function public.kesisim_cevap_kontrol(uuid, integer, text) from public, anon;
-grant execute on function public.kesisim_cevap_kontrol(uuid, integer, text) to authenticated;
+revoke execute on function public.kesisim_cevap_kontrol(uuid, integer, uuid) from public, anon;
+grant execute on function public.kesisim_cevap_kontrol(uuid, integer, uuid) to authenticated;
 
--- 4) Günde tek atış: bir kullanıcının aynı gün aynı oyun için tek kaydı olabilir.
+-- 5) Günde tek atış: bir kullanıcının aynı gün aynı oyun için tek kaydı olabilir.
 create unique index if not exists kullanici_oyun_gecmisi_gunluk_tek_idx
     on kullanici_oyun_gecmisi (kullanici_id, oyun_tipi, tarih);
 
--- 5) Oyun kaydı oyun başlarken 'basladi' olarak atılır, bitince güncellenir.
+-- 6) Oyun kaydı oyun başlarken 'basladi' olarak atılır, bitince güncellenir.
 --    Sadece kendi 'basladi' durumundaki kaydı güncellenebilir; 'tamamlandi' olduktan sonra kilitlenir.
 --    Sadece skor ve durum değiştirilebilir, kullanıcı/tarih/oyun bilgisi değiştirilemez.
 --    Gece yarısını geçen oyun bitirilebilsin diye tarih şartı yok (tarih zaten değiştirilemez).
