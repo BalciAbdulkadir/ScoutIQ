@@ -11,6 +11,12 @@ namespace ScoutIQ.API.Jobs
 {
     public class DailyQuestionJob : IInvocable
     {
+        // Oyun günleri Türkiye saatine göre başlar ve biter
+        public static readonly TimeZoneInfo TurkiyeSaatDilimi = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+
+        private const int KesisimSoruSayisi = 5;
+        private const int MaxDeneme = 200;
+
         private readonly Client _supabaseClient;
 
         public DailyQuestionJob(Client supabaseClient)
@@ -20,17 +26,16 @@ namespace ScoutIQ.API.Jobs
 
         public async Task Invoke()
         {
-            Console.WriteLine($"[{DateTime.Now}] CRON TETİKLENDİ: Yeni nesil Hub oyunları hazırlanıyor...");
-            DateTime yarin = DateTime.UtcNow.AddDays(1).Date;
+            DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
+            Console.WriteLine($"[{DateTime.Now}] CRON TETİKLENDİ: {bugun:yyyy-MM-dd} için Hub oyunları hazırlanıyor...");
 
             try
             {
                 // 1. Kesişim Oyunu İçin 5 Soruluk Set Üret
-                await UretKesisimOyunlari(yarin);
+                await UretKesisimOyunlari(bugun);
 
                 // 2. Bonservis Oyunu İçin Set Üret (Şimdilik boş, ileride içini dolduracağız)
-                // await UretBonservisOyunlari(yarin);
-                
+                // await UretBonservisOyunlari(bugun);
             }
             catch (Exception ex)
             {
@@ -38,47 +43,76 @@ namespace ScoutIQ.API.Jobs
             }
         }
 
+        private async Task<bool> OyunVarMi(string oyunTipi, DateTime tarih)
+        {
+            var response = await _supabaseClient.From<GunlukOyun>()
+                .Select("id")
+                .Filter("oyun_tipi", Supabase.Postgrest.Constants.Operator.Equals, oyunTipi)
+                .Filter("tarih", Supabase.Postgrest.Constants.Operator.Equals, tarih.ToString("yyyy-MM-dd"))
+                .Get();
+
+            return response.Models.Count > 0;
+        }
+
         private async Task UretKesisimOyunlari(DateTime tarih)
         {
-            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id").Get();
-            var kulupIdListesi = kuluplerResponse.Models.Select(k => k.Id).ToList();
+            if (await OyunVarMi("kesisim", tarih))
+            {
+                Console.WriteLine($"Kesişim: {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
+                return;
+            }
+
+            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim").Get();
+            var kulupler = kuluplerResponse.Models;
+
+            if (kulupler.Count < 2)
+            {
+                Console.WriteLine("Uyarı: Kesişim için veritabanında yeterli kulüp yok.");
+                return;
+            }
 
             var random = new Random();
             var sorular = new List<object>(); // 5 soruluk JSON dizimiz
+            var kullanilanCiftler = new HashSet<string>();
             int denemeSayisi = 0;
-            int maxDeneme = 200; // 5 soru bulmak için limiti artırdık
 
-            while (sorular.Count < 5 && denemeSayisi < maxDeneme)
+            while (sorular.Count < KesisimSoruSayisi && denemeSayisi < MaxDeneme)
             {
                 denemeSayisi++;
-                string kulupA = kulupIdListesi[random.Next(kulupIdListesi.Count)];
-                string kulupB = kulupIdListesi[random.Next(kulupIdListesi.Count)];
+                var kulupA = kulupler[random.Next(kulupler.Count)];
+                var kulupB = kulupler[random.Next(kulupler.Count)];
 
-                if (kulupA == kulupB) continue;
+                if (kulupA.Id == kulupB.Id) continue;
+
+                // Aynı iki takımı (hangi sırayla gelirse gelsin) tekrar sormamak için
+                string cift = string.CompareOrdinal(kulupA.Id, kulupB.Id) < 0
+                    ? $"{kulupA.Id}|{kulupB.Id}"
+                    : $"{kulupB.Id}|{kulupA.Id}";
+                if (kullanilanCiftler.Contains(cift)) continue;
 
                 var parametreler = new Dictionary<string, object>
                 {
-                    { "kulup_a_id", kulupA },
-                    { "kulup_b_id", kulupB }
+                    { "kulup_a_id", kulupA.Id },
+                    { "kulup_b_id", kulupB.Id }
                 };
 
                 var rpcResponse = await _supabaseClient.Rpc("get_ortak_oyuncular", parametreler);
-                
-                if (rpcResponse.Content != null && rpcResponse.Content.Length > 5)
-                {
-                    // Aynı iki takımı tekrar tekrar sormamak için kontrol
-                    bool zatenVar = sorular.Any(s => 
-                        JsonSerializer.Serialize(s).Contains(kulupA) && 
-                        JsonSerializer.Serialize(s).Contains(kulupB));
+                if (string.IsNullOrEmpty(rpcResponse.Content)) continue;
 
-                    if (!zatenVar)
-                    {
-                        sorular.Add(new { kulup_a = kulupA, kulup_b = kulupB });
-                    }
-                }
+                using var ortakOyuncular = JsonDocument.Parse(rpcResponse.Content);
+                if (ortakOyuncular.RootElement.GetArrayLength() == 0) continue;
+
+                kullanilanCiftler.Add(cift);
+                sorular.Add(new
+                {
+                    kulup_a = kulupA.Isim,
+                    kulup_b = kulupB.Isim,
+                    kulup_a_id = kulupA.Id,
+                    kulup_b_id = kulupB.Id
+                });
             }
 
-            if (sorular.Count == 5)
+            if (sorular.Count == KesisimSoruSayisi)
             {
                 var yeniOyun = new GunlukOyun
                 {
@@ -88,7 +122,7 @@ namespace ScoutIQ.API.Jobs
                 };
 
                 await _supabaseClient.From<GunlukOyun>().Insert(yeniOyun);
-                Console.WriteLine("Başarılı: Kesişim için 5 soruluk set JSONB olarak eklendi.");
+                Console.WriteLine($"Başarılı: Kesişim için {tarih:yyyy-MM-dd} tarihli 5 soruluk set eklendi ({denemeSayisi} denemede).");
             }
             else
             {

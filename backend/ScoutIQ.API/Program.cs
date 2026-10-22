@@ -21,12 +21,17 @@ builder.Services.AddTransient<DailyQuestionJob>();
 var app = builder.Build();
 
 // 3. Zamanlayıcıyı yapılandıralım
+
 app.Services.UseScheduler(scheduler =>
 {
-    // Türkiye saatine göre her gece 00:00'da çalışacak şekilde ayarlıyoruz.
-    // Şimdilik test edebilmen için "EveryMinute()" da yapabilirsin ama orijinali DailyAtHour'dur.
+    // Her gece Türkiye saatiyle 00:00'da o günün oyunlarını üretir.
+    // RunOnceAtStart: uygulama açılınca da bir kez çalışır, bugünün oyunu eksikse tamamlanır.
+    // Job o gün için oyun zaten varsa yenisini üretmez.
     scheduler.Schedule<DailyQuestionJob>()
-             .EveryMinute(); 
+             .DailyAt(0, 0)
+             .Zoned(DailyQuestionJob.TurkiyeSaatDilimi)
+             .RunOnceAtStart()
+             .PreventOverlapping(nameof(DailyQuestionJob));
 });
 
 app.MapControllers();
