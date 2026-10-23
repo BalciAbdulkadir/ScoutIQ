@@ -1,142 +1,169 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/oyun_modu.dart';
+import '../providers/hub_provider.dart';
 import '../services/auth_service.dart';
-import 'game_screen.dart'; // İleride Kesişim'e gitmek için
+import '../theme/renkler.dart';
+import '../widgets/gunluk_kart.dart';
+import '../widgets/oyun_karti.dart';
+import 'game_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  // Oyun listesini burada tanımlıyoruz (MVP'deki 5 oyun)
-  final List<Map<String, dynamic>> games = const [
-    {'title': 'Kesişim', 'icon': Icons.sync_alt, 'status': 'Oyna', 'color': Colors.greenAccent},
-    {'title': 'Bonservis', 'icon': Icons.attach_money, 'status': 'Oyna', 'color': Colors.blueAccent},
-    {'title': 'Kariyer Yolu', 'icon': Icons.route, 'status': 'Yakında', 'color': Colors.grey},
-    {'title': 'Kimlik', 'icon': Icons.person_search, 'status': 'Yakında', 'color': Colors.grey},
-    {'title': '9\'lu Izgara', 'icon': Icons.grid_3x3, 'status': 'Yakında', 'color': Colors.grey},
-  ];
+  Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
+    if (mod.tip == 'kesisim') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const GameScreen()),
+      );
+      // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
+      if (!context.mounted) return;
+      ref.invalidate(bugunOynananlarProvider);
+      return;
+    }
+
+    final mesaj = mod.durum == OyunDurumu.hazirlaniyor
+        ? '${mod.baslik} hazırlanıyor, çok yakında burada!'
+        : 'Bu mod henüz aktif değil!';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(mesaj)));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final oynananlar = ref.watch(bugunOynananlarProvider);
+    final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
+
+    final gunlukModlar = oyunModlari.where((m) => m.durum != OyunDurumu.yakinda).toList();
+    final yakindakiModlar = oyunModlari.where((m) => m.durum == OyunDurumu.yakinda).toList();
+
+    // İlerleme sadece şu an oynanabilen modlar üzerinden hesaplanır
+    final aktifModlar = oyunModlari.where((m) => m.durum == OyunDurumu.aktif);
+    final tamamlanan = aktifModlar.where((m) => skorlar.containsKey(m.tip)).length;
+
+    return Scaffold(
+      backgroundColor: Renkler.arkaPlan,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: Renkler.vurgu,
+          backgroundColor: Renkler.kart,
+          onRefresh: () => ref.refresh(bugunOynananlarProvider.future),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              const _UstBar(),
+              const SizedBox(height: 24),
+              GunlukKart(tamamlanan: tamamlanan, toplam: aktifModlar.length),
+              const SizedBox(height: 32),
+              const _BolumBasligi('Bugünün Oyunları'),
+              const SizedBox(height: 12),
+              for (final mod in gunlukModlar)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: OyunKarti(
+                    mod: mod,
+                    bugunkuSkor: skorlar[mod.tip],
+                    onTap: () => _modaTiklandi(context, ref, mod),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              const _BolumBasligi('Yakında'),
+              const SizedBox(height: 12),
+              GridView.count(
+                crossAxisCount: 3,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.95,
+                children: [
+                  for (final mod in yakindakiModlar)
+                    YakindaKarti(mod: mod, onTap: () => _modaTiklandi(context, ref, mod)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Kullanıcının Google fotoğrafı, adı ve çıkış butonu
+class _UstBar extends StatelessWidget {
+  const _UstBar();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // İstediğin o koyu yeşil (Gece çimi) arka plan
-      backgroundColor: const Color(0xFF0A1C12),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'FUTBOL IQ',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 24,
-            letterSpacing: 2,
-            color: Colors.white,
+    final kullanici = Supabase.instance.client.auth.currentUser;
+    final bilgiler = kullanici?.userMetadata ?? const {};
+    final tamAd = (bilgiler['full_name'] ?? bilgiler['name'] ?? kullanici?.email?.split('@').first ?? 'Futbolsever') as String;
+    final ad = tamAd.split(' ').first;
+    final fotoUrl = (bilgiler['avatar_url'] ?? bilgiler['picture']) as String?;
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 24,
+          backgroundColor: Renkler.kart,
+          foregroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
+          onForegroundImageError: fotoUrl != null ? (_, _) {} : null,
+          child: Text(
+            ad.isNotEmpty ? ad[0].toUpperCase() : '?',
+            style: const TextStyle(color: Renkler.vurgu, fontWeight: FontWeight.bold, fontSize: 18),
           ),
         ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white54),
-            onPressed: () async {
-              await AuthService().signOut();
-            },
-          )
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Text(
-              'Oynamak istediğin modu seç',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, // Yan yana 2 kart
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 0.85, // Kartların boy/en oranı (biraz diktörtgen)
-                ),
-                itemCount: games.length,
-                itemBuilder: (context, index) {
-                  final game = games[index];
-                  final isPlayable = game['status'] == 'Oyna';
-                  final Color gameColor = game['color'] as Color;
-
-                  return GestureDetector(
-                    onTap: () {
-                      if (game['title'] == 'Kesişim') {
-                        // Kesişim'e tıklanırsa oyun ekranına yolla
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const GameScreen()),
-                        );
-                      } else if (!isPlayable) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Bu mod henüz aktif değil!')),
-                        );
-                      }
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF132B1E), // Kart arka planı (Biraz daha açık yeşil)
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isPlayable ? gameColor.withValues(alpha: 0.5) : Colors.transparent,
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            game['icon'],
-                            size: 48,
-                            color: gameColor,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            game['title'],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isPlayable ? gameColor.withValues(alpha: 0.2) : Colors.white10,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              game['status'],
-                              style: TextStyle(
-                                color: isPlayable ? gameColor : Colors.white54,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Tekrar hoş geldin', style: TextStyle(color: Renkler.soluk, fontSize: 13)),
+              Text(
+                ad,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
               ),
+            ],
+          ),
+        ),
+        const Row(
+          children: [
+            Icon(Icons.sports_soccer, color: Renkler.vurgu, size: 20),
+            SizedBox(width: 6),
+            Text(
+              'ScoutIQ',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1),
             ),
           ],
         ),
-      ),
+        IconButton(
+          tooltip: 'Çıkış yap',
+          icon: const Icon(Icons.logout, color: Renkler.soluk),
+          onPressed: () async {
+            await AuthService().signOut();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _BolumBasligi extends StatelessWidget {
+  final String metin;
+
+  const _BolumBasligi(this.metin);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      metin,
+      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
     );
   }
 }
