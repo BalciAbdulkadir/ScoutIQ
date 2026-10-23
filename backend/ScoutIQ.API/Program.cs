@@ -20,6 +20,13 @@ builder.Services.AddTransient<DailyQuestionJob>();
 
 var app = builder.Build();
 
+// Zorluk ayarı için: "dotnet run -- --kesisim-onizleme" bir soru seti seçip ekrana basar, veritabanına yazmaz
+if (args.Contains("--kesisim-onizleme"))
+{
+    await app.Services.GetRequiredService<DailyQuestionJob>().KesisimOnizleme();
+    return;
+}
+
 // 3. Zamanlayıcıyı yapılandıralım
 
 app.Services.UseScheduler(scheduler =>

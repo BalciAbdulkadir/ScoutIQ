@@ -168,9 +168,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Soru: ${state.currentIndex + 1} / ${state.questions.length}',
-                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              Row(
+                children: [
+                  Text(
+                    'Soru: ${state.currentIndex + 1} / ${state.questions.length}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildZorlukEtiketi(currentQuestion['zorluk'] as String?),
+                ],
               ),
               Text(
                 'Skor: ${state.score}',
@@ -284,6 +290,27 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  // Backend soruları kolaydan zora sıralar. Zorluk bilgisi olmayan eski oyunlarda etiket gösterilmez.
+  Widget _buildZorlukEtiketi(String? zorluk) {
+    final (metin, renk) = switch (zorluk) {
+      'kolay' => ('Kolay', Colors.greenAccent),
+      'orta' => ('Orta-Zor', Colors.orangeAccent),
+      'zor' => ('Zor', Colors.redAccent),
+      _ => (null, Colors.transparent),
+    };
+    if (metin == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: renk.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: renk.withValues(alpha: 0.6)),
+      ),
+      child: Text(metin, style: TextStyle(color: renk, fontSize: 12, fontWeight: FontWeight.bold)),
     );
   }
 
