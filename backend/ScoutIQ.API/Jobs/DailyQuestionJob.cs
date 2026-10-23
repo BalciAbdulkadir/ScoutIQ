@@ -37,8 +37,28 @@ namespace ScoutIQ.API.Jobs
             ["583"] = "PSG",
         };
 
-        // Büyük kulüp çiftleri kolay sayılır. Diğer çiftlerde zorluk ortak oyuncu sayısına göre belirlenir.
-        private const int OrtaMinOrtakOyuncu = 2;  // 2 ve üzeri: orta-zor, 1: zor
+        // Orta-zor sorularda en az bir kulüp bu listeden olur, diğeri bu listeden ya da büyük kulüplerden.
+        private static readonly Dictionary<string, string> BasAltiKulupler = new()
+        {
+            // İngiltere
+            ["762"] = "Newcastle", ["405"] = "Aston Villa", ["379"] = "West Ham",
+            // İspanya
+            ["368"] = "Sevilla", ["1050"] = "Villarreal", ["681"] = "Real Sociedad",
+            ["621"] = "Athletic Bilbao", ["150"] = "Real Betis", ["1049"] = "Valencia",
+            // İtalya
+            ["6195"] = "Napoli", ["12"] = "Roma", ["398"] = "Lazio", ["800"] = "Atalanta", ["430"] = "Fiorentina",
+            // Almanya
+            ["15"] = "Leverkusen", ["23826"] = "RB Leipzig", ["24"] = "Eintracht Frankfurt", ["79"] = "Stuttgart",
+            // Fransa
+            ["244"] = "Marsilya", ["162"] = "Monaco", ["1041"] = "Lyon", ["1082"] = "Lille",
+            // Türkiye
+            ["449"] = "Trabzonspor", ["6890"] = "Başakşehir",
+        };
+
+        // Kolay: iki kulüp de büyük. Orta-zor: baş altı kulüp içerir, farklı liglerden, en az 2 ortak oyuncu.
+        // Zor: geri kalan farklı lig çiftleri. Aynı ligden çiftler (büyükler hariç) sorulmaz:
+        // transferler çoğunlukla lig içinde olduğu için aksi halde sorular hep aynı ligden çıkıyor.
+        private const int OrtaMinOrtakOyuncu = 2;
 
         private const int SayfaBoyutu = 1000; // Supabase tek istekte en fazla 1000 satır döndürür
 
@@ -134,7 +154,7 @@ namespace ScoutIQ.API.Jobs
         // Sadece en az bir ortak oyuncusu olan çiftler soru olabilir. Bir oyunda aynı kulüp iki kez çıkmaz.
         public async Task<List<KesisimSorusu>?> KesisimSorulariniSec(bool ayrintili = false)
         {
-            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim, transfermarkt_id").Get();
+            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id").Get();
             var kulupler = kuluplerResponse.Models.ToDictionary(k => k.Id);
 
             if (kulupler.Count < 2)
@@ -143,29 +163,8 @@ namespace ScoutIQ.API.Jobs
                 return null;
             }
 
-            var buyukKulupIdleri = kulupler.Values
-                .Where(k => BuyukKulupler.ContainsKey(k.TransfermarktId))
-                .Select(k => k.Id)
-                .ToHashSet();
-
-            var bulunamayanlar = BuyukKulupler
-                .Where(b => kulupler.Values.All(k => k.TransfermarktId != b.Key))
-                .Select(b => b.Value)
-                .ToList();
-            if (bulunamayanlar.Count > 0)
-            {
-                Console.WriteLine($"Uyarı: Veritabanında bulunamayan büyük kulüpler: {string.Join(", ", bulunamayanlar)}");
-            }
-
-            if (ayrintili)
-            {
-                // Listedeki ID'lerin doğru kulübe denk geldiğini gözle kontrol etmek için
-                Console.WriteLine("Büyük kulüpler (Transfermarkt ID -> veritabanındaki isim):");
-                foreach (var kulup in kulupler.Values.Where(k => buyukKulupIdleri.Contains(k.Id)).OrderBy(k => k.Isim))
-                {
-                    Console.WriteLine($"   {kulup.TransfermarktId,-4} {BuyukKulupler[kulup.TransfermarktId],-18} -> {kulup.Isim}");
-                }
-            }
+            var buyukKulupIdleri = ListedekiKulupler(BuyukKulupler, "büyük", kulupler.Values, ayrintili);
+            var basAltiKulupIdleri = ListedekiKulupler(BasAltiKulupler, "baş altı", kulupler.Values, ayrintili);
 
             var kulupOyunculari = (await TumKariyerGecmisi())
                 .Where(k => kulupler.ContainsKey(k.KulupId))
@@ -187,9 +186,9 @@ namespace ScoutIQ.API.Jobs
                     int ortak = OrtakSayisi(kulupOyunculari[kulupIdleri[i]], kulupOyunculari[kulupIdleri[j]]);
                     if (ortak == 0) continue;
 
-                    bool buyukCift = buyukKulupIdleri.Contains(kulupIdleri[i]) && buyukKulupIdleri.Contains(kulupIdleri[j]);
                     var cift = new KulupCifti(kulupler[kulupIdleri[i]], kulupler[kulupIdleri[j]], ortak);
-                    havuzlar[ZorlukBelirle(buyukCift, ortak)].Add(cift);
+                    var zorluk = ZorlukBelirle(cift, buyukKulupIdleri, basAltiKulupIdleri);
+                    if (zorluk != null) havuzlar[zorluk.Value].Add(cift);
                 }
             }
 
@@ -272,19 +271,52 @@ namespace ScoutIQ.API.Jobs
             return kucuk.Count(buyuk.Contains);
         }
 
-        private static Zorluk ZorlukBelirle(bool buyukCift, int ortakOyuncuSayisi)
+        // Çiftin hangi zorlukta sorulacağını döndürür, hiç sorulmayacaksa null
+        private static Zorluk? ZorlukBelirle(KulupCifti cift, HashSet<string> buyukler, HashSet<string> basAltilar)
         {
-            if (buyukCift) return Zorluk.Kolay;
-            if (ortakOyuncuSayisi >= OrtaMinOrtakOyuncu) return Zorluk.Orta;
+            string a = cift.KulupA.Id, b = cift.KulupB.Id;
+
+            if (buyukler.Contains(a) && buyukler.Contains(b)) return Zorluk.Kolay;
+            if (cift.KulupA.Lig == cift.KulupB.Lig) return null;
+
+            bool basAltiVar = basAltilar.Contains(a) || basAltilar.Contains(b);
+            bool ikisiDeUstSeviye = (buyukler.Contains(a) || basAltilar.Contains(a)) && (buyukler.Contains(b) || basAltilar.Contains(b));
+            if (basAltiVar && ikisiDeUstSeviye && cift.OrtakOyuncuSayisi >= OrtaMinOrtakOyuncu) return Zorluk.Orta;
+
             return Zorluk.Zor;
         }
 
+        // Orta-zor yerine zor çift kullanılmaz: orta-zor soruda en az 2 ortak oyuncu şartı korunur
         private static Zorluk[] YedekSirasi(Zorluk istenen) => istenen switch
         {
-            Zorluk.Kolay => new[] { Zorluk.Kolay, Zorluk.Orta, Zorluk.Zor },
-            Zorluk.Orta => new[] { Zorluk.Orta, Zorluk.Zor, Zorluk.Kolay },
+            Zorluk.Kolay => new[] { Zorluk.Kolay, Zorluk.Orta },
+            Zorluk.Orta => new[] { Zorluk.Orta, Zorluk.Kolay },
             _ => new[] { Zorluk.Zor, Zorluk.Orta, Zorluk.Kolay }
         };
+
+        // Listedeki Transfermarkt ID'lerine denk gelen kulüplerin veritabanı ID'lerini döndürür
+        private static HashSet<string> ListedekiKulupler(Dictionary<string, string> liste, string listeAdi, IEnumerable<Kulup> kulupler, bool ayrintili)
+        {
+            var bulunanlar = kulupler.Where(k => liste.ContainsKey(k.TransfermarktId)).ToList();
+
+            var bulunamayanlar = liste.Keys.Except(bulunanlar.Select(k => k.TransfermarktId)).Select(id => liste[id]).ToList();
+            if (bulunamayanlar.Count > 0)
+            {
+                Console.WriteLine($"Uyarı: Veritabanında bulunamayan {listeAdi} kulüpler: {string.Join(", ", bulunamayanlar)}");
+            }
+
+            if (ayrintili)
+            {
+                // Listedeki ID'lerin doğru kulübe denk geldiğini gözle kontrol etmek için
+                Console.WriteLine($"{char.ToUpper(listeAdi[0])}{listeAdi[1..]} kulüpler (Transfermarkt ID -> veritabanındaki isim):");
+                foreach (var kulup in bulunanlar.OrderBy(k => k.Lig).ThenBy(k => k.Isim))
+                {
+                    Console.WriteLine($"   {kulup.TransfermarktId,-6} {liste[kulup.TransfermarktId],-20} -> {kulup.Isim} ({kulup.Lig})");
+                }
+            }
+
+            return bulunanlar.Select(k => k.Id).ToHashSet();
+        }
 
         private static void Karistir<T>(List<T> liste, Random random)
         {
