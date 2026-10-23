@@ -1,0 +1,44 @@
+# Her push'ta ve main'e açılan her pull request'te mobil ve backend testlerini çalıştırır.
+# Testlerden biri bozulursa pull request'te kırmızı çarpı görünür.
+name: Testler
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  mobil:
+    name: Flutter testleri
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # Bilgi seviyesindeki uyarılar (ör. eskimiş API) işi durdurmasın, hata ve uyarılar durdursun
+      - run: flutter analyze --no-fatal-infos
+
+      - run: flutter test
+
+  backend:
+    name: .NET testleri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet test backend/ScoutIQ.slnx
