@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/oyuncu_oneri.dart';
+import '../services/oyun_deposu.dart';
 import 'hub_provider.dart';
 
 class GameState {
@@ -54,13 +54,16 @@ class GameState {
 class GameNotifier extends Notifier<GameState> {
   static const _oyunTipi = 'kesisim';
   static const _puan = 2;
+  static const _oturumYokMesaji = 'Oturumun kapanmış görünüyor. Lütfen tekrar giriş yap.';
 
-  final _supabase = Supabase.instance.client;
+  late OyunDeposu _depo;
 
   @override
   GameState build() {
-    // İlk kurulumda asenkron olarak veriyi başlatıyoruz
-    _initGame();
+    _depo = ref.read(oyunDeposuProvider);
+    // Veriyi build bittikten sonra yüklüyoruz: _initGame state'i hemen değiştirirse (örneğin oturum yoksa)
+    // build'in döndürdüğü başlangıç durumu o değişikliğin üzerine yazmasın
+    Future.microtask(_initGame);
     return GameState();
   }
 
@@ -68,20 +71,10 @@ class GameNotifier extends Notifier<GameState> {
   // Sunucuya ulaşılamazsa aynı hesabı yapan yerel fonksiyona düşüyoruz.
   Future<String> _oyunTarihi() async {
     try {
-      final tarih = await _supabase.rpc('bugunun_tarihi');
-      if (tarih is String && tarih.isNotEmpty) return tarih;
-    } catch (_) {}
-    return bugununTarihi();
-  }
-
-  Future<Map<String, dynamic>?> _oyunKaydi(String userId, String tarih) {
-    return _supabase
-        .from('kullanici_oyun_gecmisi')
-        .select('skor, durum')
-        .eq('kullanici_id', userId)
-        .eq('oyun_tipi', _oyunTipi)
-        .eq('tarih', tarih)
-        .maybeSingle();
+      return await _depo.oyunTarihi();
+    } catch (_) {
+      return bugununTarihi();
+    }
   }
 
   // Daha önce atılmış kayda göre oyunu kilitler. Yarıda bırakılan oyun da tamamlandı sayılır.
@@ -91,13 +84,7 @@ class GameNotifier extends Notifier<GameState> {
     if (kayit['durum'] == 'basladi') {
       // Kaydı kapatıyoruz ki yarım kalan oyunun skoru sonradan değiştirilemesin
       try {
-        await _supabase
-            .from('kullanici_oyun_gecmisi')
-            .update({'durum': 'tamamlandi'})
-            .eq('kullanici_id', userId)
-            .eq('oyun_tipi', _oyunTipi)
-            .eq('tarih', tarih)
-            .eq('durum', 'basladi');
+        await _depo.yarimKaydiKapat(userId, _oyunTipi, tarih);
       } catch (_) {}
       if (!ref.mounted) return;
       state = state.copyWith(status: 'abandoned', score: skor);
@@ -109,9 +96,9 @@ class GameNotifier extends Notifier<GameState> {
 
   Future<void> _initGame() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = _depo.kullaniciId;
       if (userId == null) {
-        state = state.copyWith(status: 'error', hataMesaji: 'Oturumun kapanmış görünüyor. Lütfen tekrar giriş yap.');
+        state = state.copyWith(status: 'error', hataMesaji: _oturumYokMesaji);
         return;
       }
 
@@ -119,7 +106,7 @@ class GameNotifier extends Notifier<GameState> {
       if (!ref.mounted) return;
 
       // 1. Kullanıcı bugün bu oyuna başlamış ya da bitirmiş mi?
-      final kayit = await _oyunKaydi(userId, tarih);
+      final kayit = await _depo.oyunKaydi(userId, _oyunTipi, tarih);
       if (!ref.mounted) return;
       if (kayit != null) {
         await _kayittanKilitle(kayit, userId, tarih);
@@ -127,35 +114,20 @@ class GameNotifier extends Notifier<GameState> {
       }
 
       // 2. Bugünün oyununu çek
-      final gameResponse = await _supabase
-          .from('gunluk_oyunlar')
-          .select()
-          .eq('oyun_tipi', _oyunTipi)
-          .eq('tarih', tarih)
-          .limit(1)
-          .maybeSingle();
+      final oyun = await _depo.gununOyunu(_oyunTipi, tarih);
       if (!ref.mounted) return;
 
-      final questions = gameResponse?['soru_verisi'] as List<dynamic>?;
-      if (gameResponse == null || questions == null || questions.isEmpty) {
+      final questions = oyun?['soru_verisi'] as List<dynamic>?;
+      if (oyun == null || questions == null || questions.isEmpty) {
         state = state.copyWith(status: 'no_game');
         return;
       }
 
       // 3. Oyun başlarken kaydı atıyoruz: oyun yarıda bırakılırsa bu kayıt tekrar oynamayı engeller
       try {
-        await _supabase.from('kullanici_oyun_gecmisi').insert({
-          'kullanici_id': userId,
-          'oyun_id': gameResponse['id'],
-          'oyun_tipi': _oyunTipi,
-          'tarih': tarih,
-          'skor': 0,
-          'durum': 'basladi',
-        });
-      } on PostgrestException catch (e) {
-        // 23505: aynı gün için kayıt zaten var (örneğin başka bir cihazda başlanmış)
-        if (e.code != '23505') rethrow;
-        final mevcut = await _oyunKaydi(userId, tarih);
+        await _depo.kayitAc(kullaniciId: userId, oyunId: oyun['id'], oyunTipi: _oyunTipi, tarih: tarih);
+      } on KayitZatenVar {
+        final mevcut = await _depo.oyunKaydi(userId, _oyunTipi, tarih);
         if (!ref.mounted) return;
         if (mevcut != null) {
           await _kayittanKilitle(mevcut, userId, tarih);
@@ -168,7 +140,7 @@ class GameNotifier extends Notifier<GameState> {
       state = state.copyWith(
         status: 'playing',
         questions: questions,
-        gameId: gameResponse['id'],
+        gameId: oyun['id'],
         tarih: tarih,
       );
     } catch (e) {
@@ -181,47 +153,40 @@ class GameNotifier extends Notifier<GameState> {
   }
 
   // Cevap kutusunun altındaki öneri listesi. Tüm oyuncular arasında arar, doğru cevabı ele vermez.
-  Future<List<OyuncuOneri>> oyuncuAra(String metin) async {
-    final sonuc = await _supabase.rpc('oyuncu_ara', params: {'p_arama': metin});
-    return (sonuc as List<dynamic>)
-        .map((satir) => OyuncuOneri.fromJson(satir as Map<String, dynamic>))
-        .toList();
-  }
+  Future<List<OyuncuOneri>> oyuncuAra(String metin) => _depo.oyuncuAra(metin);
 
   // Seçilen oyuncuyu sunucuda kontrol ettirir. Hata olursa mesajını döndürür, başarılıysa null.
   Future<String?> makeGuess(OyuncuOneri oyuncu) async {
     if (state.status != 'playing' || state.questions.isEmpty || state.gonderiliyor) return null;
 
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return 'Oturumun kapanmış görünüyor. Lütfen tekrar giriş yap.';
+    final userId = _depo.kullaniciId;
+    if (userId == null) return _oturumYokMesaji;
 
     state = state.copyWith(gonderiliyor: true);
 
     try {
-      final dogruMu = await _supabase.rpc('kesisim_cevap_kontrol', params: {
-        'p_oyun_id': state.gameId,
-        'p_soru_index': state.currentIndex,
-        'p_oyuncu_id': oyuncu.id,
-      });
+      final isCorrect = await _depo.kesisimCevapKontrol(
+        oyunId: state.gameId!,
+        soruIndex: state.currentIndex,
+        oyuncuId: oyuncu.id,
+      );
       if (!ref.mounted) return null;
 
-      final isCorrect = dogruMu == true;
       final newScore = isCorrect ? state.score + _puan : state.score;
       final nextIndex = state.currentIndex + 1;
       final bitti = nextIndex >= state.questions.length;
 
       // Skoru her cevaptan sonra kaydediyoruz, son soruda kaydı kilitliyoruz
-      final guncellenen = await _supabase
-          .from('kullanici_oyun_gecmisi')
-          .update({'skor': newScore, 'durum': bitti ? 'tamamlandi' : 'basladi'})
-          .eq('kullanici_id', userId)
-          .eq('oyun_tipi', _oyunTipi)
-          .eq('tarih', state.tarih!)
-          .eq('durum', 'basladi')
-          .select('skor');
+      final yazildi = await _depo.skorYaz(
+        kullaniciId: userId,
+        oyunTipi: _oyunTipi,
+        tarih: state.tarih!,
+        skor: newScore,
+        bitti: bitti,
+      );
       if (!ref.mounted) return null;
 
-      if (guncellenen.isEmpty) {
+      if (!yazildi) {
         // Kayıt başka bir yerden kapatılmış: oyun artık oynanamaz
         state = state.copyWith(status: 'already_played', gonderiliyor: false);
         return null;

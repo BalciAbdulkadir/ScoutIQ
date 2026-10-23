@@ -273,22 +273,24 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      decoration: BoxDecoration(
+    // Renk Material'da: ListTile dokunma efektini en yakın Material'a çizer, renkli bir kutu onu gizlerdi
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
         color: const Color(0xFF132B1E),
         borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        children: [
-          for (final oyuncu in _oneriler)
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.person, color: Colors.white54),
-              title: Text(oyuncu.isim, style: const TextStyle(color: Colors.white, fontSize: 15)),
-              onTap: () => _oyuncuSec(oyuncu),
-            ),
-        ],
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            for (final oyuncu in _oneriler)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.person, color: Colors.white54),
+                title: Text(oyuncu.isim, style: const TextStyle(color: Colors.white, fontSize: 15)),
+                onTap: () => _oyuncuSec(oyuncu),
+              ),
+          ],
+        ),
       ),
     );
   }
