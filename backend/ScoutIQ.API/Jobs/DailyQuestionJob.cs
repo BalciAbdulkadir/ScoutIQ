@@ -19,9 +19,26 @@ namespace ScoutIQ.API.Jobs
         // Kesişim soruları kolaydan zora sıralanır: 2 kolay, 2 orta-zor, 1 zor
         private static readonly Zorluk[] KesisimSoruSirasi = { Zorluk.Kolay, Zorluk.Kolay, Zorluk.Orta, Zorluk.Orta, Zorluk.Zor };
 
-        // Zorluk, iki kulübün ortak oyuncu sayısına göre belirlenir: ne kadar çok ortak oyuncu, o kadar kolay
-        private const int KolayMinOrtakOyuncu = 4; // 4 ve üzeri: kolay
-        private const int OrtaMinOrtakOyuncu = 2;  // 2-3: orta-zor, 1: zor
+        // Kolay sorularda iki kulüp de bu listeden olur. Transfermarkt ID'si ile eşleştirilir, isimler değişebilir.
+        private static readonly Dictionary<string, string> BuyukKulupler = new()
+        {
+            // Türkiye: 3 büyükler
+            ["141"] = "Galatasaray", ["36"] = "Fenerbahçe", ["114"] = "Beşiktaş",
+            // İngiltere: Big Six
+            ["281"] = "Manchester City", ["985"] = "Manchester United", ["31"] = "Liverpool",
+            ["11"] = "Arsenal", ["631"] = "Chelsea", ["148"] = "Tottenham",
+            // İspanya
+            ["418"] = "Real Madrid", ["131"] = "Barcelona", ["13"] = "Atlético Madrid",
+            // İtalya
+            ["506"] = "Juventus", ["46"] = "Inter", ["5"] = "Milan",
+            // Almanya
+            ["27"] = "Bayern Münih", ["16"] = "Borussia Dortmund",
+            // Fransa
+            ["583"] = "PSG",
+        };
+
+        // Büyük kulüp çiftleri kolay sayılır. Diğer çiftlerde zorluk ortak oyuncu sayısına göre belirlenir.
+        private const int OrtaMinOrtakOyuncu = 2;  // 2 ve üzeri: orta-zor, 1: zor
 
         private const int SayfaBoyutu = 1000; // Supabase tek istekte en fazla 1000 satır döndürür
 
@@ -102,7 +119,7 @@ namespace ScoutIQ.API.Jobs
         // dotnet run -- --kesisim-onizleme
         public async Task KesisimOnizleme()
         {
-            var sorular = await KesisimSorulariniSec();
+            var sorular = await KesisimSorulariniSec(ayrintili: true);
             if (sorular == null) return;
 
             Console.WriteLine("Önizleme (veritabanına yazılmadı):");
@@ -115,15 +132,39 @@ namespace ScoutIQ.API.Jobs
 
         // Tüm kulüp çiftlerinin ortak oyuncu sayısını hesaplar ve her zorluktan rastgele çift seçer.
         // Sadece en az bir ortak oyuncusu olan çiftler soru olabilir. Bir oyunda aynı kulüp iki kez çıkmaz.
-        public async Task<List<KesisimSorusu>?> KesisimSorulariniSec()
+        public async Task<List<KesisimSorusu>?> KesisimSorulariniSec(bool ayrintili = false)
         {
-            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim").Get();
+            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim, transfermarkt_id").Get();
             var kulupler = kuluplerResponse.Models.ToDictionary(k => k.Id);
 
             if (kulupler.Count < 2)
             {
                 Console.WriteLine("Uyarı: Kesişim için veritabanında yeterli kulüp yok.");
                 return null;
+            }
+
+            var buyukKulupIdleri = kulupler.Values
+                .Where(k => BuyukKulupler.ContainsKey(k.TransfermarktId))
+                .Select(k => k.Id)
+                .ToHashSet();
+
+            var bulunamayanlar = BuyukKulupler
+                .Where(b => kulupler.Values.All(k => k.TransfermarktId != b.Key))
+                .Select(b => b.Value)
+                .ToList();
+            if (bulunamayanlar.Count > 0)
+            {
+                Console.WriteLine($"Uyarı: Veritabanında bulunamayan büyük kulüpler: {string.Join(", ", bulunamayanlar)}");
+            }
+
+            if (ayrintili)
+            {
+                // Listedeki ID'lerin doğru kulübe denk geldiğini gözle kontrol etmek için
+                Console.WriteLine("Büyük kulüpler (Transfermarkt ID -> veritabanındaki isim):");
+                foreach (var kulup in kulupler.Values.Where(k => buyukKulupIdleri.Contains(k.Id)).OrderBy(k => k.Isim))
+                {
+                    Console.WriteLine($"   {kulup.TransfermarktId,-4} {BuyukKulupler[kulup.TransfermarktId],-18} -> {kulup.Isim}");
+                }
             }
 
             var kulupOyunculari = (await TumKariyerGecmisi())
@@ -146,8 +187,9 @@ namespace ScoutIQ.API.Jobs
                     int ortak = OrtakSayisi(kulupOyunculari[kulupIdleri[i]], kulupOyunculari[kulupIdleri[j]]);
                     if (ortak == 0) continue;
 
+                    bool buyukCift = buyukKulupIdleri.Contains(kulupIdleri[i]) && buyukKulupIdleri.Contains(kulupIdleri[j]);
                     var cift = new KulupCifti(kulupler[kulupIdleri[i]], kulupler[kulupIdleri[j]], ortak);
-                    havuzlar[ZorlukBelirle(ortak)].Add(cift);
+                    havuzlar[ZorlukBelirle(buyukCift, ortak)].Add(cift);
                 }
             }
 
@@ -230,9 +272,9 @@ namespace ScoutIQ.API.Jobs
             return kucuk.Count(buyuk.Contains);
         }
 
-        private static Zorluk ZorlukBelirle(int ortakOyuncuSayisi)
+        private static Zorluk ZorlukBelirle(bool buyukCift, int ortakOyuncuSayisi)
         {
-            if (ortakOyuncuSayisi >= KolayMinOrtakOyuncu) return Zorluk.Kolay;
+            if (buyukCift) return Zorluk.Kolay;
             if (ortakOyuncuSayisi >= OrtaMinOrtakOyuncu) return Zorluk.Orta;
             return Zorluk.Zor;
         }

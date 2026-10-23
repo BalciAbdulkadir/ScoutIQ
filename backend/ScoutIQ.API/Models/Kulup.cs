@@ -11,5 +11,8 @@ namespace ScoutIQ.API.Models
 
         [Column("isim")]
         public string Isim { get; set; } = string.Empty;
+
+        [Column("transfermarkt_id")]
+        public string TransfermarktId { get; set; } = string.Empty;
     }
 }
