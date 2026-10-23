@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ScoutIQ.API.Tests/ScoutIQ.API.Tests.csproj" />
+  <Project Path="ScoutIQ.API/ScoutIQ.API.csproj" />
+</Solution>
