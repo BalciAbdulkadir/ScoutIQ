@@ -9,7 +9,7 @@ public class BonservisSoruSeciciTests
 
     private static Aday Oyuncu(int no, long milyon) => new($"oyuncu-{no}", $"Oyuncu {no}", milyon * M);
 
-    // 6 ile 200 milyon arasında, kurallara uyan pek çok zincir kurulabilen bir havuz
+    // 6 ile 200 milyon arasında, kurallara uyan pek çok ikili kurulabilen bir havuz
     private static List<Aday> GenisHavuz()
     {
         var havuz = new List<Aday>();
@@ -26,15 +26,15 @@ public class BonservisSoruSeciciTests
     [InlineData(3)]
     [InlineData(42)]
     [InlineData(2026)]
-    public void Bes_soru_ve_alti_farkli_oyuncu_secer(int tohum)
+    public void Bes_soru_ve_on_farkli_oyuncu_secer(int tohum)
     {
         var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(GenisHavuz());
 
         Assert.NotNull(sorular);
         Assert.Equal(SoruSayisi, sorular!.Count);
 
-        var oyuncular = sorular.SelectMany(s => new[] { s.Sol.Id, s.Sag.Id }).Distinct().ToList();
-        Assert.Equal(SoruSayisi + 1, oyuncular.Count);
+        var oyuncular = sorular.SelectMany(s => new[] { s.Sol.Id, s.Sag.Id }).Distinct().Count();
+        Assert.Equal(SoruSayisi * 2, oyuncular);
     }
 
     [Theory]
@@ -52,27 +52,16 @@ public class BonservisSoruSeciciTests
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(5)]
-    [InlineData(123)]
-    public void Dogru_cevap_sonraki_soruda_ayni_yerde_kalir(int tohum)
+    [Fact]
+    public void Dogru_cevap_bazen_solda_bazen_sagda_olur()
     {
-        var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(GenisHavuz())!;
+        var taraflar = Enumerable.Range(0, 20)
+            .SelectMany(tohum => new BonservisSoruSecici(new Random(tohum)).Sec(GenisHavuz())!)
+            .Select(s => s.Dogru == s.Sol)
+            .ToList();
 
-        for (int i = 0; i < sorular.Count - 1; i++)
-        {
-            var simdiki = sorular[i];
-            var sonraki = sorular[i + 1];
-            if (simdiki.Dogru == simdiki.Sol)
-            {
-                Assert.Equal(simdiki.Sol, sonraki.Sol);
-            }
-            else
-            {
-                Assert.Equal(simdiki.Sag, sonraki.Sag);
-            }
-        }
+        Assert.Contains(true, taraflar);
+        Assert.Contains(false, taraflar);
     }
 
     [Fact]
@@ -127,7 +116,7 @@ public class BonservisSoruSeciciTests
         var sorular = new BonservisSoruSecici(new Random(3)).Sec(havuz)!;
 
         var oyuncular = sorular.SelectMany(s => new[] { s.Sol.Id, s.Sag.Id }).Distinct().Count();
-        Assert.Equal(SoruSayisi + 1, oyuncular);
+        Assert.Equal(SoruSayisi * 2, oyuncular);
     }
 
     [Fact]
@@ -140,12 +129,12 @@ public class BonservisSoruSeciciTests
     }
 
     [Fact]
-    public void Cikmaza_giren_zinciri_birakip_gecerli_zincir_bulur()
+    public void Esi_olmayan_oyuncuyu_atlayip_diger_ikilileri_kurar()
     {
-        // 300 milyonluk oyuncunun 30 milyon aralığında eşi yok; zincire girerse çıkmaz olur.
-        // Geri kalanlar 10'ar milyon arayla dizili, tek geçerli zincir onlardan kurulur.
+        // 300 milyonluk oyuncunun 30 milyon aralığında eşi yok, soruda çıkmamalı.
+        // Geri kalanlar 10'ar milyon arayla dizili, 5 ikili onlardan kurulur.
         var havuz = new List<Aday> { Oyuncu(0, 300) };
-        for (int i = 1; i <= 6; i++)
+        for (int i = 1; i <= 10; i++)
         {
             havuz.Add(Oyuncu(i, 10 * i));
         }
@@ -159,18 +148,18 @@ public class BonservisSoruSeciciTests
     }
 
     [Fact]
-    public void Kurallara_uyan_zincir_yoksa_null_doner()
+    public void Kurallara_uyan_bes_ikili_yoksa_null_doner()
     {
         // Oyuncular arasında hep 40 milyon fark var: hiçbir ikili eşleşemez
-        var havuz = Enumerable.Range(1, 10).Select(i => Oyuncu(i, 40 * i)).ToList();
+        var havuz = Enumerable.Range(1, 20).Select(i => Oyuncu(i, 40 * i)).ToList();
 
         Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(havuz));
     }
 
     [Fact]
-    public void Alti_oyuncudan_az_havuzda_null_doner()
+    public void On_oyuncudan_az_havuzda_null_doner()
     {
-        var havuz = Enumerable.Range(1, 5).Select(i => Oyuncu(i, 10 + i)).ToList();
+        var havuz = Enumerable.Range(1, 9).Select(i => Oyuncu(i, 10 + i)).ToList();
 
         Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(havuz));
     }

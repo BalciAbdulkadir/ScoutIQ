@@ -7,9 +7,9 @@ namespace ScoutIQ.API.Oyunlar
     // Bonservis oyununun 5 sorusunu seçer. Veritabanına dokunmaz: aday oyuncuları parametre olarak alır,
     // böylece kurallar gerçek veri olmadan test edilebilir.
     //
-    // Her soruda iki oyuncu çıkar, toplam bonservisi fazla olan doğru cevaptır. Doğru cevap olan oyuncu
-    // sonraki soruda ekranda kalır, diğerinin yerine yeni bir oyuncu gelir. Bu yüzden 5 soru,
-    // 6 farklı oyuncudan oluşan bir zincirdir. Yanlış cevapta oyun biter (bu kural mobil tarafta).
+    // Her soruda rastgele iki oyuncu çıkar, toplam bonservisi fazla olan doğru cevaptır.
+    // Bir oyunda aynı oyuncu iki kez çıkmaz: 5 soru, 10 farklı oyuncu.
+    // Yanlış cevapta oyun biter (bu kural mobil tarafta).
     public class BonservisSoruSecici
     {
         public const int SoruSayisi = 5;
@@ -41,13 +41,13 @@ namespace ScoutIQ.API.Oyunlar
 
         public record Aday(string Id, string Isim, long ToplamBonservis);
 
-        // Sol ve Sag ekrandaki yerlerdir. Kalan oyuncu yerini korur, yeni oyuncu kaybedenin yerine gelir.
+        // Sol ve Sag ekrandaki yerlerdir; doğru cevabın hangi tarafta olacağı rastgeledir
         public record BonservisSorusu(Aday Sol, Aday Sag)
         {
             public Aday Dogru => Sol.ToplamBonservis > Sag.ToplamBonservis ? Sol : Sag;
         }
 
-        // Zincir aramasının üst sınırı: havuzda uygun zincir yoksa aramayı sonsuza kadar sürdürmesin
+        // Arama adımı üst sınırı: havuzda uygun 5 ikili yoksa aramayı sonsuza kadar sürdürmesin
         private const int MaxAdim = 200_000;
 
         private readonly Random _random;
@@ -64,7 +64,7 @@ namespace ScoutIQ.API.Oyunlar
             return fark > 0 && fark <= MaxFark;
         }
 
-        // 5 soruluk zinciri döndürür, kurallara uyan zincir kurulamıyorsa null
+        // 5 soruyu döndürür, kurallara uyan 5 ikili bulunamazsa null
         public List<BonservisSorusu>? Sec(IEnumerable<Aday> adaylar)
         {
             // Sıralı alınıp sonra karıştırılır ki aynı tohumla (seed) aynı sonuç çıksın
@@ -77,66 +77,43 @@ namespace ScoutIQ.API.Oyunlar
             Karistir(havuz);
 
             _adim = 0;
-            var kullanilan = new HashSet<string>();
-            var zincir = new List<Aday>();
+            var ikililer = new List<(Aday, Aday)>();
+            if (!IkilileriTamamla(havuz, 0, new HashSet<string>(), ikililer)) return null;
 
-            // Zincir çıkmaza girerse (kalan oyuncunun 30 milyon aralığında kullanılmamış eşi kalmazsa)
-            // geri dönülüp başka oyuncu denenir
-            foreach (var ilk in havuz)
-            {
-                kullanilan.Add(ilk.Id);
-                zincir.Add(ilk);
-                if (ZinciriTamamla(havuz, kullanilan, zincir, ilk)) return SorulariKur(zincir);
-                zincir.RemoveAt(zincir.Count - 1);
-                kullanilan.Remove(ilk.Id);
-
-                if (_adim > MaxAdim) break;
-            }
-
-            return null;
+            return ikililer
+                .Select(i => _random.Next(2) == 0 ? new BonservisSorusu(i.Item1, i.Item2) : new BonservisSorusu(i.Item2, i.Item1))
+                .ToList();
         }
 
-        // zincir: [ilk oyuncu, 1. sorunun yeni oyuncusu, 2. sorunun yeni oyuncusu, ...]
-        private bool ZinciriTamamla(List<Aday> havuz, HashSet<string> kullanilan, List<Aday> zincir, Aday kalan)
+        // Karışık sırada gezer, her oyuncuya kurallara uyan kullanılmamış bir eş arar.
+        // Bir ikili sonraki soruları imkânsız kılarsa geri dönüp başka eş ya da başka oyuncu dener.
+        private bool IkilileriTamamla(List<Aday> havuz, int bas, HashSet<string> kullanilan, List<(Aday, Aday)> ikililer)
         {
-            if (zincir.Count == SoruSayisi + 1) return true;
+            if (ikililer.Count == SoruSayisi) return true;
 
-            foreach (var yeni in havuz)
+            for (int i = bas; i < havuz.Count; i++)
             {
-                if (++_adim > MaxAdim) return false;
-                if (kullanilan.Contains(yeni.Id) || !Eslesebilir(kalan, yeni)) continue;
+                var a = havuz[i];
+                if (kullanilan.Contains(a.Id)) continue;
 
-                kullanilan.Add(yeni.Id);
-                zincir.Add(yeni);
-                var sonrakiKalan = yeni.ToplamBonservis > kalan.ToplamBonservis ? yeni : kalan;
-                if (ZinciriTamamla(havuz, kullanilan, zincir, sonrakiKalan)) return true;
-                zincir.RemoveAt(zincir.Count - 1);
-                kullanilan.Remove(yeni.Id);
+                for (int j = i + 1; j < havuz.Count; j++)
+                {
+                    if (++_adim > MaxAdim) return false;
+
+                    var b = havuz[j];
+                    if (kullanilan.Contains(b.Id) || !Eslesebilir(a, b)) continue;
+
+                    kullanilan.Add(a.Id);
+                    kullanilan.Add(b.Id);
+                    ikililer.Add((a, b));
+                    if (IkilileriTamamla(havuz, i + 1, kullanilan, ikililer)) return true;
+                    ikililer.RemoveAt(ikililer.Count - 1);
+                    kullanilan.Remove(a.Id);
+                    kullanilan.Remove(b.Id);
+                }
             }
 
             return false;
-        }
-
-        private List<BonservisSorusu> SorulariKur(List<Aday> zincir)
-        {
-            var sorular = new List<BonservisSorusu>();
-
-            // İlk soruda hangi oyuncunun solda görüneceği rastgele
-            var soru = _random.Next(2) == 0
-                ? new BonservisSorusu(zincir[0], zincir[1])
-                : new BonservisSorusu(zincir[1], zincir[0]);
-            sorular.Add(soru);
-
-            for (int i = 2; i < zincir.Count; i++)
-            {
-                var kalanSolda = soru.Dogru == soru.Sol;
-                soru = kalanSolda
-                    ? new BonservisSorusu(soru.Sol, zincir[i])
-                    : new BonservisSorusu(zincir[i], soru.Sag);
-                sorular.Add(soru);
-            }
-
-            return sorular;
         }
 
         private void Karistir<T>(List<T> liste)
