@@ -1,0 +1,6 @@
+@ScoutIQ.API_HostAddress = http://localhost:5271
+
+GET {{ScoutIQ.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
