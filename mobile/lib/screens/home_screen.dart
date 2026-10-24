@@ -7,16 +7,23 @@ import '../services/auth_service.dart';
 import '../theme/renkler.dart';
 import '../widgets/gunluk_kart.dart';
 import '../widgets/oyun_karti.dart';
+import 'bonservis_screen.dart';
 import 'game_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
-    if (mod.tip == 'kesisim') {
+    final Widget? oyunEkrani = switch (mod.tip) {
+      'kesisim' => const GameScreen(),
+      'bonservis' => const BonservisScreen(),
+      _ => null,
+    };
+
+    if (oyunEkrani != null) {
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const GameScreen()),
+        MaterialPageRoute(builder: (context) => oyunEkrani),
       );
       // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
       if (!context.mounted) return;

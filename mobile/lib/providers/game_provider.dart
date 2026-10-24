@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyuncu_oneri.dart';
+import '../services/gunluk_oyun.dart';
 import '../services/oyun_deposu.dart';
-import 'hub_provider.dart';
 
 class GameState {
   final String status; // 'loading', 'playing', 'completed', 'already_played', 'abandoned', 'no_game', 'error'
@@ -54,7 +54,6 @@ class GameState {
 class GameNotifier extends Notifier<GameState> {
   static const _oyunTipi = 'kesisim';
   static const _puan = 2;
-  static const _oturumYokMesaji = 'Oturumun kapanmış görünüyor. Lütfen tekrar giriş yap.';
 
   late OyunDeposu _depo;
 
@@ -67,88 +66,22 @@ class GameNotifier extends Notifier<GameState> {
     return GameState();
   }
 
-  // Oyun günü telefonun saatinden değil sunucudan alınır, veritabanı kuralları da bu tarihe göre çalışır.
-  // Sunucuya ulaşılamazsa aynı hesabı yapan yerel fonksiyona düşüyoruz.
-  Future<String> _oyunTarihi() async {
-    try {
-      return await _depo.oyunTarihi();
-    } catch (_) {
-      return bugununTarihi();
-    }
-  }
-
-  // Daha önce atılmış kayda göre oyunu kilitler. Yarıda bırakılan oyun da tamamlandı sayılır.
-  Future<void> _kayittanKilitle(Map<String, dynamic> kayit, String userId, String tarih) async {
-    final skor = (kayit['skor'] as num?)?.toInt() ?? 0;
-
-    if (kayit['durum'] == 'basladi') {
-      // Kaydı kapatıyoruz ki yarım kalan oyunun skoru sonradan değiştirilemesin
-      try {
-        await _depo.yarimKaydiKapat(userId, _oyunTipi, tarih);
-      } catch (_) {}
-      if (!ref.mounted) return;
-      state = state.copyWith(status: 'abandoned', score: skor);
-      return;
-    }
-
-    state = state.copyWith(status: 'already_played', score: skor);
-  }
-
   Future<void> _initGame() async {
     try {
-      final userId = _depo.kullaniciId;
-      if (userId == null) {
-        state = state.copyWith(status: 'error', hataMesaji: _oturumYokMesaji);
-        return;
-      }
-
-      final tarih = await _oyunTarihi();
+      final acilis = await gunlukOyunuAc(_depo, _oyunTipi);
       if (!ref.mounted) return;
 
-      // 1. Kullanıcı bugün bu oyuna başlamış ya da bitirmiş mi?
-      final kayit = await _depo.oyunKaydi(userId, _oyunTipi, tarih);
-      if (!ref.mounted) return;
-      if (kayit != null) {
-        await _kayittanKilitle(kayit, userId, tarih);
-        return;
-      }
-
-      // 2. Bugünün oyununu çek
-      final oyun = await _depo.gununOyunu(_oyunTipi, tarih);
-      if (!ref.mounted) return;
-
-      final questions = oyun?['soru_verisi'] as List<dynamic>?;
-      if (oyun == null || questions == null || questions.isEmpty) {
-        state = state.copyWith(status: 'no_game');
-        return;
-      }
-
-      // 3. Oyun başlarken kaydı atıyoruz: oyun yarıda bırakılırsa bu kayıt tekrar oynamayı engeller
-      try {
-        await _depo.kayitAc(kullaniciId: userId, oyunId: oyun['id'], oyunTipi: _oyunTipi, tarih: tarih);
-      } on KayitZatenVar {
-        final mevcut = await _depo.oyunKaydi(userId, _oyunTipi, tarih);
-        if (!ref.mounted) return;
-        if (mevcut != null) {
-          await _kayittanKilitle(mevcut, userId, tarih);
-          return;
-        }
-        rethrow;
-      }
-      if (!ref.mounted) return;
-
-      state = state.copyWith(
-        status: 'playing',
-        questions: questions,
-        gameId: oyun['id'],
-        tarih: tarih,
-      );
+      state = switch (acilis) {
+        Oynanabilir(:final oyunId, :final sorular, :final tarih) =>
+          state.copyWith(status: 'playing', questions: sorular, gameId: oyunId, tarih: tarih),
+        ZatenOynandi(:final skor) => state.copyWith(status: 'already_played', score: skor),
+        YaridaBirakildi(:final skor) => state.copyWith(status: 'abandoned', score: skor),
+        OyunYok() => state.copyWith(status: 'no_game'),
+        OturumYok() => state.copyWith(status: 'error', hataMesaji: oturumYokMesaji),
+      };
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(
-        status: 'error',
-        hataMesaji: 'Oyun yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.',
-      );
+      state = state.copyWith(status: 'error', hataMesaji: yuklemeHataMesaji);
     }
   }
 
@@ -160,7 +93,7 @@ class GameNotifier extends Notifier<GameState> {
     if (state.status != 'playing' || state.questions.isEmpty || state.gonderiliyor) return null;
 
     final userId = _depo.kullaniciId;
-    if (userId == null) return _oturumYokMesaji;
+    if (userId == null) return oturumYokMesaji;
 
     state = state.copyWith(gonderiliyor: true);
 
@@ -204,7 +137,7 @@ class GameNotifier extends Notifier<GameState> {
     } catch (e) {
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
-      return 'Cevap gönderilemedi. İnternet bağlantını kontrol edip tekrar dene.';
+      return gonderimHataMesaji;
     }
   }
 }

@@ -36,10 +36,11 @@ const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'bonservis',
     baslik: 'Bonservis',
-    aciklama: 'Hangi transfer daha pahalıydı? Daha az mı, daha fazla mı?',
+    aciklama: 'Kariyerindeki toplam bonservis daha mı fazla, daha mı az?',
     ikon: Icons.attach_money,
     renk: Colors.lightBlueAccent,
-    durum: OyunDurumu.hazirlaniyor,
+    durum: OyunDurumu.aktif,
+    maksimumSkor: 5,
   ),
   OyunModu(
     baslik: 'Kariyer Yolu',

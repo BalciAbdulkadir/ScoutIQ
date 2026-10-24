@@ -38,6 +38,10 @@ class SahteOyunDeposu implements OyunDeposu {
   // Doluysa cevap kontrolü bu Completer tamamlanana kadar bekler (çift gönderim testleri için)
   Completer<void>? cevapKontrolBekletici;
 
+  // Doluysa skor yazımı bu Completer tamamlanana kadar bekler
+  Completer<void>? skorYazBekletici;
+  bool skorYazHataVerir = false;
+
   // Çağrı kayıtları
   int kayitAcSayisi = 0;
   int cevapKontrolSayisi = 0;
@@ -92,6 +96,8 @@ class SahteOyunDeposu implements OyunDeposu {
 
   @override
   Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti}) async {
+    if (skorYazBekletici != null) await skorYazBekletici!.future;
+    if (skorYazHataVerir) throw Exception('bağlantı yok');
     if (kayit?['durum'] != 'basladi') return false;
     yazilanSkorlar.add((skor: skor, bitti: bitti));
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
