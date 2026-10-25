@@ -34,10 +34,10 @@ void main() {
   testWidgets('soru, kulüp isimleri ve zorluk etiketiyle gösterilir', (tester) async {
     await ekraniAc(tester);
 
-    expect(find.text('Soru: 1 / 5'), findsOneWidget);
+    expect(find.text('Soru 1/5'), findsOneWidget);
     expect(find.text('Kulüp A0'), findsOneWidget);
     expect(find.text('Kulüp B0'), findsOneWidget);
-    expect(find.text('Kolay'), findsOneWidget);
+    expect(find.text('KOLAY'), findsOneWidget);
   });
 
   testWidgets('tek harfle arama yapılmaz, iki harften sonra öneri listesi çıkar', (tester) async {
@@ -76,7 +76,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
 
-    expect(find.text('Cevabını aşağıdaki listeden seçmelisin.'), findsOneWidget);
+    expect(find.text('Cevabını listeden seçmelisin.'), findsOneWidget);
     expect(depo.cevapKontrolSayisi, 0);
   });
 
@@ -94,8 +94,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(depo.cevapKontrolSayisi, 1);
-    expect(find.text('Önceki Soru: Doğru (+2)'), findsOneWidget);
-    expect(find.text('Soru: 2 / 5'), findsOneWidget);
+    expect(find.text('Doğru'), findsOneWidget);
+    expect(find.textContaining('Arda Güler'), findsOneWidget);
+    expect(find.text('Soru 2/5'), findsOneWidget);
   });
 
   testWidgets('seçimden sonra isim değiştirilirse seçim iptal olur', (tester) async {
@@ -115,14 +116,14 @@ void main() {
   testWidgets('bugün oynanmış oyun açılmaz', (tester) async {
     await ekraniAc(tester, (d) => d.kayit = {'skor': 8, 'durum': 'tamamlandi'});
 
-    expect(find.text('Bugünkü Hakkını Doldurdun!'), findsOneWidget);
+    expect(find.text('Bugünkü oyununu oynadın'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
   });
 
   testWidgets('yarıda bırakılan oyun açılmaz', (tester) async {
     await ekraniAc(tester, (d) => d.kayit = {'skor': 2, 'durum': 'basladi'});
 
-    expect(find.text('Bugünkü Hakkını Kullandın'), findsOneWidget);
+    expect(find.text('Bugünkü hakkını kullandın'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
   });
 }

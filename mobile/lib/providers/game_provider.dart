@@ -13,8 +13,12 @@ class GameState {
   final String? tarih; // Oyun günü (Türkiye saatine göre), kayıtlar bu tarihle atılır
   final bool gonderiliyor; // Cevap sunucuda kontrol edilirken ikinci gönderimi engeller
   final String? hataMesaji; // status 'error' iken gösterilir
+  final List<bool> sonuclar; // Cevaplanan soruların doğru/yanlış sonucu (ilerleme çubuğu ve özet için)
+  final List<String> cevaplar; // Cevaplanan sorularda seçilen oyuncular (özet için)
 
   GameState({
+    this.sonuclar = const [],
+    this.cevaplar = const [],
     this.status = 'loading',
     this.questions = const [],
     this.currentIndex = 0,
@@ -36,8 +40,12 @@ class GameState {
     String? tarih,
     bool? gonderiliyor,
     String? hataMesaji,
+    List<bool>? sonuclar,
+    List<String>? cevaplar,
   }) {
     return GameState(
+      sonuclar: sonuclar ?? this.sonuclar,
+      cevaplar: cevaplar ?? this.cevaplar,
       status: status ?? this.status,
       questions: questions ?? this.questions,
       currentIndex: currentIndex ?? this.currentIndex,
@@ -130,6 +138,8 @@ class GameNotifier extends Notifier<GameState> {
         currentIndex: bitti ? state.currentIndex : nextIndex,
         score: newScore,
         lastGuessStatus: isCorrect ? 'correct' : 'wrong',
+        sonuclar: [...state.sonuclar, isCorrect],
+        cevaplar: [...state.cevaplar, oyuncu.isim],
         // Oyun bittiyse kilit açılmıyor: son soruda ikinci gönderim mümkün olmasın
         gonderiliyor: bitti,
       );

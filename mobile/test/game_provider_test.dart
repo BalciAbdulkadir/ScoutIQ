@@ -142,6 +142,8 @@ void main() {
 
       expect(durum(c).status, 'completed');
       expect(durum(c).score, 6);
+      expect(durum(c).sonuclar, [true, false, true, false, true]);
+      expect(durum(c).cevaplar, ['Arda Güler', 'Mesut Özil', 'Arda Güler', 'Mesut Özil', 'Arda Güler']);
       expect(depo.kayit, {'skor': 6, 'durum': 'tamamlandi'});
       expect(depo.yazilanSkorlar.last, (skor: 6, bitti: true));
     });

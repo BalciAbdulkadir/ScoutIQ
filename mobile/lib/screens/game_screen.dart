@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyuncu_oneri.dart';
 import '../providers/game_provider.dart';
+import '../theme/renkler.dart';
+import '../widgets/oyun_mesaj_karti.dart';
+import '../widgets/oyun_ortak.dart';
 
+// Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
 
@@ -13,6 +17,8 @@ class GameScreen extends ConsumerStatefulWidget {
 }
 
 class _GameScreenState extends ConsumerState<GameScreen> {
+  static const _maksimumSkor = 10;
+
   final TextEditingController _guessController = TextEditingController();
 
   // Öneri listesi: cevap sadece bu listeden seçilebilir
@@ -85,7 +91,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   Future<void> _gonder() async {
     final secilen = _secilenOyuncu;
     if (secilen == null) {
-      _mesajGoster('Cevabını aşağıdaki listeden seçmelisin.');
+      _mesajGoster('Cevabını listeden seçmelisin.');
       return;
     }
 
@@ -112,153 +118,148 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final gameState = ref.watch(gameProvider);
+    final state = ref.watch(gameProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A1C12),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Kesişim', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: _buildBody(gameState),
+      appBar: AppBar(title: const Text('Kesişim')),
+      body: SafeArea(child: _govde(state)),
     );
   }
 
-  Widget _buildBody(GameState state) {
-    if (state.status == 'loading') {
-      return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
+  Widget _govde(GameState state) {
+    switch (state.status) {
+      case 'loading':
+        return const Center(child: CircularProgressIndicator());
+      case 'error':
+        return OyunMesajKarti(
+          ikon: Icons.wifi_off_rounded,
+          baslik: 'Bağlantı sorunu',
+          aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
+          onTekrarDene: () => ref.invalidate(gameProvider),
+        );
+      case 'no_game':
+        return const OyunMesajKarti(
+          ikon: Icons.schedule_rounded,
+          baslik: 'Bugünün oyunu henüz hazır değil',
+          aciklama: 'Biraz sonra tekrar dene.',
+        );
+      case 'already_played':
+        return OyunMesajKarti(
+          ikon: Icons.check_circle_outline_rounded,
+          baslik: 'Bugünkü oyununu oynadın',
+          aciklama: 'Skorun: ${state.score}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
+        );
+      case 'abandoned':
+        return OyunMesajKarti(
+          ikon: Icons.lock_outline_rounded,
+          baslik: 'Bugünkü hakkını kullandın',
+          aciklama: 'Oyundan çıktığın için oyun tamamlanmış sayıldı.\nSkorun: ${state.score}/$_maksimumSkor',
+        );
+      case 'completed':
+        return _bitis(state);
+      default:
+        return _oyun(state);
     }
+  }
 
-    if (state.status == 'error') {
-      return _buildMessageCard('Bir sorun oluştu', state.hataMesaji ?? 'Lütfen daha sonra tekrar dene.');
-    }
-
-    if (state.status == 'no_game') {
-      return _buildMessageCard('Bugün için oyun bulunamadı.', 'Yarın tekrar gel veya veritabanını kontrol et.');
-    }
-
-    if (state.status == 'already_played') {
-      return _buildMessageCard('Bugünkü Hakkını Doldurdun!', 'Skorun: ${state.score} / 10\nYarın yeni eşleşmelerle görüşmek üzere.');
-    }
-
-    if (state.status == 'abandoned') {
-      return _buildMessageCard(
-        'Bugünkü Hakkını Kullandın',
-        'Oyunu yarıda bıraktığın için tamamlanmış sayıldı.\nSkorun: ${state.score} / 10\nYarın yeni eşleşmelerle görüşmek üzere.',
-      );
-    }
-
-    if (state.status == 'completed') {
-      return _buildMessageCard('Oyun Tamamlandı!', 'Günlük Skorun: ${state.score} / 10\nTebrikler!');
-    }
-
-    // Oynama Ekranı (playing)
-    final currentQuestion = state.questions[state.currentIndex];
-    final clubA = currentQuestion['kulup_a'] ?? 'Bilinmiyor';
-    final clubB = currentQuestion['kulup_b'] ?? 'Bilinmiyor';
-    final gonderilebilir = _secilenOyuncu != null && !state.gonderiliyor;
+  Widget _oyun(GameState state) {
+    final soru = state.questions[state.currentIndex] as Map<String, dynamic>;
+    final zorluk = _zorluk(soru['zorluk'] as String?);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          OyunIlerlemesi(
+            soruSayisi: state.questions.length,
+            mevcutSoru: state.currentIndex,
+            sonuclar: state.sonuclar,
+            renk: Renkler.kesisim,
+            sagMetin: '${state.score} puan',
+          ),
+          const SizedBox(height: 28),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Text(
-                    'Soru: ${state.currentIndex + 1} / ${state.questions.length}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                  const SizedBox(width: 10),
-                  _buildZorlukEtiketi(currentQuestion['zorluk'] as String?),
-                ],
-              ),
-              Text(
-                'Skor: ${state.score}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent),
+              if (zorluk != null) ...[OyunEtiketi(metin: zorluk.$1, renk: zorluk.$2), const SizedBox(width: 10)],
+              const Expanded(
+                child: Text(
+                  'İki takımda da forma giymiş bir oyuncu bul',
+                  style: TextStyle(color: Renkler.metinIkincil, fontSize: 14),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 40),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildClubCard(clubA),
-              const Text('X', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.grey)),
-              _buildClubCard(clubB),
-            ],
+          const SizedBox(height: 14),
+          _KulupEslesmesi(
+            kulupA: soru['kulup_a'] as String? ?? '—',
+            kulupB: soru['kulup_b'] as String? ?? '—',
           ),
-
-          const SizedBox(height: 60),
-
-          TextField(
-            controller: _guessController,
-            enabled: !state.gonderiliyor,
-            style: const TextStyle(color: Colors.white),
-            textInputAction: TextInputAction.send,
-            onChanged: _metinDegisti,
-            onSubmitted: (_) => _gonder(),
-            decoration: InputDecoration(
-              hintText: 'Ortak oyuncuyu yazıp listeden seç...',
-              hintStyle: const TextStyle(color: Colors.grey),
-              filled: true,
-              fillColor: const Color(0xFF132B1E),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide.none,
-              ),
-              prefixIcon: _secilenOyuncu != null
-                  ? const Icon(Icons.check_circle, color: Colors.greenAccent)
-                  : const Icon(Icons.search, color: Colors.grey),
-              suffixIcon: state.gonderiliyor
-                  ? const Padding(
-                      padding: EdgeInsets.all(14),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.greenAccent),
-                      ),
-                    )
-                  : IconButton(
-                      icon: Icon(Icons.send, color: gonderilebilir ? Colors.greenAccent : Colors.grey),
-                      onPressed: gonderilebilir ? _gonder : null,
-                    ),
-            ),
-          ),
-
-          _buildOneriListesi(),
-
-          const SizedBox(height: 30),
-
-          if (state.lastGuessStatus != null)
-            Text(
-              state.lastGuessStatus == 'correct' ? 'Önceki Soru: Doğru (+2)' : 'Önceki Soru: Yanlış',
-              style: TextStyle(
-                fontSize: 16,
-                color: state.lastGuessStatus == 'correct' ? Colors.greenAccent : Colors.redAccent,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+          const SizedBox(height: 20),
+          _cevapAlani(state),
+          _oneriListesi(),
+          const SizedBox(height: 16),
+          _oncekiSonuc(state),
         ],
       ),
     );
   }
 
-  Widget _buildOneriListesi() {
+  (String, Color)? _zorluk(String? zorluk) => switch (zorluk) {
+        'kolay' => ('Kolay', Renkler.basari),
+        'orta' => ('Orta', const Color(0xFFFBBF24)),
+        'zor' => ('Zor', Renkler.hata),
+        _ => null,
+      };
+
+  Widget _cevapAlani(GameState state) {
+    final gonderilebilir = _secilenOyuncu != null && !state.gonderiliyor;
+
+    OutlineInputBorder kenarlik(Color renk) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: renk),
+        );
+
+    return TextField(
+      controller: _guessController,
+      enabled: !state.gonderiliyor,
+      style: const TextStyle(color: Renkler.metin, fontSize: 16),
+      cursorColor: Renkler.kesisim,
+      textInputAction: TextInputAction.send,
+      textCapitalization: TextCapitalization.words,
+      onChanged: _metinDegisti,
+      onSubmitted: (_) => _gonder(),
+      decoration: InputDecoration(
+        hintText: 'Oyuncu ara',
+        hintStyle: const TextStyle(color: Renkler.metinSoluk),
+        filled: true,
+        fillColor: Renkler.yuzey,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        enabledBorder: kenarlik(_secilenOyuncu != null ? Renkler.kesisim : Renkler.kenar),
+        focusedBorder: kenarlik(Renkler.kesisim),
+        disabledBorder: kenarlik(Renkler.kenar),
+        prefixIcon: _secilenOyuncu != null
+            ? const Icon(Icons.check_circle, color: Renkler.kesisim, size: 22)
+            : const Icon(Icons.search_rounded, color: Renkler.metinSoluk),
+        suffixIcon: state.gonderiliyor
+            ? const Padding(
+                padding: EdgeInsets.all(14),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            : IconButton(
+                tooltip: 'Gönder',
+                icon: Icon(Icons.send, color: gonderilebilir ? Renkler.kesisim : Renkler.metinSoluk),
+                onPressed: gonderilebilir ? _gonder : null,
+              ),
+      ),
+    );
+  }
+
+  Widget _oneriListesi() {
     if (_araniyor) {
       return const Padding(
         padding: EdgeInsets.only(top: 16),
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.greenAccent),
-        ),
+        child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
       );
     }
 
@@ -268,8 +269,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     if (_oneriler.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.only(top: 12),
-        child: Text('Bu isimde oyuncu bulunamadı.', style: TextStyle(color: Colors.white54)),
+        padding: EdgeInsets.only(top: 14, left: 4),
+        child: Text('Bu isimde oyuncu bulunamadı.', style: TextStyle(color: Renkler.metinSoluk)),
       );
     }
 
@@ -277,88 +278,131 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Material(
-        color: const Color(0xFF132B1E),
-        borderRadius: BorderRadius.circular(15),
+        color: Renkler.yuzey,
+        borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: Column(
           children: [
-            for (final oyuncu in _oneriler)
+            for (var i = 0; i < _oneriler.length; i++) ...[
+              if (i > 0) const Divider(indent: 16, endIndent: 16),
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.person, color: Colors.white54),
-                title: Text(oyuncu.isim, style: const TextStyle(color: Colors.white, fontSize: 15)),
-                onTap: () => _oyuncuSec(oyuncu),
+                title: Text(_oneriler[i].isim, style: const TextStyle(color: Renkler.metin, fontSize: 15)),
+                trailing: const Icon(Icons.north_west_rounded, size: 16, color: Renkler.metinSoluk),
+                onTap: () => _oyuncuSec(_oneriler[i]),
               ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  // Backend soruları kolaydan zora sıralar. Zorluk bilgisi olmayan eski oyunlarda etiket gösterilmez.
-  Widget _buildZorlukEtiketi(String? zorluk) {
-    final (metin, renk) = switch (zorluk) {
-      'kolay' => ('Kolay', Colors.greenAccent),
-      'orta' => ('Orta-Zor', Colors.orangeAccent),
-      'zor' => ('Zor', Colors.redAccent),
-      _ => (null, Colors.transparent),
-    };
-    if (metin == null) return const SizedBox.shrink();
+  // Bir önceki sorunun sonucu: "Doğru · Arda Güler"
+  Widget _oncekiSonuc(GameState state) {
+    if (state.sonuclar.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: renk.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: renk.withValues(alpha: 0.6)),
-      ),
-      child: Text(metin, style: TextStyle(color: renk, fontSize: 12, fontWeight: FontWeight.bold)),
-    );
-  }
+    final dogru = state.sonuclar.last;
+    final renk = dogru ? Renkler.basari : Renkler.hata;
 
-  Widget _buildClubCard(String clubName) {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Text(
-          clubName.length > 15 ? '${clubName.substring(0, 12)}...' : clubName,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMessageCard(String title, String subtitle) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.sports_score, size: 80, color: Colors.greenAccent),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Row(
+        key: ValueKey(state.sonuclar.length),
+        children: [
+          Icon(dogru ? Icons.check_circle_rounded : Icons.cancel_rounded, color: renk, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            dogru ? 'Doğru' : 'Yanlış',
+            style: TextStyle(color: renk, fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+          Expanded(
+            child: Text(
+              '  ·  ${state.cevaplar.last}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Renkler.metinIkincil, fontSize: 14),
             ),
-            const SizedBox(height: 10),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.white70)),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent),
-              child: const Text('Ana Menüye Dön', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            )
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _bitis(GameState state) {
+    final dogruSayisi = state.sonuclar.where((s) => s).length;
+
+    return OyunBitisEkrani(
+      skor: '${state.score}/$_maksimumSkor',
+      skorAciklamasi: 'puan',
+      baslik: bitisBasligi(dogruSayisi, state.questions.length),
+      renk: Renkler.kesisim,
+      ozetSatirlari: [
+        for (var i = 0; i < state.questions.length; i++)
+          OzetSatiri(
+            dogru: i < state.sonuclar.length ? state.sonuclar[i] : null,
+            baslik: '${state.questions[i]['kulup_a']}  ×  ${state.questions[i]['kulup_b']}',
+            altBaslik: i < state.cevaplar.length ? 'Cevabın: ${state.cevaplar[i]}' : null,
+          ),
+      ],
+    );
+  }
+}
+
+// İki kulüp tek kartta, aralarında VS rozeti
+class _KulupEslesmesi extends StatelessWidget {
+  final String kulupA;
+  final String kulupB;
+
+  const _KulupEslesmesi({required this.kulupA, required this.kulupB});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      decoration: BoxDecoration(
+        color: Renkler.yuzey,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Renkler.kenar),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _Kulup(isim: kulupA)),
+          const VsRozeti(),
+          Expanded(child: _Kulup(isim: kulupB)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Kulup extends StatelessWidget {
+  final String isim;
+
+  const _Kulup({required this.isim});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
+          child: const Icon(Icons.shield_outlined, color: Renkler.kesisim, size: 28),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text(
+            isim,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Renkler.metin, fontSize: 15, fontWeight: FontWeight.w700, height: 1.25),
+          ),
+        ),
+      ],
     );
   }
 }

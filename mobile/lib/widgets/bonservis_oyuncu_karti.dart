@@ -6,7 +6,7 @@ import '../theme/renkler.dart';
 class BonservisOyuncuKarti extends StatelessWidget {
   final BonservisOyuncusu oyuncu;
   final bool bedelGorunur;
-  final bool? dogru; // Doluysa kart sonuca göre yeşil ya da kırmızı yanar
+  final bool? dogru; // Doluysa kart sonuca göre yeşil ya da kırmızı kenarlanır
   final bool bedelAnimasyonlu; // Bedel yeni açıldıysa sayarak gösterilir
 
   const BonservisOyuncuKarti({
@@ -16,15 +16,6 @@ class BonservisOyuncuKarti extends StatelessWidget {
     this.dogru,
     this.bedelAnimasyonlu = false,
   });
-
-  static const _avatarRenkleri = [
-    Color(0xFF26A69A),
-    Color(0xFF5C6BC0),
-    Color(0xFFEF6C00),
-    Color(0xFFAB47BC),
-    Color(0xFF29B6F6),
-    Color(0xFF9CCC65),
-  ];
 
   static String basHarfler(String isim) {
     final parcalar = isim.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -37,32 +28,30 @@ class BonservisOyuncuKarti extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final kenarRengi = switch (dogru) {
-      true => Colors.greenAccent,
-      false => Colors.redAccent,
-      null => Renkler.kartKenar,
+      true => Renkler.basari,
+      false => Renkler.hata,
+      null => Renkler.kenar,
     };
-    final avatarRengi = _avatarRenkleri[oyuncu.isim.hashCode.abs() % _avatarRenkleri.length];
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.all(20),
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
       decoration: BoxDecoration(
-        color: Renkler.kart,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kenarRengi, width: dogru == null ? 1.5 : 2.5),
-        boxShadow: [
-          if (dogru != null)
-            BoxShadow(color: kenarRengi.withValues(alpha: 0.25), blurRadius: 16, spreadRadius: 1),
-        ],
+        color: Renkler.yuzey,
+        borderRadius: BorderRadius.circular(16),
+        // Kenar kalınlığı sabit: sonuç gösterilince kart boyutu değişip yerleşim kaymasın
+        border: Border.all(color: kenarRengi, width: 1.5),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: avatarRengi.withValues(alpha: 0.25),
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
             child: Text(
               basHarfler(oyuncu.isim),
-              style: TextStyle(color: avatarRengi, fontWeight: FontWeight.w900, fontSize: 20),
+              style: const TextStyle(color: Renkler.bonservis, fontWeight: FontWeight.w700, fontSize: 17),
             ),
           ),
           const SizedBox(width: 16),
@@ -74,11 +63,9 @@ class BonservisOyuncuKarti extends StatelessWidget {
                   oyuncu.isim,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Renkler.metin, fontSize: 18, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 6),
-                const Text('Toplam bonservis', style: TextStyle(color: Renkler.soluk, fontSize: 12)),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 _bedel(),
               ],
             ),
@@ -90,19 +77,19 @@ class BonservisOyuncuKarti extends StatelessWidget {
 
   Widget _bedel() {
     const stil = TextStyle(
-      fontSize: 28,
-      fontWeight: FontWeight.w900,
+      fontSize: 26,
+      fontWeight: FontWeight.w800,
       fontFeatures: [FontFeature.tabularFigures()],
     );
 
     if (!bedelGorunur) {
-      return Text('? M€', style: stil.copyWith(color: Colors.white38));
+      return Text('? M€', style: stil.copyWith(color: Renkler.metinSoluk));
     }
 
     final renk = switch (dogru) {
-      true => Colors.greenAccent,
-      false => Colors.redAccent,
-      null => Colors.lightBlueAccent,
+      true => Renkler.basari,
+      false => Renkler.hata,
+      null => Renkler.bonservis,
     };
 
     if (!bedelAnimasyonlu) {
@@ -112,7 +99,7 @@ class BonservisOyuncuKarti extends StatelessWidget {
     // Bedel sıfırdan gerçek değerine sayarak yükselir
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: oyuncu.toplamBonservis.toDouble()),
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 800),
       curve: Curves.easeOutCubic,
       builder: (context, deger, _) {
         // Ara değerler tam milyona yuvarlanır, son karede gerçek değer gösterilir

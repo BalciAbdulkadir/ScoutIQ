@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/oyun_modu.dart';
 import '../providers/hub_provider.dart';
 import '../services/auth_service.dart';
@@ -21,28 +21,23 @@ class HomeScreen extends ConsumerWidget {
     };
 
     if (oyunEkrani != null) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => oyunEkrani),
-      );
+      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani));
       // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
       if (!context.mounted) return;
       ref.invalidate(bugunOynananlarProvider);
       return;
     }
 
-    final mesaj = mod.durum == OyunDurumu.hazirlaniyor
-        ? '${mod.baslik} hazırlanıyor, çok yakında burada!'
-        : 'Bu mod henüz aktif değil!';
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(mesaj)));
+      ..showSnackBar(SnackBar(content: Text('${mod.baslik} henüz hazır değil.')));
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final oynananlar = ref.watch(bugunOynananlarProvider);
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
+    final kullanici = ref.watch(kullaniciProvider);
 
     final gunlukModlar = oyunModlari.where((m) => m.durum != OyunDurumu.yakinda).toList();
     final yakindakiModlar = oyunModlari.where((m) => m.durum == OyunDurumu.yakinda).toList();
@@ -51,48 +46,47 @@ class HomeScreen extends ConsumerWidget {
     final aktifModlar = oyunModlari.where((m) => m.durum == OyunDurumu.aktif);
     final tamamlanan = aktifModlar.where((m) => skorlar.containsKey(m.tip)).length;
 
-    return Scaffold(
-      backgroundColor: Renkler.arkaPlan,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: Renkler.vurgu,
-          backgroundColor: Renkler.kart,
-          onRefresh: () => ref.refresh(bugunOynananlarProvider.future),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            children: [
-              const _UstBar(),
-              const SizedBox(height: 24),
-              GunlukKart(tamamlanan: tamamlanan, toplam: aktifModlar.length),
-              const SizedBox(height: 32),
-              const _BolumBasligi('Bugünün Oyunları'),
-              const SizedBox(height: 12),
-              for (final mod in gunlukModlar)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: OyunKarti(
-                    mod: mod,
-                    bugunkuSkor: skorlar[mod.tip],
-                    onTap: () => _modaTiklandi(context, ref, mod),
-                  ),
+    // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        body: SafeArea(
+          child: RefreshIndicator(
+            color: Renkler.basari,
+            backgroundColor: Renkler.yuzey,
+            onRefresh: () => ref.refresh(bugunOynananlarProvider.future),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              children: [
+                _UstBar(kullanici: kullanici),
+                const SizedBox(height: 24),
+                Text(
+                  kullanici != null ? 'Merhaba, ${kullanici.ilkAd}' : 'Merhaba',
+                  style: const TextStyle(color: Renkler.metin, fontSize: 26, fontWeight: FontWeight.w800),
                 ),
-              const SizedBox(height: 20),
-              const _BolumBasligi('Yakında'),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.95,
-                children: [
-                  for (final mod in yakindakiModlar)
-                    YakindaKarti(mod: mod, onTap: () => _modaTiklandi(context, ref, mod)),
+                const SizedBox(height: 4),
+                Text(tarihMetni(turkiyeSaati()), style: const TextStyle(color: Renkler.metinIkincil, fontSize: 15)),
+                const SizedBox(height: 20),
+                GunlukKart(tamamlanan: tamamlanan, toplam: aktifModlar.length),
+                const SizedBox(height: 28),
+                const _BolumBasligi('Oyunlar'),
+                for (final mod in gunlukModlar)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: OyunKarti(
+                      mod: mod,
+                      bugunkuSkor: skorlar[mod.tip],
+                      onTap: () => _modaTiklandi(context, ref, mod),
+                    ),
+                  ),
+                if (yakindakiModlar.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const _BolumBasligi('Yakında'),
+                  YakindaListesi(modlar: yakindakiModlar),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -100,63 +94,118 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// Kullanıcının Google fotoğrafı, adı ve çıkış butonu
+// Logo ve profil fotoğrafı. Fotoğrafa dokununca hesap menüsü açılır.
 class _UstBar extends StatelessWidget {
-  const _UstBar();
+  final KullaniciBilgisi? kullanici;
+
+  const _UstBar({required this.kullanici});
 
   @override
   Widget build(BuildContext context) {
-    final kullanici = Supabase.instance.client.auth.currentUser;
-    final bilgiler = kullanici?.userMetadata ?? const {};
-    final tamAd = (bilgiler['full_name'] ?? bilgiler['name'] ?? kullanici?.email?.split('@').first ?? 'Futbolsever') as String;
-    final ad = tamAd.split(' ').first;
-    final fotoUrl = (bilgiler['avatar_url'] ?? bilgiler['picture']) as String?;
-
     return Row(
       children: [
-        CircleAvatar(
-          radius: 24,
-          backgroundColor: Renkler.kart,
-          foregroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
-          onForegroundImageError: fotoUrl != null ? (_, _) {} : null,
-          child: Text(
-            ad.isNotEmpty ? ad[0].toUpperCase() : '?',
-            style: const TextStyle(color: Renkler.vurgu, fontWeight: FontWeight.bold, fontSize: 18),
-          ),
+        const Icon(Icons.sports_soccer, color: Renkler.basari, size: 22),
+        const SizedBox(width: 8),
+        const Text(
+          'ScoutIQ',
+          style: TextStyle(color: Renkler.metin, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 0.3),
         ),
-        const SizedBox(width: 12),
-        Expanded(
+        const Spacer(),
+        IconButton(
+          tooltip: 'Hesap',
+          onPressed: () => _hesapMenusunuAc(context),
+          icon: _Avatar(kullanici: kullanici, yaricap: 17),
+        ),
+      ],
+    );
+  }
+
+  void _hesapMenusunuAc(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Renkler.yuzey,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Tekrar hoş geldin', style: TextStyle(color: Renkler.soluk, fontSize: 13)),
-              Text(
-                ad,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+              ListTile(
+                leading: _Avatar(kullanici: kullanici, yaricap: 20),
+                title: Text(
+                  kullanici?.ad ?? '',
+                  style: const TextStyle(color: Renkler.metin, fontWeight: FontWeight.w600),
+                ),
+                subtitle: kullanici?.eposta != null
+                    ? Text(kullanici!.eposta!, style: const TextStyle(color: Renkler.metinIkincil))
+                    : null,
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              ListTile(
+                leading: const Icon(Icons.logout_rounded, color: Renkler.hata),
+                title: const Text(
+                  'Çıkış yap',
+                  style: TextStyle(color: Renkler.hata, fontWeight: FontWeight.w600),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (await _cikisOnayla(context)) {
+                    await AuthService().signOut();
+                  }
+                },
               ),
             ],
           ),
         ),
-        const Row(
-          children: [
-            Icon(Icons.sports_soccer, color: Renkler.vurgu, size: 20),
-            SizedBox(width: 6),
-            Text(
-              'ScoutIQ',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1),
-            ),
-          ],
+      ),
+    );
+  }
+
+  Future<bool> _cikisOnayla(BuildContext context) async {
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Renkler.yuzey,
+        title: const Text('Çıkış yapılsın mı?', style: TextStyle(color: Renkler.metin)),
+        content: const Text(
+          'Tekrar oynamak için Google hesabınla yeniden giriş yapman gerekecek.',
+          style: TextStyle(color: Renkler.metinIkincil),
         ),
-        IconButton(
-          tooltip: 'Çıkış yap',
-          icon: const Icon(Icons.logout, color: Renkler.soluk),
-          onPressed: () async {
-            await AuthService().signOut();
-          },
-        ),
-      ],
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Renkler.hata),
+            child: const Text('Çıkış yap'),
+          ),
+        ],
+      ),
+    );
+    return onay ?? false;
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  final KullaniciBilgisi? kullanici;
+  final double yaricap;
+
+  const _Avatar({required this.kullanici, required this.yaricap});
+
+  @override
+  Widget build(BuildContext context) {
+    final fotoUrl = kullanici?.fotoUrl;
+    final ad = kullanici?.ilkAd ?? '';
+
+    return CircleAvatar(
+      radius: yaricap,
+      backgroundColor: Renkler.yuzeyYuksek,
+      foregroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
+      onForegroundImageError: fotoUrl != null ? (_, _) {} : null,
+      child: Text(
+        ad.isNotEmpty ? ad[0].toUpperCase() : '?',
+        style: TextStyle(color: Renkler.basari, fontWeight: FontWeight.w700, fontSize: yaricap * 0.8),
+      ),
     );
   }
 }
@@ -168,9 +217,17 @@ class _BolumBasligi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      metin,
-      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 10),
+      child: Text(
+        metin.toUpperCase(),
+        style: const TextStyle(
+          color: Renkler.metinSoluk,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
     );
   }
 }

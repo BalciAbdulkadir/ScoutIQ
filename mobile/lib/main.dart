@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'theme/tema.dart';
 
 // Supabase proje kimlik bilgileri
 const String supabaseUrl = 'https://lixufwybouylmaxeigpy.supabase.co';
@@ -30,13 +31,7 @@ class ScoutIQApp extends StatelessWidget {
     return MaterialApp(
       title: 'ScoutIQ',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green.shade800,
-          brightness: Brightness.dark, // Futbol temasına karanlık mod yakışır
-        ),
-        useMaterial3: true,
-      ),
+      theme: uygulamaTemasi(),
       home: Consumer(
         builder: (context, ref, child) {
           final authState = ref.watch(authStateProvider);

@@ -217,11 +217,11 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Daha Fazla'));
-      await tester.tap(find.text('Daha Fazla'));
+      await tester.ensureVisible(find.text('Daha fazla'));
+      await tester.tap(find.text('Daha fazla'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Doğru!'), findsOneWidget);
+      expect(find.text('Doğru'), findsOneWidget);
     });
 
     testWidgets('referansın bedeli görünür, rakibinki gizlidir', (tester) async {
@@ -231,63 +231,63 @@ void main() {
       expect(find.text('50 M€'), findsOneWidget);
       expect(find.text('Saka'), findsOneWidget);
       expect(find.text('? M€'), findsOneWidget);
-      expect(find.text('Soru 1 / 5'), findsOneWidget);
+      expect(find.text('Soru 1/5'), findsOneWidget);
     });
 
     testWidgets('doğru tahminde bedel açılır, sonra sıradaki soruya geçilir', (tester) async {
       await ekraniAc(tester);
 
-      await tahminEt(tester, 'Daha Fazla');
+      await tahminEt(tester, 'Daha fazla');
 
-      expect(find.text('Doğru!'), findsOneWidget);
+      expect(find.text('Doğru'), findsOneWidget);
       expect(find.text('70 M€'), findsOneWidget);
-      expect(find.text('Daha Fazla'), findsNothing);
+      expect(find.text('Daha fazla'), findsNothing);
 
       await tester.pump(BonservisScreen.sonucBeklemesi);
       await tester.pumpAndSettle();
 
-      expect(find.text('Soru 2 / 5'), findsOneWidget);
+      expect(find.text('Soru 2/5'), findsOneWidget);
       expect(find.text('Dumfries'), findsOneWidget);
-      expect(find.text('Daha Fazla'), findsOneWidget);
+      expect(find.text('Daha fazla'), findsOneWidget);
     });
 
     testWidgets('doğru cevap "Daha Az" ise "Daha Az" doğru sayılır', (tester) async {
       await ekraniAc(tester);
-      await tahminEt(tester, 'Daha Fazla'); // 1. soru: Saka daha pahalı
-      await tester.tap(find.text('Sıradaki'));
+      await tahminEt(tester, 'Daha fazla'); // 1. soru: Saka daha pahalı
+      await tester.tap(find.text('Devam'));
       await tester.pumpAndSettle();
 
-      await tahminEt(tester, 'Daha Az'); // 2. soru: Dumfries (40) < Kane (90)
+      await tahminEt(tester, 'Daha az'); // 2. soru: Dumfries (40) < Kane (90)
 
-      expect(find.text('Doğru!'), findsOneWidget);
-      expect(find.text('Skor: 2'), findsOneWidget);
+      expect(find.text('Doğru'), findsOneWidget);
+      expect(find.text('2 doğru'), findsOneWidget);
     });
 
     testWidgets('"Sıradaki" butonu beklemeden geçirir', (tester) async {
       await ekraniAc(tester);
 
-      await tahminEt(tester, 'Daha Fazla');
-      await tester.tap(find.text('Sıradaki'));
+      await tahminEt(tester, 'Daha fazla');
+      await tester.tap(find.text('Devam'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Soru 2 / 5'), findsOneWidget);
+      expect(find.text('Soru 2/5'), findsOneWidget);
     });
 
     testWidgets('yanlış tahminde oyun biter ve eşleşmeler listelenir', (tester) async {
       await ekraniAc(tester);
 
-      await tahminEt(tester, 'Daha Fazla'); // doğru
-      await tester.tap(find.text('Sıradaki'));
+      await tahminEt(tester, 'Daha fazla'); // doğru
+      await tester.tap(find.text('Devam'));
       await tester.pumpAndSettle();
-      await tahminEt(tester, 'Daha Fazla'); // yanlış: Dumfries daha ucuz
+      await tahminEt(tester, 'Daha fazla'); // yanlış: Dumfries daha ucuz
 
-      expect(find.text('Yanlış!'), findsOneWidget);
-      await tester.tap(find.text('Sonucu Gör'));
+      expect(find.text('Yanlış'), findsOneWidget);
+      await tester.tap(find.text('Sonuçları gör'));
       await tester.pumpAndSettle();
 
       expect(find.text('1/5'), findsOneWidget);
-      expect(find.text('Bugünün eşleşmeleri'), findsOneWidget);
-      expect(find.text('Dumfries'), findsOneWidget);
+      expect(find.text('ÖZET'), findsOneWidget);
+      expect(find.textContaining('Dumfries'), findsOneWidget);
     });
   });
 }

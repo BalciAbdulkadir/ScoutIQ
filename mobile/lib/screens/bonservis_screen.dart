@@ -7,7 +7,9 @@ import '../providers/bonservis_provider.dart';
 import '../theme/renkler.dart';
 import '../widgets/bonservis_oyuncu_karti.dart';
 import '../widgets/oyun_mesaj_karti.dart';
+import '../widgets/oyun_ortak.dart';
 
+// Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
   const BonservisScreen({super.key});
 
@@ -19,6 +21,8 @@ class BonservisScreen extends ConsumerStatefulWidget {
 }
 
 class _BonservisScreenState extends ConsumerState<BonservisScreen> {
+  static const _maksimumSkor = 5;
+
   Timer? _devamZamanlayici;
 
   @override
@@ -56,13 +60,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final durum = ref.watch(bonservisProvider);
 
     return Scaffold(
-      backgroundColor: Renkler.arkaPlan,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Bonservis', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
+      appBar: AppBar(title: const Text('Bonservis')),
       body: SafeArea(child: _govde(durum)),
     );
   }
@@ -70,23 +68,34 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   Widget _govde(BonservisState durum) {
     switch (durum.durum) {
       case BonservisDurumu.yukleniyor:
-        return const Center(child: CircularProgressIndicator(color: Colors.lightBlueAccent));
+        return const Center(child: CircularProgressIndicator(color: Renkler.bonservis));
       case BonservisDurumu.hata:
-        return OyunMesajKarti(baslik: 'Bir sorun oluştu', aciklama: durum.hataMesaji ?? 'Lütfen daha sonra tekrar dene.');
+        return OyunMesajKarti(
+          ikon: Icons.wifi_off_rounded,
+          baslik: 'Bağlantı sorunu',
+          aciklama: durum.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
+          onTekrarDene: () => ref.invalidate(bonservisProvider),
+        );
       case BonservisDurumu.oyunYok:
-        return const OyunMesajKarti(baslik: 'Bugün için oyun bulunamadı.', aciklama: 'Yarın tekrar gel.');
+        return const OyunMesajKarti(
+          ikon: Icons.schedule_rounded,
+          baslik: 'Bugünün oyunu henüz hazır değil',
+          aciklama: 'Biraz sonra tekrar dene.',
+        );
       case BonservisDurumu.zatenOynandi:
         return OyunMesajKarti(
-          baslik: 'Bugünkü Hakkını Doldurdun!',
-          aciklama: 'Skorun: ${durum.skor} / 5\nYarın yeni oyuncularla görüşmek üzere.',
+          ikon: Icons.check_circle_outline_rounded,
+          baslik: 'Bugünkü oyununu oynadın',
+          aciklama: 'Skorun: ${durum.skor}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
         );
       case BonservisDurumu.yaridaBirakildi:
         return OyunMesajKarti(
-          baslik: 'Bugünkü Hakkını Kullandın',
-          aciklama: 'Oyunu yarıda bıraktığın için tamamlanmış sayıldı.\nSkorun: ${durum.skor} / 5',
+          ikon: Icons.lock_outline_rounded,
+          baslik: 'Bugünkü hakkını kullandın',
+          aciklama: 'Oyundan çıktığın için oyun tamamlanmış sayıldı.\nSkorun: ${durum.skor}/$_maksimumSkor',
         );
       case BonservisDurumu.bitti:
-        return _BitisEkrani(durum: durum);
+        return _bitis(durum);
       case BonservisDurumu.oynaniyor:
         return _oyun(durum);
     }
@@ -96,177 +105,131 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final soru = durum.soru!;
     final cevaplandi = durum.sonCevapDogru != null;
 
-    // Büyük ekranda butonlar en altta durur; küçük ekranda içerik sığmazsa sayfa kaydırılır
+    // Kartlar ortada, butonlar altta durur; küçük ekranda içerik sığmazsa sayfa kaydırılır
     return LayoutBuilder(
       builder: (context, kisitlar) => SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: kisitlar.maxHeight - 28),
-          child: IntrinsicHeight(child: _oyunIcerigi(durum, soru, cevaplandi)),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OyunIlerlemesi(
+                  soruSayisi: durum.sorular.length,
+                  mevcutSoru: durum.soruIndex,
+                  sonuclar: durum.sonuclar,
+                  renk: Renkler.bonservis,
+                  sagMetin: '${durum.skor} doğru',
+                ),
+                const SizedBox(height: 24),
+                const Spacer(),
+                const Text(
+                  'Alttaki oyuncunun kariyeri boyunca ödenen toplam bonservis daha fazla mı, daha az mı?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Renkler.metinIkincil, fontSize: 14, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                _gecisli(
+                  BonservisOyuncuKarti(key: ValueKey('ref-${soru.referans.id}'), oyuncu: soru.referans, bedelGorunur: true),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Center(child: VsRozeti()),
+                ),
+                _gecisli(
+                  BonservisOyuncuKarti(
+                    key: ValueKey('rakip-${soru.rakip.id}'),
+                    oyuncu: soru.rakip,
+                    bedelGorunur: cevaplandi,
+                    bedelAnimasyonlu: cevaplandi,
+                    dogru: durum.sonCevapDogru,
+                  ),
+                ),
+                const Spacer(),
+                const SizedBox(height: 24),
+                // Butonlar ve sonuç bandı aynı yükseklikte: cevap verilince kartlar kaymasın
+                SizedBox(
+                  height: 64,
+                  child: cevaplandi
+                      ? _SonucBandi(soru: soru, dogru: durum.sonCevapDogru!, sonSoru: durum.sonSoru, onDevam: _devamEt)
+                      : _tahminButonlari(durum),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _oyunIcerigi(BonservisState durum, BonservisSorusu soru, bool cevaplandi) {
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _IlerlemeCubugu(durum: durum),
-          const SizedBox(height: 28),
-          const Text(
-            'Kariyeri boyunca ödenen toplam bonservis daha mı fazla, daha mı az?',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.3),
-          ),
-          const SizedBox(height: 20),
-          _gecisli(
-            BonservisOyuncuKarti(key: ValueKey('ref-${soru.referans.id}'), oyuncu: soru.referans, bedelGorunur: true),
-          ),
-          const _VsRozeti(),
-          _gecisli(
-            BonservisOyuncuKarti(
-              key: ValueKey('rakip-${soru.rakip.id}'),
-              oyuncu: soru.rakip,
-              bedelGorunur: cevaplandi,
-              bedelAnimasyonlu: cevaplandi,
-              dogru: durum.sonCevapDogru,
-            ),
-          ),
-          const Spacer(),
-          const SizedBox(height: 20),
-          if (cevaplandi) _SonucBandi(soru: soru, dogru: durum.sonCevapDogru!, sonSoru: durum.sonSoru, onDevam: _devamEt),
-          if (!cevaplandi) _tahminButonlari(durum, soru),
-        ],
-    );
-  }
-
-  // Yeni oyuncu geldiğinde kart yandan kayarak girer
+  // Yeni oyuncu geldiğinde kart hafifçe kayarak girer
   Widget _gecisli(Widget kart) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 300),
       transitionBuilder: (child, animasyon) => SlideTransition(
-        position: Tween(begin: const Offset(0.15, 0), end: Offset.zero).animate(animasyon),
+        position: Tween(begin: const Offset(0.08, 0), end: Offset.zero).animate(animasyon),
         child: FadeTransition(opacity: animasyon, child: child),
       ),
       child: kart,
     );
   }
 
-  Widget _tahminButonlari(BonservisState durum, BonservisSorusu soru) {
+  Widget _tahminButonlari(BonservisState durum) {
     final aktif = durum.tahminEdilebilir;
 
-    Widget buton({required String metin, required IconData ikon, required Color renk, required bool dahaFazla}) {
+    Widget buton({required String metin, required IconData ikon, required bool dahaFazla}) {
       return Expanded(
-        child: SizedBox(
-          height: 64,
-          child: FilledButton.icon(
-            onPressed: aktif ? () => _tahminEt(dahaFazla) : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: renk,
-              foregroundColor: Colors.black,
-              disabledBackgroundColor: renk.withValues(alpha: 0.3),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: FilledButton.icon(
+          onPressed: aktif ? () => _tahminEt(dahaFazla) : null,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(64),
+            backgroundColor: Renkler.yuzeyYuksek,
+            foregroundColor: Renkler.metin,
+            disabledBackgroundColor: Renkler.yuzey,
+            disabledForegroundColor: Renkler.metinSoluk,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Renkler.kenar),
             ),
-            icon: Icon(ikon, size: 26),
-            label: Text(metin, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
+          icon: Icon(ikon, size: 20, color: aktif ? Renkler.bonservis : Renkler.metinSoluk),
+          label: Text(metin, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
       );
     }
 
-    return Column(
+    return Row(
       children: [
-        Text(
-          '${soru.rakip.isim} için tahminin?',
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Renkler.soluk, fontSize: 13),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            buton(metin: 'Daha Az', ikon: Icons.arrow_downward, renk: const Color(0xFFFF8A65), dahaFazla: false),
-            const SizedBox(width: 12),
-            buton(metin: 'Daha Fazla', ikon: Icons.arrow_upward, renk: Colors.greenAccent, dahaFazla: true),
-          ],
-        ),
+        buton(metin: 'Daha az', ikon: Icons.arrow_downward_rounded, dahaFazla: false),
+        const SizedBox(width: 12),
+        buton(metin: 'Daha fazla', ikon: Icons.arrow_upward_rounded, dahaFazla: true),
       ],
     );
   }
-}
 
-class _IlerlemeCubugu extends StatelessWidget {
-  final BonservisState durum;
-
-  const _IlerlemeCubugu({required this.durum});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            for (var i = 0; i < durum.sorular.length; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              Expanded(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  height: 8,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    color: switch (i < durum.sonuclar.length ? durum.sonuclar[i] : null) {
-                      true => Colors.greenAccent,
-                      false => Colors.redAccent,
-                      null => i == durum.soruIndex ? Colors.lightBlueAccent.withValues(alpha: 0.6) : Colors.white12,
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Soru ${durum.soruIndex + 1} / ${durum.sorular.length}', style: const TextStyle(color: Colors.white70)),
-            Text(
-              'Skor: ${durum.skor}',
-              style: const TextStyle(color: Colors.lightBlueAccent, fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ],
-        ),
+  Widget _bitis(BonservisState durum) {
+    return OyunBitisEkrani(
+      skor: '${durum.skor}/${durum.sorular.length}',
+      skorAciklamasi: 'doğru',
+      baslik: bitisBasligi(durum.skor, durum.sorular.length),
+      renk: Renkler.bonservis,
+      ozetSatirlari: [
+        for (var i = 0; i < durum.sonuclar.length; i++) _ozetSatiri(durum.sorular[i], durum.sonuclar[i]),
       ],
     );
   }
-}
 
-class _VsRozeti extends StatelessWidget {
-  const _VsRozeti();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Center(
-        child: Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Renkler.arkaPlan,
-            border: Border.all(color: Colors.lightBlueAccent.withValues(alpha: 0.6), width: 2),
-          ),
-          child: const Text('VS', style: TextStyle(color: Colors.lightBlueAccent, fontWeight: FontWeight.w900)),
-        ),
-      ),
+  Widget _ozetSatiri(BonservisSorusu soru, bool dogru) {
+    return OzetSatiri(
+      dogru: dogru,
+      baslik: '${soru.referans.isim}  –  ${soru.rakip.isim}',
+      altBaslik: '${bonservisMetni(soru.referans.toplamBonservis)}  –  ${bonservisMetni(soru.rakip.toplamBonservis)}',
     );
   }
 }
 
+// Tahminden sonra butonların yerine çıkan sonuç
 class _SonucBandi extends StatelessWidget {
   final BonservisSorusu soru;
   final bool dogru;
@@ -277,152 +240,44 @@ class _SonucBandi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final renk = dogru ? Colors.greenAccent : Colors.redAccent;
+    final renk = dogru ? Renkler.basari : Renkler.hata;
     final fark = (soru.rakip.toplamBonservis - soru.referans.toplamBonservis).abs();
-    final aciklama = '${soru.pahaliOlan.isim} ${bonservisMetni(fark)} daha pahalı.';
-    final butonMetni = (!dogru || sonSoru) ? 'Sonucu Gör' : 'Sıradaki';
+    final butonMetni = (!dogru || sonSoru) ? 'Sonuçları gör' : 'Devam';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
       decoration: BoxDecoration(
-        color: renk.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
+        color: Renkler.yuzey,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: renk.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
-          Icon(dogru ? Icons.check_circle : Icons.cancel, color: renk, size: 36),
+          Icon(dogru ? Icons.check_circle_rounded : Icons.cancel_rounded, color: renk, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  dogru ? 'Doğru!' : 'Yanlış!',
-                  style: TextStyle(color: renk, fontSize: 20, fontWeight: FontWeight.w900),
+                  dogru ? 'Doğru' : 'Yanlış',
+                  style: TextStyle(color: renk, fontSize: 16, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 2),
-                Text(aciklama, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                Text(
+                  '${soru.pahaliOlan.isim}, ${bonservisMetni(fark)} daha pahalı',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13),
+                ),
               ],
             ),
           ),
           TextButton(
             onPressed: onDevam,
-            child: Text(butonMetni, style: TextStyle(color: renk, fontWeight: FontWeight.bold)),
+            style: TextButton.styleFrom(foregroundColor: Renkler.metin),
+            child: Text(butonMetni, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BitisEkrani extends StatelessWidget {
-  final BonservisState durum;
-
-  const _BitisEkrani({required this.durum});
-
-  String get _baslik => switch (durum.skor) {
-        5 => 'Kusursuz! 🏆',
-        4 => 'Harika!',
-        2 || 3 => 'Fena değil!',
-        _ => 'Bir dahaki sefere!',
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final oynananSorular = durum.sorular.take(durum.sonuclar.length).toList();
-
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Center(
-          child: Container(
-            width: 140,
-            height: 140,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.lightBlueAccent, width: 4),
-              color: Colors.lightBlueAccent.withValues(alpha: 0.08),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${durum.skor}/${durum.sorular.length}',
-                  style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900),
-                ),
-                const Text('doğru', style: TextStyle(color: Colors.white60)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          _baslik,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Yarın yeni oyuncularla görüşmek üzere.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white60),
-        ),
-        const SizedBox(height: 28),
-        const Text('Bugünün eşleşmeleri', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        for (var i = 0; i < oynananSorular.length; i++) _eslesmeSatiri(oynananSorular[i], durum.sonuclar[i]),
-        const SizedBox(height: 24),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.lightBlueAccent,
-            minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          child: const Text('Ana Menüye Dön', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        ),
-      ],
-    );
-  }
-
-  Widget _eslesmeSatiri(BonservisSorusu soru, bool dogru) {
-    Widget oyuncu(BonservisOyuncusu o) {
-      final pahali = identical(o, soru.pahaliOlan);
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              o.isim,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: pahali ? Colors.white : Colors.white60, fontWeight: pahali ? FontWeight.bold : FontWeight.normal),
-            ),
-            Text(
-              bonservisMetni(o.toplamBonservis),
-              style: TextStyle(color: pahali ? Colors.lightBlueAccent : Colors.white38, fontSize: 13),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: Renkler.kart, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Icon(dogru ? Icons.check_circle : Icons.cancel, color: dogru ? Colors.greenAccent : Colors.redAccent, size: 20),
-          const SizedBox(width: 12),
-          oyuncu(soru.referans),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Text('vs', style: TextStyle(color: Colors.white38)),
-          ),
-          oyuncu(soru.rakip),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/renkler.dart';
 
 enum OyunDurumu { aktif, hazirlaniyor, yakinda }
 
@@ -22,14 +23,15 @@ class OyunModu {
   });
 }
 
-// Hub'da gösterilen modlar. İlk faz: Kesişim ve Bonservis. Diğerleri ileriki fazlarda.
+// Hub'da gösterilen modlar. İlk faz: Kesişim ve Bonservis.
+// Izgara ve Bingo proje planında ileriki fazlar için öngörülüyor.
 const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'kesisim',
     baslik: 'Kesişim',
-    aciklama: 'İki takımda da forma giymiş oyuncuyu bul.',
-    ikon: Icons.sync_alt,
-    renk: Colors.greenAccent,
+    aciklama: 'İki takımda da forma giymiş bir oyuncu bul.',
+    ikon: Icons.join_inner,
+    renk: Renkler.kesisim,
     durum: OyunDurumu.aktif,
     maksimumSkor: 10,
   ),
@@ -37,30 +39,23 @@ const List<OyunModu> oyunModlari = [
     tip: 'bonservis',
     baslik: 'Bonservis',
     aciklama: 'Kariyerindeki toplam bonservis daha mı fazla, daha mı az?',
-    ikon: Icons.attach_money,
-    renk: Colors.lightBlueAccent,
+    ikon: Icons.euro,
+    renk: Renkler.bonservis,
     durum: OyunDurumu.aktif,
     maksimumSkor: 5,
   ),
   OyunModu(
-    baslik: 'Kariyer Yolu',
-    aciklama: 'Kulüplerinden oyuncuyu tahmin et.',
-    ikon: Icons.route,
-    renk: Colors.grey,
-    durum: OyunDurumu.yakinda,
-  ),
-  OyunModu(
-    baslik: 'Kimlik',
-    aciklama: 'İpuçlarından oyuncuyu bul.',
-    ikon: Icons.person_search,
-    renk: Colors.grey,
-    durum: OyunDurumu.yakinda,
-  ),
-  OyunModu(
     baslik: '9\'lu Izgara',
-    aciklama: 'Izgarayı doğru oyuncularla doldur.',
-    ikon: Icons.grid_3x3,
-    renk: Colors.grey,
+    aciklama: 'Satır ve sütunlardaki koşullara uyan oyuncularla ızgarayı doldur.',
+    ikon: Icons.grid_view_rounded,
+    renk: Renkler.metinSoluk,
+    durum: OyunDurumu.yakinda,
+  ),
+  OyunModu(
+    baslik: 'Bingo',
+    aciklama: 'Kartındaki özellikleri taşıyan oyuncuları bul.',
+    ikon: Icons.apps_rounded,
+    renk: Renkler.metinSoluk,
     durum: OyunDurumu.yakinda,
   ),
 ];
