@@ -15,10 +15,12 @@ class GameState {
   final String? hataMesaji; // status 'error' iken gösterilir
   final List<bool> sonuclar; // Cevaplanan soruların doğru/yanlış sonucu (ilerleme çubuğu ve özet için)
   final List<String> cevaplar; // Cevaplanan sorularda seçilen oyuncular (özet için)
+  final Map<int, String> ornekCevaplar; // Oyun bitince sunucudan gelen örnek doğru cevaplar: soru index'i -> oyuncu
 
   GameState({
     this.sonuclar = const [],
     this.cevaplar = const [],
+    this.ornekCevaplar = const {},
     this.status = 'loading',
     this.questions = const [],
     this.currentIndex = 0,
@@ -42,10 +44,12 @@ class GameState {
     String? hataMesaji,
     List<bool>? sonuclar,
     List<String>? cevaplar,
+    Map<int, String>? ornekCevaplar,
   }) {
     return GameState(
       sonuclar: sonuclar ?? this.sonuclar,
       cevaplar: cevaplar ?? this.cevaplar,
+      ornekCevaplar: ornekCevaplar ?? this.ornekCevaplar,
       status: status ?? this.status,
       questions: questions ?? this.questions,
       currentIndex: currentIndex ?? this.currentIndex,
@@ -143,12 +147,26 @@ class GameNotifier extends Notifier<GameState> {
         // Oyun bittiyse kilit açılmıyor: son soruda ikinci gönderim mümkün olmasın
         gonderiliyor: bitti,
       );
-      return null;
     } catch (e) {
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return gonderimHataMesaji;
     }
+
+    // Bitiş ekranı açıldı; yanlış cevap varsa özette gösterilecek doğru cevapları getiriyoruz
+    if (state.status == 'completed' && state.sonuclar.contains(false)) {
+      await _ornekCevaplariYukle();
+    }
+    return null;
+  }
+
+  // Örnek doğru cevaplar özete ek bilgidir: gelmezse özet yine gösterilir, hata kullanıcıya yansıtılmaz
+  Future<void> _ornekCevaplariYukle() async {
+    try {
+      final ornekler = await _depo.kesisimOrnekCevaplar(state.gameId!);
+      if (!ref.mounted) return;
+      state = state.copyWith(ornekCevaplar: ornekler);
+    } catch (_) {}
   }
 }
 

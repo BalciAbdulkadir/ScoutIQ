@@ -210,9 +210,10 @@ class OzetSatiri extends StatelessWidget {
   final bool? dogru; // null: soru cevaplanmadı
   final String baslik;
   final String? altBaslik;
+  final String? dogruCevap; // Doluysa altBaslik'ın altında yeşil "Doğru cevap: ..." satırı çıkar
   final Widget? sag;
 
-  const OzetSatiri({super.key, required this.dogru, required this.baslik, this.altBaslik, this.sag});
+  const OzetSatiri({super.key, required this.dogru, required this.baslik, this.altBaslik, this.dogruCevap, this.sag});
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +252,15 @@ class OzetSatiri extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13),
+                  ),
+                ],
+                if (dogruCevap != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Doğru cevap: $dogruCevap',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Renkler.basari, fontSize: 13),
                   ),
                 ],
               ],

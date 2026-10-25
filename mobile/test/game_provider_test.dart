@@ -172,6 +172,52 @@ void main() {
     });
   });
 
+  group('Oyun sonu doğru cevaplar', () {
+    test('oyun bitince yanlış cevap varsa örnek doğru cevaplar getirilir', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      for (var i = 0; i < 5; i++) {
+        await notifier(c).makeGuess(i == 1 ? yanlisOyuncu : dogruOyuncu);
+      }
+
+      expect(depo.ornekCevaplarSayisi, 1);
+      expect(durum(c).ornekCevaplar[1], 'Doğru Oyuncu 1');
+    });
+
+    test('oyun sürerken doğru cevaplar istenmez', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      await notifier(c).makeGuess(yanlisOyuncu);
+      await notifier(c).makeGuess(yanlisOyuncu);
+
+      expect(depo.ornekCevaplarSayisi, 0);
+      expect(durum(c).ornekCevaplar, isEmpty);
+    });
+
+    test('hepsi doğruysa doğru cevaplar istenmez', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      for (var i = 0; i < 5; i++) {
+        await notifier(c).makeGuess(dogruOyuncu);
+      }
+
+      expect(depo.ornekCevaplarSayisi, 0);
+    });
+
+    test('doğru cevaplar getirilemezse oyun yine düzgün biter', () async {
+      final (c, _) = await oyunuBaslat((d) => d.ornekCevaplarHataVerir = true);
+
+      String? sonHata;
+      for (var i = 0; i < 5; i++) {
+        sonHata = await notifier(c).makeGuess(yanlisOyuncu);
+      }
+
+      expect(sonHata, isNull);
+      expect(durum(c).status, 'completed');
+      expect(durum(c).ornekCevaplar, isEmpty);
+    });
+  });
+
   group('Çift gönderim', () {
     test('cevap kontrol edilirken ikinci gönderim yok sayılır', () async {
       final (c, depo) = await oyunuBaslat((d) => d.cevapKontrolBekletici = Completer<void>());

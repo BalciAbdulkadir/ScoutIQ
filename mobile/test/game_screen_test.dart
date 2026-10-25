@@ -113,6 +113,28 @@ void main() {
     expect(gonderButonu(tester).onPressed, isNull);
   });
 
+  testWidgets('bitiş özetinde yanlış bilinen sorunun doğru cevabı gösterilir', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+    await ekraniAc(tester);
+
+    // 2. soru yanlış (Mesut Özil), diğerleri doğru (Arda Güler)
+    for (var i = 0; i < 5; i++) {
+      await yaz(tester, 'ar');
+      await tester.tap(find.text(i == 1 ? 'Mesut Özil' : 'Arda Güler'));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('ÖZET'), findsOneWidget);
+    expect(find.text('Cevabın: Mesut Özil'), findsOneWidget);
+    expect(find.text('Doğru cevap: Doğru Oyuncu 1'), findsOneWidget);
+    // Doğru bilinen sorularda doğru cevap tekrar yazılmaz
+    expect(find.textContaining('Doğru cevap:'), findsOneWidget);
+  });
+
   testWidgets('bugün oynanmış oyun açılmaz', (tester) async {
     await ekraniAc(tester, (d) => d.kayit = {'skor': 8, 'durum': 'tamamlandi'});
 

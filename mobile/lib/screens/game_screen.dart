@@ -343,6 +343,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             dogru: i < state.sonuclar.length ? state.sonuclar[i] : null,
             baslik: '${state.questions[i]['kulup_a']}  ×  ${state.questions[i]['kulup_b']}',
             altBaslik: i < state.cevaplar.length ? 'Cevabın: ${state.cevaplar[i]}' : null,
+            // Doğru cevap sadece yanlış bilinen sorularda gösterilir
+            dogruCevap: (i < state.sonuclar.length && !state.sonuclar[i]) ? state.ornekCevaplar[i] : null,
           ),
       ],
     );

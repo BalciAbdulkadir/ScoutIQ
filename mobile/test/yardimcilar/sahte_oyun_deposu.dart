@@ -38,6 +38,13 @@ class SahteOyunDeposu implements OyunDeposu {
   // Doluysa cevap kontrolü bu Completer tamamlanana kadar bekler (çift gönderim testleri için)
   Completer<void>? cevapKontrolBekletici;
 
+  // Oyun bitince sunucunun döndüreceği örnek doğru cevaplar: soru index'i -> oyuncu
+  Map<int, String> ornekCevaplar = {
+    for (var i = 0; i < 5; i++) i: 'Doğru Oyuncu $i',
+  };
+  bool ornekCevaplarHataVerir = false;
+  int ornekCevaplarSayisi = 0;
+
   // Doluysa skor yazımı bu Completer tamamlanana kadar bekler
   Completer<void>? skorYazBekletici;
   bool skorYazHataVerir = false;
@@ -92,6 +99,15 @@ class SahteOyunDeposu implements OyunDeposu {
     if (cevapKontrolBekletici != null) await cevapKontrolBekletici!.future;
     if (cevapKontrolHataVerir) throw Exception('bağlantı yok');
     return dogruCevaplar.contains(oyuncuId);
+  }
+
+  @override
+  Future<Map<int, String>> kesisimOrnekCevaplar(String oyunId) async {
+    ornekCevaplarSayisi++;
+    if (ornekCevaplarHataVerir) throw Exception('bağlantı yok');
+    // Gerçek sunucu gibi: oyun bitmeden cevap vermez
+    if (kayit?['durum'] != 'tamamlandi') return {};
+    return ornekCevaplar;
   }
 
   @override
