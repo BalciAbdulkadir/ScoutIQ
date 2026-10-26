@@ -11,5 +11,9 @@ namespace ScoutIQ.API.Models
 
         [Column("kulup_id")]
         public string KulupId { get; set; } = string.Empty;
+
+        // Oyuncunun bu kulüpte oynadığı son sezon (2026 = 2026/27)
+        [Column("bitis_yili")]
+        public int? BitisYili { get; set; }
     }
 }

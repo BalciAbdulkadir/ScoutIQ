@@ -28,15 +28,29 @@ void main() {
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
 
+  testWidgets('Bonservis skoru 5 üzerinden gösterilir', (tester) async {
+    await kartiGoster(tester, bonservis, 3);
+
+    expect(find.text('3/5'), findsOneWidget);
+  });
+
   testWidgets('henüz hazır olmayan oyunda "Hazırlanıyor" yazar', (tester) async {
-    await kartiGoster(tester, bonservis, null);
+    const hazirlanan = OyunModu(
+      tip: 'yeni_mod',
+      baslik: 'Yeni Mod',
+      aciklama: 'Açıklama',
+      ikon: Icons.star,
+      renk: Colors.grey,
+      durum: OyunDurumu.hazirlaniyor,
+    );
+    await kartiGoster(tester, hazirlanan, null);
 
     expect(find.text('Hazırlanıyor'), findsOneWidget);
     expect(find.text('Oyna'), findsNothing);
   });
 
-  test('ilk fazda sadece Kesişim oynanabilir durumda', () {
+  test('ilk fazın iki modu (Kesişim ve Bonservis) oynanabilir durumda', () {
     final aktifler = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).map((m) => m.tip);
-    expect(aktifler, ['kesisim']);
+    expect(aktifler, ['kesisim', 'bonservis']);
   });
 }
