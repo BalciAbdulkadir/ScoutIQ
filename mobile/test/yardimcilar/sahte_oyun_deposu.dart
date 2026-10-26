@@ -38,6 +38,17 @@ class SahteOyunDeposu implements OyunDeposu {
   // Doluysa cevap kontrolü bu Completer tamamlanana kadar bekler (çift gönderim testleri için)
   Completer<void>? cevapKontrolBekletici;
 
+  // Oyun bitince sunucunun döndüreceği örnek doğru cevaplar: soru index'i -> oyuncu
+  Map<int, String> ornekCevaplar = {
+    for (var i = 0; i < 5; i++) i: 'Doğru Oyuncu $i',
+  };
+  bool ornekCevaplarHataVerir = false;
+  int ornekCevaplarSayisi = 0;
+
+  // Doluysa skor yazımı bu Completer tamamlanana kadar bekler
+  Completer<void>? skorYazBekletici;
+  bool skorYazHataVerir = false;
+
   // Çağrı kayıtları
   int kayitAcSayisi = 0;
   int cevapKontrolSayisi = 0;
@@ -91,7 +102,18 @@ class SahteOyunDeposu implements OyunDeposu {
   }
 
   @override
+  Future<Map<int, String>> kesisimOrnekCevaplar(String oyunId) async {
+    ornekCevaplarSayisi++;
+    if (ornekCevaplarHataVerir) throw Exception('bağlantı yok');
+    // Gerçek sunucu gibi: oyun bitmeden cevap vermez
+    if (kayit?['durum'] != 'tamamlandi') return {};
+    return ornekCevaplar;
+  }
+
+  @override
   Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti}) async {
+    if (skorYazBekletici != null) await skorYazBekletici!.future;
+    if (skorYazHataVerir) throw Exception('bağlantı yok');
     if (kayit?['durum'] != 'basladi') return false;
     yazilanSkorlar.add((skor: skor, bitti: bitti));
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};

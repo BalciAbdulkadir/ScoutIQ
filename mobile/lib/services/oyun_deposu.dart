@@ -29,6 +29,10 @@ abstract class OyunDeposu {
 
   Future<bool> kesisimCevapKontrol({required String oyunId, required int soruIndex, required String oyuncuId});
 
+  // Bitmiş bir Kesişim oyununun her sorusu için örnek bir doğru cevap: soru index'i -> oyuncu adı.
+  // Sunucu sadece oyunu bitirmiş kullanıcıya cevap döndürür.
+  Future<Map<int, String>> kesisimOrnekCevaplar(String oyunId);
+
   // 'basladi' durumundaki kaydın skorunu yazar, bittiyse kilitler.
   // Güncellenecek kayıt yoksa (başka yerden kapatılmışsa) false döner.
   Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti});
@@ -116,6 +120,15 @@ class SupabaseOyunDeposu implements OyunDeposu {
       'p_oyuncu_id': oyuncuId,
     });
     return dogruMu == true;
+  }
+
+  @override
+  Future<Map<int, String>> kesisimOrnekCevaplar(String oyunId) async {
+    final satirlar = await _supabase.rpc('kesisim_ornek_cevaplar', params: {'p_oyun_id': oyunId}) as List<dynamic>;
+    return {
+      for (final satir in satirlar.cast<Map<String, dynamic>>())
+        if (satir['oyuncu_isim'] != null) (satir['soru_index'] as num).toInt(): satir['oyuncu_isim'] as String,
+    };
   }
 
   @override

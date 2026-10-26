@@ -142,6 +142,8 @@ void main() {
 
       expect(durum(c).status, 'completed');
       expect(durum(c).score, 6);
+      expect(durum(c).sonuclar, [true, false, true, false, true]);
+      expect(durum(c).cevaplar, ['Arda Güler', 'Mesut Özil', 'Arda Güler', 'Mesut Özil', 'Arda Güler']);
       expect(depo.kayit, {'skor': 6, 'durum': 'tamamlandi'});
       expect(depo.yazilanSkorlar.last, (skor: 6, bitti: true));
     });
@@ -167,6 +169,52 @@ void main() {
       await notifier(c).makeGuess(dogruOyuncu);
 
       expect(durum(c).status, 'already_played');
+    });
+  });
+
+  group('Oyun sonu doğru cevaplar', () {
+    test('oyun bitince yanlış cevap varsa örnek doğru cevaplar getirilir', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      for (var i = 0; i < 5; i++) {
+        await notifier(c).makeGuess(i == 1 ? yanlisOyuncu : dogruOyuncu);
+      }
+
+      expect(depo.ornekCevaplarSayisi, 1);
+      expect(durum(c).ornekCevaplar[1], 'Doğru Oyuncu 1');
+    });
+
+    test('oyun sürerken doğru cevaplar istenmez', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      await notifier(c).makeGuess(yanlisOyuncu);
+      await notifier(c).makeGuess(yanlisOyuncu);
+
+      expect(depo.ornekCevaplarSayisi, 0);
+      expect(durum(c).ornekCevaplar, isEmpty);
+    });
+
+    test('hepsi doğruysa doğru cevaplar istenmez', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      for (var i = 0; i < 5; i++) {
+        await notifier(c).makeGuess(dogruOyuncu);
+      }
+
+      expect(depo.ornekCevaplarSayisi, 0);
+    });
+
+    test('doğru cevaplar getirilemezse oyun yine düzgün biter', () async {
+      final (c, _) = await oyunuBaslat((d) => d.ornekCevaplarHataVerir = true);
+
+      String? sonHata;
+      for (var i = 0; i < 5; i++) {
+        sonHata = await notifier(c).makeGuess(yanlisOyuncu);
+      }
+
+      expect(sonHata, isNull);
+      expect(durum(c).status, 'completed');
+      expect(durum(c).ornekCevaplar, isEmpty);
     });
   });
 
