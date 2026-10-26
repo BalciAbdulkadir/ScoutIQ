@@ -29,17 +29,23 @@ namespace ScoutIQ.API.Jobs
             DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
             Console.WriteLine($"[{DateTime.Now}] CRON TETİKLENDİ: {bugun:yyyy-MM-dd} için Hub oyunları hazırlanıyor...");
 
+            // Oyunlar ayrı ayrı denenir: birinde hata olursa diğeri yine üretilir
             try
             {
-                // 1. Kesişim Oyunu İçin 5 Soruluk Set Üret
                 await UretKesisimOyunlari(bugun);
-
-                // 2. Bonservis Oyunu İçin Set Üret (Şimdilik boş, ileride içini dolduracağız)
-                // await UretBonservisOyunlari(bugun);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Hata oluştu: {ex.Message}");
+                Console.WriteLine($"Kesişim: hata oluştu: {ex.Message}");
+            }
+
+            try
+            {
+                await UretBonservisOyunlari(bugun);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Bonservis: hata oluştu: {ex.Message}");
             }
         }
 
@@ -127,6 +133,139 @@ namespace ScoutIQ.API.Jobs
             }
 
             return sonuc.Sorular;
+        }
+
+        private async Task UretBonservisOyunlari(DateTime tarih)
+        {
+            if (await OyunVarMi("bonservis", tarih))
+            {
+                Console.WriteLine($"Bonservis: {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
+                return;
+            }
+
+            var sorular = await BonservisSorulariniSec();
+            if (sorular == null) return;
+
+            // Toplam bonservisler de kaydedilir: cevaptan sonra ekranda gösterilir
+            var yeniOyun = new GunlukOyun
+            {
+                OyunTipi = "bonservis",
+                Tarih = tarih,
+                SoruVerisi = sorular.Select(s => new
+                {
+                    oyuncu_a = s.Sol.Isim,
+                    oyuncu_b = s.Sag.Isim,
+                    oyuncu_a_id = s.Sol.Id,
+                    oyuncu_b_id = s.Sag.Id,
+                    oyuncu_a_bonservis = s.Sol.ToplamBonservis,
+                    oyuncu_b_bonservis = s.Sag.ToplamBonservis
+                }).ToList()
+            };
+
+            await _supabaseClient.From<GunlukOyun>().Insert(yeniOyun);
+            Console.WriteLine($"Başarılı: Bonservis için {tarih:yyyy-MM-dd} tarihli 5 soruluk set eklendi.");
+            BonservisSorulariniYaz(sorular);
+        }
+
+        // Veritabanına yazmadan bir Bonservis soru seti seçip ekrana basar:
+        // dotnet run -- --bonservis-onizleme
+        public async Task BonservisOnizleme()
+        {
+            var sorular = await BonservisSorulariniSec(ayrintili: true);
+            if (sorular == null) return;
+
+            Console.WriteLine("Önizleme (veritabanına yazılmadı):");
+            BonservisSorulariniYaz(sorular);
+        }
+
+        private static void BonservisSorulariniYaz(List<BonservisSoruSecici.BonservisSorusu> sorular)
+        {
+            for (int i = 0; i < sorular.Count; i++)
+            {
+                var s = sorular[i];
+                Console.WriteLine($"   {i + 1}. {s.Sol.Isim} ({Milyon(s.Sol.ToplamBonservis)}) x {s.Sag.Isim} ({Milyon(s.Sag.ToplamBonservis)}) -> doğru: {s.Dogru.Isim}");
+            }
+        }
+
+        private static string Milyon(long euro) => $"{euro / 1_000_000.0:0.#} M€";
+
+        // Listedeki kulüplerde güncel sezonda oynayan, toplam bonservisi yeterli oyuncuları çeker,
+        // seçimi BonservisSoruSecici'ye bırakır
+        private async Task<List<BonservisSoruSecici.BonservisSorusu>?> BonservisSorulariniSec(bool ayrintili = false)
+        {
+            var kulupler = (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id").Get()).Models;
+            KulupListesiniKontrolEt(BonservisSoruSecici.Kulupler, "Bonservis", kulupler, ayrintili);
+
+            var kulupIdleri = KesisimSoruSecici.ListedekiKulupIdleri(BonservisSoruSecici.Kulupler, kulupler);
+            var kariyer = await KulupKariyerleri(kulupIdleri);
+            if (kariyer.Count == 0)
+            {
+                Console.WriteLine("Uyarı: Bonservis kulüpleri için kariyer verisi yok.");
+                return null;
+            }
+
+            // Güncel sezon: bu kulüpler için veritabanındaki en son sezon
+            int guncelSezon = kariyer.Max(k => k.BitisYili ?? 0);
+            var guncelOyuncular = kariyer.Where(k => k.BitisYili == guncelSezon).Select(k => k.OyuncuId).ToHashSet();
+
+            var adaylar = (await PahaliOyuncular())
+                .Where(o => guncelOyuncular.Contains(o.Id))
+                .Select(o => new BonservisSoruSecici.Aday(o.Id, o.Isim, o.ToplamBonservis))
+                .ToList();
+
+            Console.WriteLine($"Bonservis havuzu: {guncelSezon}/{guncelSezon + 1} sezonunda {guncelOyuncular.Count} oyuncu, " +
+                              $"toplam bonservisi {Milyon(BonservisSoruSecici.MinToplamBonservis)} üstünde olan {adaylar.Count} oyuncu.");
+
+            var sorular = new BonservisSoruSecici().Sec(adaylar);
+            if (sorular == null)
+            {
+                Console.WriteLine("Uyarı: Bonservis için kurallara uyan 5 soruluk zincir kurulamadı.");
+            }
+            return sorular;
+        }
+
+        // Verilen kulüplerin kariyer kayıtları (oyuncu, kulüp, son sezon)
+        private async Task<List<KariyerGecmisi>> KulupKariyerleri(HashSet<string> kulupIdleri)
+        {
+            var tumu = new List<KariyerGecmisi>();
+            var filtre = kulupIdleri.Cast<object>().ToList();
+
+            for (int bas = 0; ; bas += SayfaBoyutu)
+            {
+                var sayfa = await _supabaseClient.From<KariyerGecmisi>()
+                    .Select("oyuncu_id, kulup_id, bitis_yili")
+                    .Filter("kulup_id", Operator.In, filtre)
+                    .Order("oyuncu_id", Ordering.Ascending)
+                    .Order("kulup_id", Ordering.Ascending)
+                    .Range(bas, bas + SayfaBoyutu - 1)
+                    .Get();
+
+                tumu.AddRange(sayfa.Models);
+                if (sayfa.Models.Count < SayfaBoyutu) break;
+            }
+
+            return tumu;
+        }
+
+        // Toplam bonservisi alt sınırın üzerindeki tüm oyuncular
+        private async Task<List<Oyuncu>> PahaliOyuncular()
+        {
+            var tumu = new List<Oyuncu>();
+
+            for (int bas = 0; ; bas += SayfaBoyutu)
+            {
+                var sayfa = await _supabaseClient.From<Oyuncu>()
+                    .Select("id, isim, toplam_bonservis")
+                    .Filter("toplam_bonservis", Operator.GreaterThan, BonservisSoruSecici.MinToplamBonservis.ToString())
+                    .Order("id", Ordering.Ascending)
+                    .Range(bas, bas + SayfaBoyutu - 1)
+                    .Get();
+
+                tumu.AddRange(sayfa.Models);
+                if (sayfa.Models.Count < SayfaBoyutu) break;
+            }
+
+            return tumu;
         }
 
         private async Task<List<KariyerGecmisi>> TumKariyerGecmisi()

@@ -27,6 +27,13 @@ if (args.Contains("--kesisim-onizleme"))
     return;
 }
 
+// "dotnet run -- --bonservis-onizleme" bir Bonservis soru seti seçip ekrana basar, veritabanına yazmaz
+if (args.Contains("--bonservis-onizleme"))
+{
+    await app.Services.GetRequiredService<DailyQuestionJob>().BonservisOnizleme();
+    return;
+}
+
 // 3. Zamanlayıcıyı yapılandıralım
 
 app.Services.UseScheduler(scheduler =>
