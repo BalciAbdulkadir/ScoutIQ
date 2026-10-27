@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Supabase ve oyuncu fotoğrafları için. Flutter bu izni sadece debug/profile derlemelerine ekler,
+         release derlemede ve debug manifest'i olmayan makinelerde uygulama internete çıkamaz. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="mobile"
         android:name="${applicationName}"
