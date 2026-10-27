@@ -5,8 +5,9 @@ Kullanım:
     python main.py            # varsayılan sezonlar: 2023/2024 - 2026/2027
     python main.py 2025 2026  # sadece verilen sezonlar, eskiden yeniye işlenir
 
-Önce supabase/migrations/001_temel_veri_duzeltmeleri.sql çalıştırılmış olmalıdır.
+Önce supabase/migrations/001_temel_veri_duzeltmeleri.sql ve 007_oyuncu_fotograflari.sql çalıştırılmış olmalıdır.
 Tekrar çalıştırmak güvenlidir: kayıtlar transfermarkt_id üzerinden güncellenir, çoğalmaz.
+Yeni eklenen oyuncuların fotoğrafları da yazılır. Mevcut oyuncuların fotoğrafları için: python fotograflar.py
 """
 import os
 import sys
@@ -61,6 +62,14 @@ def kulup_kaydet(kulup, lig):
     ).execute()
     return res.data[0]["id"]
 
+def foto_adresi(oyuncu):
+    """Oyuncunun Transfermarkt fotoğrafının adresi. Fotoğrafı olmayan oyuncular için None:
+    Transfermarkt'ın boş siluet resmi (default.jpg) uygulamada baş harflerle gösterilir."""
+    adres = oyuncu.get("imageUrl")
+    if not adres or "/default." in adres:
+        return None
+    return adres
+
 def oyunculari_kaydet(oyuncular):
     """Kadrodaki oyuncuları toplu ekler ya da günceller, Supabase UUID'lerini döndürür."""
     # Aynı oyuncu listede iki kez geçerse upsert hata verir, transfermarkt_id ile tekilleştiriyoruz
@@ -73,6 +82,7 @@ def oyunculari_kaydet(oyuncular):
             "transfermarkt_id": oyuncu["id"],
             "isim": oyuncu["name"],
             "uyruk": uyruklar[0] if uyruklar else None,
+            "foto_url": foto_adresi(oyuncu),
         }
 
     if not satirlar:

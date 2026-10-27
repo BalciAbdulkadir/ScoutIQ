@@ -3,8 +3,9 @@ class BonservisOyuncusu {
   final String id;
   final String isim;
   final int toplamBonservis;
+  final String? fotoUrl; // Fotoğrafı olmayan oyuncularda ve fotoğraflar eklenmeden önceki oyunlarda null
 
-  const BonservisOyuncusu({required this.id, required this.isim, required this.toplamBonservis});
+  const BonservisOyuncusu({required this.id, required this.isim, required this.toplamBonservis, this.fotoUrl});
 }
 
 // Bir soru: bedeli görünen referans oyuncu ve bedeli tahmin edilecek rakip
@@ -25,6 +26,7 @@ List<BonservisSorusu> bonservisSorulariniOku(List<dynamic> soruVerisi) {
         id: soru['oyuncu_${taraf}_id'] as String,
         isim: soru['oyuncu_$taraf'] as String,
         toplamBonservis: (soru['oyuncu_${taraf}_bonservis'] as num).toInt(),
+        fotoUrl: soru['oyuncu_${taraf}_foto'] as String?,
       );
 
   return [

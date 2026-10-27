@@ -14,5 +14,9 @@ namespace ScoutIQ.API.Models
 
         [Column("toplam_bonservis")]
         public long ToplamBonservis { get; set; }
+
+        // Transfermarkt'taki fotoğrafın adresi, fotoğrafı olmayan oyuncularda null
+        [Column("foto_url")]
+        public string? FotoUrl { get; set; }
     }
 }

@@ -7,7 +7,7 @@ import 'package:mobile/models/bonservis_sorusu.dart';
 import 'package:mobile/providers/bonservis_provider.dart';
 import 'package:mobile/screens/bonservis_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
-import 'package:mobile/widgets/bonservis_oyuncu_karti.dart';
+import 'package:mobile/widgets/oyuncu_fotografi.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
 
@@ -73,10 +73,21 @@ void main() {
       expect(bonservisMetni(5500000), '5,5 M€');
     });
 
-    test('avatar için ad ve soyadın baş harfleri alınır', () {
-      expect(BonservisOyuncuKarti.basHarfler('Alexander Sørloth'), 'AS');
-      expect(BonservisOyuncuKarti.basHarfler('Pedri'), 'P');
-      expect(BonservisOyuncuKarti.basHarfler('Kevin De Bruyne'), 'KB');
+    test('fotoğraf adresleri sorudan okunur, fotoğrafsız eski oyunlarda boş kalır', () {
+      final okunan = bonservisSorulariniOku([
+        {...soru('Pedri', 50, 'Saka', 70), 'oyuncu_a_foto': 'https://foto.test/pedri.jpg', 'oyuncu_b_foto': null},
+        soru('Kane', 90, 'Dumfries', 40),
+      ]);
+
+      expect(okunan[0].referans.fotoUrl, 'https://foto.test/pedri.jpg');
+      expect(okunan[0].rakip.fotoUrl, isNull);
+      expect(okunan[1].referans.fotoUrl, isNull);
+    });
+
+    test('fotoğraf yoksa avatar için ad ve soyadın baş harfleri alınır', () {
+      expect(OyuncuFotografi.basHarfler('Alexander Sørloth'), 'AS');
+      expect(OyuncuFotografi.basHarfler('Pedri'), 'P');
+      expect(OyuncuFotografi.basHarfler('Kevin De Bruyne'), 'KB');
     });
   });
 

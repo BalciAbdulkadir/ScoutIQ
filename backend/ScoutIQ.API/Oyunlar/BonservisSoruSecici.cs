@@ -39,7 +39,8 @@ namespace ScoutIQ.API.Oyunlar
             ["131"] = "Barcelona", ["418"] = "Real Madrid", ["13"] = "Atlético Madrid", ["621"] = "Athletic Bilbao",
         };
 
-        public record Aday(string Id, string Isim, long ToplamBonservis);
+        // FotoUrl seçimi etkilemez, sadece soruyla birlikte uygulamaya taşınır
+        public record Aday(string Id, string Isim, long ToplamBonservis, string? FotoUrl = null);
 
         // Sol ve Sag ekrandaki yerlerdir; doğru cevabın hangi tarafta olacağı rastgeledir
         public record BonservisSorusu(Aday Sol, Aday Sag)

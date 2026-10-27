@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 
@@ -51,6 +52,20 @@ void main() {
     expect(depo.arananlar, ['ar']);
     expect(find.text('Arda Güler'), findsOneWidget);
     expect(find.text('Mesut Özil'), findsOneWidget);
+  });
+
+  testWidgets('öneri listesinde fotoğrafı olan oyuncunun fotoğrafı, olmayanın baş harfleri görünür', (tester) async {
+    await ekraniAc(tester, (d) => d.oneriler = const [
+          OyuncuOneri(id: 'o-1', isim: 'Arda Güler', fotoUrl: 'https://foto.test/arda.jpg'),
+          OyuncuOneri(id: 'o-2', isim: 'Mesut Özil'),
+        ]);
+
+    await yaz(tester, 'ar');
+
+    final fotograflar = tester.widgetList<Image>(find.byType(Image)).toList();
+    expect(fotograflar, hasLength(1));
+    expect((fotograflar.single.image as ResizeImage).imageProvider, isA<NetworkImage>());
+    expect(find.text('MÖ'), findsOneWidget);
   });
 
   testWidgets('sonuç yoksa "bulunamadı" yazar', (tester) async {
