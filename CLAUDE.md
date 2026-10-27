@@ -16,10 +16,11 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 7. İlk faz oyun modları:
    - **Mod 1 – Kesişim Bulmacası:** Rastgele seçilen iki takımın ortak oyuncusunu bulma. (Mevcut geliştirme aşamasındaki oyun.)
    - **Mod 2 – Bonservis Kıyaslaması:** İki oyuncunun geçmiş transfer bedellerini Daha Az / Daha Fazla mantığıyla karşılaştırma.
-8. Grid ve Bingo tarzı modlar **ileride** eklenecektir; ilk fazın parçası değildir.
+   - **Mod 3 – Izgara (3x3):** Satır ve sütun başlıklarının ikisine de uyan oyuncuları bulma. Kolay (sadece kulüpler), Orta (kulüpler + bilinen 20 milli takım) ve Zor (kulüpler + diğer milli takımlar) ayrı oyunlardır, her biri günde bir kez oynanır. Bir tahtada en fazla 2 milli takım olur. Toplam 9 tahmin hakkı vardır; kullanıcı hücre seçmez, doğru oyuncu uygun hücreye yerleşir. Aynı oyuncu iki kez kullanılamaz, pes edilebilir.
+8. Bingo tarzı modlar **ileride** eklenecektir; ilk fazın parçası değildir.
 9. Aşağıdakiler **Faz 2** kapsamındadır, ilk fazda yapılmaz:
    - **Zamanlayıcı:** Belirli oyunlarda geri sayım sayacı.
-   - **Zorluk Seviyeleri:** "Kolay" (ör. son 5 yıldaki oyuncular) / "Zor" (ör. tüm zamanlar).
+   - **Zorluk Seviyeleri:** "Kolay" (ör. son 5 yıldaki oyuncular) / "Zor" (ör. tüm zamanlar). (Izgara'nın kendi zorlukları istisnadır, Mod 3'e bakınız.)
    - **Can Hakkı Sistemi:** Bazı oyunlarda 3 veya 5 yanlış cevap hakkı (kalp/can).
 
 ## D. Teknik Mimari

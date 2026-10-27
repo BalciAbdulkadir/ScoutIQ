@@ -47,6 +47,134 @@ namespace ScoutIQ.API.Jobs
             {
                 Console.WriteLine($"Bonservis: hata oluştu: {ex.Message}");
             }
+
+            try
+            {
+                await UretIzgaraOyunlari(bugun);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Izgara: hata oluştu: {ex.Message}");
+            }
+        }
+
+        // Her zorluk ayrı bir oyundur: izgara_kolay, izgara_orta, izgara_zor
+        public static string IzgaraOyunTipi(IzgaraSoruSecici.Zorluk zorluk) => $"izgara_{zorluk.ToString().ToLowerInvariant()}";
+
+        private async Task UretIzgaraOyunlari(DateTime tarih)
+        {
+            var eksikler = new List<IzgaraSoruSecici.Zorluk>();
+            foreach (var zorluk in Enum.GetValues<IzgaraSoruSecici.Zorluk>())
+            {
+                if (await OyunVarMi(IzgaraOyunTipi(zorluk), tarih))
+                    Console.WriteLine($"Izgara ({zorluk}): {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
+                else
+                    eksikler.Add(zorluk);
+            }
+            if (eksikler.Count == 0) return;
+
+            var veri = await IzgaraVerisiniOku();
+            foreach (var zorluk in eksikler)
+            {
+                var izgara = new IzgaraSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, veri.MilliKariyer);
+                if (izgara == null)
+                {
+                    Console.WriteLine($"Uyarı: Izgara ({zorluk}) için kurallara uyan tahta kurulamadı.");
+                    continue;
+                }
+
+                await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+                {
+                    OyunTipi = IzgaraOyunTipi(zorluk),
+                    Tarih = tarih,
+                    SoruVerisi = IzgaraSoruVerisi(izgara)
+                });
+                Console.WriteLine($"Başarılı: Izgara ({zorluk}) için {tarih:yyyy-MM-dd} tarihli tahta eklendi.");
+                IzgarayiYaz(izgara);
+            }
+        }
+
+        // Veritabanına yazmadan her zorluktan bir tahta seçip ekrana basar:
+        // dotnet run -- --izgara-onizleme
+        public async Task IzgaraOnizleme()
+        {
+            var veri = await IzgaraVerisiniOku(ayrintili: true);
+            foreach (var zorluk in Enum.GetValues<IzgaraSoruSecici.Zorluk>())
+            {
+                var izgara = new IzgaraSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, veri.MilliKariyer);
+                Console.WriteLine($"\nIzgara ({zorluk}) önizleme (veritabanına yazılmadı):");
+                if (izgara == null)
+                    Console.WriteLine("   Kurallara uyan tahta kurulamadı.");
+                else
+                    IzgarayiYaz(izgara);
+            }
+        }
+
+        private record IzgaraVerisi(List<Kulup> Kulupler, List<KariyerGecmisi> Kariyer, List<MilliTakimKariyeri> MilliKariyer);
+
+        private async Task<IzgaraVerisi> IzgaraVerisiniOku(bool ayrintili = false)
+        {
+            var kulupler = (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url").Get()).Models;
+            KulupListesiniKontrolEt(IzgaraSoruSecici.Kulupler, "Izgara", kulupler, ayrintili);
+
+            var kulupIdleri = KesisimSoruSecici.ListedekiKulupIdleri(IzgaraSoruSecici.Kulupler, kulupler);
+            var kariyer = await KulupKariyerleri(kulupIdleri);
+            var milliKariyer = await TumMilliTakimKariyeri();
+
+            Console.WriteLine($"Izgara verisi: {kulupIdleri.Count} kulüpte {kariyer.Count} kariyer kaydı, {milliKariyer.Count} milli takım kaydı.");
+            return new IzgaraVerisi(kulupler, kariyer, milliKariyer);
+        }
+
+        // Uygulama başlıkları gösterir; cevap sayıları sunucuda, oyuncu birden fazla boş hücreye uyuyorsa
+        // hangisine yerleşeceğini seçmek için kullanılır. Cevapların kendisi tahtada yoktur.
+        private static object IzgaraSoruVerisi(IzgaraSoruSecici.Izgara izgara)
+        {
+            object Baslik(IzgaraSoruSecici.Baslik b) => new
+            {
+                tip = b.Tip == IzgaraSoruSecici.BaslikTipi.Kulup ? "kulup" : "milli",
+                id = b.KulupId,
+                tm_id = b.TmId,
+                isim = b.Isim,
+                logo = b.LogoUrl
+            };
+
+            return new
+            {
+                satirlar = izgara.Satirlar.Select(Baslik).ToList(),
+                sutunlar = izgara.Sutunlar.Select(Baslik).ToList(),
+                cevap_sayilari = izgara.CevapSayilari
+            };
+        }
+
+        private static void IzgarayiYaz(IzgaraSoruSecici.Izgara izgara)
+        {
+            Console.WriteLine($"   {"",-22}" + string.Join("", izgara.Sutunlar.Select(s => $"{s.Isim,-22}")));
+            for (int s = 0; s < IzgaraSoruSecici.Boyut; s++)
+            {
+                var sayilar = Enumerable.Range(0, IzgaraSoruSecici.Boyut)
+                    .Select(t => $"{izgara.CevapSayilari[s * IzgaraSoruSecici.Boyut + t] + " cevap",-22}");
+                Console.WriteLine($"   {izgara.Satirlar[s].Isim,-22}" + string.Join("", sayilar));
+            }
+        }
+
+        private async Task<List<MilliTakimKariyeri>> TumMilliTakimKariyeri()
+        {
+            var tumu = new List<MilliTakimKariyeri>();
+
+            for (int bas = 0; ; bas += SayfaBoyutu)
+            {
+                var sayfa = await _supabaseClient.From<MilliTakimKariyeri>()
+                    .Select("oyuncu_id, milli_takim_tm_id, milli_takim_isim")
+                    .Order("oyuncu_id", Ordering.Ascending)
+                    .Order("milli_takim_tm_id", Ordering.Ascending)
+                    .Range(bas, bas + SayfaBoyutu - 1)
+                    .Get();
+
+                tumu.AddRange(sayfa.Models);
+                if (sayfa.Models.Count < SayfaBoyutu) break;
+            }
+
+            return tumu;
         }
 
         private async Task<bool> OyunVarMi(string oyunTipi, DateTime tarih)
