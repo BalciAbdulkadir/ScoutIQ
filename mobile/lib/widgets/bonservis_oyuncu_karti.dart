@@ -28,7 +28,7 @@ class BonservisOyuncuKarti extends StatelessWidget {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: Renkler.yuzey,
         borderRadius: BorderRadius.circular(16),
