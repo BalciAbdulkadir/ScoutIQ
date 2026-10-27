@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bonservis_sorusu.dart';
 import '../theme/renkler.dart';
+import 'oyuncu_fotografi.dart';
 
 // Bonservis oyunundaki oyuncu kartı. Bedel gizliyse "?" gösterir; açılınca bedel sayarak yükselir.
 class BonservisOyuncuKarti extends StatelessWidget {
@@ -16,14 +17,6 @@ class BonservisOyuncuKarti extends StatelessWidget {
     this.dogru,
     this.bedelAnimasyonlu = false,
   });
-
-  static String basHarfler(String isim) {
-    final parcalar = isim.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parcalar.isEmpty) return '?';
-    final ilk = parcalar.first.characters.first;
-    final son = parcalar.length > 1 ? parcalar.last.characters.first : '';
-    return (ilk + son).toUpperCase();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,16 +37,7 @@ class BonservisOyuncuKarti extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
-            child: Text(
-              basHarfler(oyuncu.isim),
-              style: const TextStyle(color: Renkler.bonservis, fontWeight: FontWeight.w700, fontSize: 17),
-            ),
-          ),
+          OyuncuFotografi(isim: oyuncu.isim, fotoUrl: oyuncu.fotoUrl, harfRengi: Renkler.bonservis),
           const SizedBox(width: 16),
           Expanded(
             child: Column(

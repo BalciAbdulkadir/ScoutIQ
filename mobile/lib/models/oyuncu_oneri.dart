@@ -2,10 +2,11 @@
 class OyuncuOneri {
   final String id;
   final String isim;
+  final String? fotoUrl;
 
-  const OyuncuOneri({required this.id, required this.isim});
+  const OyuncuOneri({required this.id, required this.isim, this.fotoUrl});
 
   factory OyuncuOneri.fromJson(Map<String, dynamic> json) {
-    return OyuncuOneri(id: json['id'] as String, isim: json['isim'] as String);
+    return OyuncuOneri(id: json['id'] as String, isim: json['isim'] as String, fotoUrl: json['foto_url'] as String?);
   }
 }
