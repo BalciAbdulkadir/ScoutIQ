@@ -38,17 +38,26 @@ class OyuncuFotografi extends StatelessWidget {
       width: boyut,
       height: boyut,
       clipBehavior: Clip.antiAlias,
+      // Açık arka planlı fotoğraflar koyu zeminde dağılmasın diye ince bir çerçeve
+      foregroundDecoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Renkler.kenar, width: 1),
+      ),
       decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
       child: fotoUrl == null
           ? harfler
           : Image.network(
               fotoUrl!,
+              width: boyut,
+              height: boyut,
               fit: BoxFit.cover,
-              // Transfermarkt portreleri dikey: yüz üstte kaldığı için üstten hizalanır
-              alignment: Alignment.topCenter,
+              // Transfermarkt portreleri 300x390, yüz tüm kareyi dolduruyor. Üstten hizalanınca
+              // çene kesiliyordu; biraz aşağıdan hizalanınca saçtan çeneye yüz çembere oturur.
+              alignment: const Alignment(0, 0.4),
               // Ekrandaki boyuta göre küçültülerek belleğe alınır
               cacheWidth: (boyut * MediaQuery.devicePixelRatioOf(context)).round(),
-              loadingBuilder: (context, child, ilerleme) => ilerleme == null ? child : harfler,
+              // İlk kare gelene kadar baş harfler gösterilir (loadingBuilder ilk veri gelmeden boş kalıyordu)
+              frameBuilder: (context, child, kare, senkron) => senkron || kare != null ? child : harfler,
               errorBuilder: (context, hata, iz) => harfler,
             ),
     );
