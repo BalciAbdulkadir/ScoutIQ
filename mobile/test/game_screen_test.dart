@@ -41,6 +41,21 @@ void main() {
     expect(find.text('KOLAY'), findsOneWidget);
   });
 
+  testWidgets('logosu olan kulübün logosu, olmayanın kalkan ikonu görünür', (tester) async {
+    await ekraniAc(tester, (d) {
+      final sorular = d.oyun!['soru_verisi'] as List;
+      sorular[0] = {'kulup_a': 'Galatasaray', 'kulup_b': 'Parma', 'kulup_a_logo': 'https://logo.test/141.png', 'zorluk': 'kolay'};
+    });
+
+    // Kulübün ismiyle logosunu taşıyan en yakın sütun
+    Finder kulup(String isim) => find.ancestor(of: find.text(isim), matching: find.byType(Column)).first;
+
+    final logo = tester.widget<Image>(find.descendant(of: kulup('Galatasaray'), matching: find.byType(Image)));
+    expect((logo.image as ResizeImage).imageProvider, isA<NetworkImage>());
+    expect(find.descendant(of: kulup('Parma'), matching: find.byType(Image)), findsNothing);
+    expect(find.descendant(of: kulup('Parma'), matching: find.byIcon(Icons.shield_outlined)), findsOneWidget);
+  });
+
   testWidgets('tek harfle arama yapılmaz, iki harften sonra öneri listesi çıkar', (tester) async {
     final depo = await ekraniAc(tester);
 

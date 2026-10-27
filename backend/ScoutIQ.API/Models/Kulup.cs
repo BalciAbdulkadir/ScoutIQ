@@ -17,5 +17,8 @@ namespace ScoutIQ.API.Models
 
         [Column("transfermarkt_id")]
         public string TransfermarktId { get; set; } = string.Empty;
+
+        [Column("logo_url")]
+        public string? LogoUrl { get; set; }
     }
 }

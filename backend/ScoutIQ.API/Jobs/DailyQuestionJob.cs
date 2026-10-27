@@ -81,6 +81,8 @@ namespace ScoutIQ.API.Jobs
                     kulup_b = s.Cift.KulupB.Isim,
                     kulup_a_id = s.Cift.KulupA.Id,
                     kulup_b_id = s.Cift.KulupB.Id,
+                    kulup_a_logo = s.Cift.KulupA.LogoUrl,
+                    kulup_b_logo = s.Cift.KulupB.LogoUrl,
                     zorluk = s.Zorluk.ToString().ToLowerInvariant()
                 }).ToList()
             };
@@ -111,7 +113,7 @@ namespace ScoutIQ.API.Jobs
         // Kulüpleri ve kariyer geçmişini veritabanından çeker, seçimi KesisimSoruSecici'ye bırakır
         private async Task<List<KesisimSoruSecici.KesisimSorusu>?> KesisimSorulariniSec(bool ayrintili = false)
         {
-            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id").Get();
+            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url").Get();
             var kulupler = kuluplerResponse.Models;
 
             if (kulupler.Count < 2)
