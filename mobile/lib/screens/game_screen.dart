@@ -7,6 +7,7 @@ import '../providers/game_provider.dart';
 import '../theme/renkler.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
+import '../widgets/oyuncu_fotografi.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
@@ -287,6 +288,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               if (i > 0) const Divider(indent: 16, endIndent: 16),
               ListTile(
                 dense: true,
+                leading: OyuncuFotografi(isim: _oneriler[i].isim, fotoUrl: _oneriler[i].fotoUrl, boyut: 36),
                 title: Text(_oneriler[i].isim, style: const TextStyle(color: Renkler.metin, fontSize: 15)),
                 trailing: const Icon(Icons.north_west_rounded, size: 16, color: Renkler.metinSoluk),
                 onTap: () => _oyuncuSec(_oneriler[i]),

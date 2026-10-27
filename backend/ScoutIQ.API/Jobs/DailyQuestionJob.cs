@@ -158,7 +158,9 @@ namespace ScoutIQ.API.Jobs
                     oyuncu_a_id = s.Sol.Id,
                     oyuncu_b_id = s.Sag.Id,
                     oyuncu_a_bonservis = s.Sol.ToplamBonservis,
-                    oyuncu_b_bonservis = s.Sag.ToplamBonservis
+                    oyuncu_b_bonservis = s.Sag.ToplamBonservis,
+                    oyuncu_a_foto = s.Sol.FotoUrl,
+                    oyuncu_b_foto = s.Sag.FotoUrl
                 }).ToList()
             };
 
@@ -210,7 +212,7 @@ namespace ScoutIQ.API.Jobs
 
             var adaylar = (await PahaliOyuncular())
                 .Where(o => guncelOyuncular.Contains(o.Id))
-                .Select(o => new BonservisSoruSecici.Aday(o.Id, o.Isim, o.ToplamBonservis))
+                .Select(o => new BonservisSoruSecici.Aday(o.Id, o.Isim, o.ToplamBonservis, o.FotoUrl))
                 .ToList();
 
             Console.WriteLine($"Bonservis havuzu: {guncelSezon}/{guncelSezon + 1} sezonunda {guncelOyuncular.Count} oyuncu, " +
@@ -255,7 +257,7 @@ namespace ScoutIQ.API.Jobs
             for (int bas = 0; ; bas += SayfaBoyutu)
             {
                 var sayfa = await _supabaseClient.From<Oyuncu>()
-                    .Select("id, isim, toplam_bonservis")
+                    .Select("id, isim, toplam_bonservis, foto_url")
                     .Filter("toplam_bonservis", Operator.GreaterThan, BonservisSoruSecici.MinToplamBonservis.ToString())
                     .Order("id", Ordering.Ascending)
                     .Range(bas, bas + SayfaBoyutu - 1)
