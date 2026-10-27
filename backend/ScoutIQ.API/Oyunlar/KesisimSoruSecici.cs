@@ -73,9 +73,10 @@ namespace ScoutIQ.API.Oyunlar
 
         // Tüm kulüp çiftlerinin ortak oyuncu sayısını hesaplar ve her zorluktan rastgele çift seçer.
         // Sadece en az bir ortak oyuncusu olan çiftler soru olabilir. Bir oyunda aynı kulüp iki kez çıkmaz.
+        // Ligi olmayan kulüpler (efsanelerin eski kulüpleri) soru olmaz; cevap kontrolü yine tüm kariyere bakar.
         public SecimSonucu Sec(IEnumerable<Kulup> kulupListesi, IEnumerable<KariyerGecmisi> kariyer)
         {
-            var kulupler = kulupListesi.ToDictionary(k => k.Id);
+            var kulupler = kulupListesi.Where(k => k.Lig != null).ToDictionary(k => k.Id);
             var uyarilar = new List<string>();
 
             var buyukKulupIdleri = ListedekiKulupIdleri(BuyukKulupler, kulupler.Values);

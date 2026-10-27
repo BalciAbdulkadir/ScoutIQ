@@ -12,8 +12,9 @@ namespace ScoutIQ.API.Models
         [Column("isim")]
         public string Isim { get; set; } = string.Empty;
 
+        // null: 6 ana ligden biri değil (efsanelerin eski kulüpleri gibi), Kesişim'de soru olarak çıkmaz
         [Column("lig")]
-        public string Lig { get; set; } = string.Empty;
+        public string? Lig { get; set; }
 
         [Column("transfermarkt_id")]
         public string TransfermarktId { get; set; } = string.Empty;
