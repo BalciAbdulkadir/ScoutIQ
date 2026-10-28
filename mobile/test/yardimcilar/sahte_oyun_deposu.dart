@@ -56,7 +56,13 @@ class SahteOyunDeposu implements OyunDeposu {
   List<IzgaraTahmini> izgaraTahminListesi = [];
   bool izgaraTahminHataVerir = false;
   int izgaraPesSayisi = 0;
-  Map<int, String> izgaraOrnekleri = {for (var i = 0; i < 9; i++) i: 'Örnek Oyuncu $i'};
+  Map<int, IzgaraOyuncusu> izgaraOrnekleri = {
+    for (var i = 0; i < 9; i++) i: IzgaraOyuncusu(isim: 'Örnek Oyuncu $i', fotoUrl: 'https://foto.test/$i.jpg'),
+  };
+
+  // Kulüp ID'si -> logo (Kesişim'de logosu olmayan eski sorular için)
+  Map<String, String> logolar = {};
+  int logoIstekSayisi = 0;
 
   // Çağrı kayıtları
   int kayitAcSayisi = 0;
@@ -166,8 +172,14 @@ class SahteOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<Map<int, String>> izgaraOrnekCevaplar(String oyunId) async {
+  Future<Map<int, IzgaraOyuncusu>> izgaraOrnekCevaplar(String oyunId) async {
     if (kayit?['durum'] != 'tamamlandi') return {};
     return izgaraOrnekleri;
+  }
+
+  @override
+  Future<Map<String, String>> kulupLogolari(List<String> kulupIdleri) async {
+    logoIstekSayisi++;
+    return {for (final id in kulupIdleri) if (logolar[id] != null) id: logolar[id]!};
   }
 }

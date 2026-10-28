@@ -49,8 +49,11 @@ abstract class OyunDeposu {
   // Oyunu o anki skorla bitirir, skoru döndürür
   Future<int> izgaraPesEt(String oyunId);
 
-  // Bitmiş tahtanın her hücresi için örnek bir doğru cevap: hücre -> oyuncu adı
-  Future<Map<int, String>> izgaraOrnekCevaplar(String oyunId);
+  // Bitmiş tahtanın her hücresi için örnek bir doğru cevap: hücre -> oyuncu
+  Future<Map<int, IzgaraOyuncusu>> izgaraOrnekCevaplar(String oyunId);
+
+  // Kulüplerin logo adresleri: kulüp ID'si -> logo. Logosuz kulüpler dönmez.
+  Future<Map<String, String>> kulupLogolari(List<String> kulupIdleri);
 }
 
 class SupabaseOyunDeposu implements OyunDeposu {
@@ -183,11 +186,26 @@ class SupabaseOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<Map<int, String>> izgaraOrnekCevaplar(String oyunId) async {
+  Future<Map<int, IzgaraOyuncusu>> izgaraOrnekCevaplar(String oyunId) async {
     final satirlar = await _supabase.rpc('izgara_ornek_cevaplar', params: {'p_oyun_id': oyunId}) as List<dynamic>;
     return {
       for (final satir in satirlar.cast<Map<String, dynamic>>())
-        if (satir['oyuncu_isim'] != null) (satir['hucre'] as num).toInt(): satir['oyuncu_isim'] as String,
+        if (satir['oyuncu_isim'] != null)
+          (satir['hucre'] as num).toInt(): IzgaraOyuncusu(
+            isim: satir['oyuncu_isim'] as String,
+            // 012 çalıştırılmadan önce fonksiyon fotoğraf döndürmez
+            fotoUrl: satir['foto_url'] as String?,
+          ),
+    };
+  }
+
+  @override
+  Future<Map<String, String>> kulupLogolari(List<String> kulupIdleri) async {
+    if (kulupIdleri.isEmpty) return {};
+    final satirlar = await _supabase.from('kulupler').select('id, logo_url').inFilter('id', kulupIdleri);
+    return {
+      for (final satir in satirlar)
+        if (satir['logo_url'] != null) satir['id'] as String: satir['logo_url'] as String,
     };
   }
 }

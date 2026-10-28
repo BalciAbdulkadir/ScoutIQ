@@ -248,6 +248,12 @@ void main() {
       expect(find.text('1/9'), findsOneWidget);
       expect(find.text('Arda Güler'), findsOneWidget);
       expect(find.text('Örnek Oyuncu 0'), findsOneWidget);
+      // Bulunamayan kutulardaki örnek cevaplar da fotoğrafıyla gösterilir: 1 dolu + 8 örnek
+      final fotograflar = tester.widgetList<Image>(find.byType(Image)).where((i) {
+        final kaynak = i.image is ResizeImage ? (i.image as ResizeImage).imageProvider : i.image;
+        return kaynak is NetworkImage && kaynak.url.startsWith('https://foto.test/');
+      });
+      expect(fotograflar, hasLength(8));
       expect(find.text('Ana menüye dön'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
     });

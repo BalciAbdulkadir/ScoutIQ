@@ -16,7 +16,7 @@ class IzgaraState {
   final bool gonderiliyor; // Tahmin ya da pes etme sunucuda işlenirken ikinci isteği engeller
   final String? hataMesaji; // durum 'hata' iken gösterilir
   final IzgaraTahminSonucu? sonTahmin; // Arama kutusunun altında gösterilen son tahminin sonucu
-  final Map<int, String> ornekCevaplar; // Oyun bitince boş hücreler için sunucudan gelen örnek cevaplar
+  final Map<int, IzgaraOyuncusu> ornekCevaplar; // Oyun bitince boş hücreler için sunucudan gelen örnek cevaplar
 
   const IzgaraState({
     this.durum = IzgaraDurumu.yukleniyor,
@@ -42,7 +42,7 @@ class IzgaraState {
     bool? gonderiliyor,
     String? hataMesaji,
     IzgaraTahminSonucu? sonTahmin,
-    Map<int, String>? ornekCevaplar,
+    Map<int, IzgaraOyuncusu>? ornekCevaplar,
   }) {
     return IzgaraState(
       durum: durum ?? this.durum,

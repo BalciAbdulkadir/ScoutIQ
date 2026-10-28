@@ -374,7 +374,7 @@ class _Baslik extends StatelessWidget {
 // Tahtadaki bir kutu: boş, oyuncuyla dolu ya da (oyun bittiyse) örnek cevaplı
 class _Hucre extends StatelessWidget {
   final IzgaraOyuncusu? oyuncu;
-  final String? ornekCevap;
+  final IzgaraOyuncusu? ornekCevap; // Oyun bitince boş kalan kutuda gösterilen doğru cevap
 
   const _Hucre({this.oyuncu, this.ornekCevap});
 
@@ -393,7 +393,7 @@ class _Hucre extends StatelessWidget {
         builder: (context, kisitlar) {
           final kenar = kisitlar.maxWidth;
           if (oyuncu != null) return _OyuncuIcerigi(oyuncu: oyuncu!, kenar: kenar);
-          if (ornekCevap != null) return _OrnekIcerik(isim: ornekCevap!);
+          if (ornekCevap != null) return _OyuncuIcerigi(oyuncu: ornekCevap!, kenar: kenar, ornek: true);
           return const SizedBox.expand();
         },
       ),
@@ -405,8 +405,9 @@ class _Hucre extends StatelessWidget {
 class _OyuncuIcerigi extends StatelessWidget {
   final IzgaraOyuncusu oyuncu;
   final double kenar;
+  final bool ornek; // Kullanıcının bulamadığı örnek cevap: soluk gösterilir
 
-  const _OyuncuIcerigi({required this.oyuncu, required this.kenar});
+  const _OyuncuIcerigi({required this.oyuncu, required this.kenar, this.ornek = false});
 
   @override
   Widget build(BuildContext context) {
@@ -423,45 +424,30 @@ class _OyuncuIcerigi extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(4, 5, 4, 4),
         child: Column(
           children: [
-            OyuncuFotografi(isim: oyuncu.isim, fotoUrl: oyuncu.fotoUrl, boyut: fotoGenisligi, harfRengi: Renkler.izgara),
+            Opacity(
+              opacity: ornek ? 0.55 : 1,
+              child: OyuncuFotografi(
+                isim: oyuncu.isim,
+                fotoUrl: oyuncu.fotoUrl,
+                boyut: fotoGenisligi,
+                harfRengi: ornek ? Renkler.metinSoluk : Renkler.izgara,
+              ),
+            ),
             const Spacer(),
             Text(
               oyuncu.isim,
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Renkler.metin, fontSize: 10.5, fontWeight: FontWeight.w600, height: 1.1),
+              style: TextStyle(
+                color: ornek ? Renkler.metinIkincil : Renkler.metin,
+                fontSize: 10.5,
+                fontWeight: ornek ? FontWeight.w500 : FontWeight.w600,
+                height: 1.1,
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// Oyun bitince boş kalan kutu: örnek doğru cevap soluk renkte
-class _OrnekIcerik extends StatelessWidget {
-  final String isim;
-
-  const _OrnekIcerik({required this.isim});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.lightbulb_outline_rounded, color: Renkler.metinSoluk, size: 16),
-          const SizedBox(height: 4),
-          Text(
-            isim,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Renkler.metinIkincil, fontSize: 10.5, height: 1.15),
-          ),
-        ],
       ),
     );
   }
