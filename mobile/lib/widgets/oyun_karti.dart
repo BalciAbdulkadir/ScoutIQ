@@ -6,9 +6,16 @@ import '../theme/renkler.dart';
 class OyunKarti extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor; // null ise bugün henüz oynanmadı
+  final int tamamlananAltOyun; // Birden fazla günlük oyunu olan modlarda (Izgara) bugün bitirilenlerin sayısı
   final VoidCallback onTap;
 
-  const OyunKarti({super.key, required this.mod, required this.bugunkuSkor, required this.onTap});
+  const OyunKarti({
+    super.key,
+    required this.mod,
+    required this.bugunkuSkor,
+    required this.onTap,
+    this.tamamlananAltOyun = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +61,7 @@ class OyunKarti extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              _DurumEtiketi(mod: mod, bugunkuSkor: bugunkuSkor),
+              _DurumEtiketi(mod: mod, bugunkuSkor: bugunkuSkor, tamamlananAltOyun: tamamlananAltOyun),
             ],
           ),
         ),
@@ -66,45 +73,71 @@ class OyunKarti extends StatelessWidget {
 class _DurumEtiketi extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor;
+  final int tamamlananAltOyun;
 
-  const _DurumEtiketi({required this.mod, required this.bugunkuSkor});
+  const _DurumEtiketi({required this.mod, required this.bugunkuSkor, required this.tamamlananAltOyun});
 
   @override
   Widget build(BuildContext context) {
-    if (bugunkuSkor != null) {
-      final skorMetni = mod.maksimumSkor != null ? '$bugunkuSkor/${mod.maksimumSkor}' : '$bugunkuSkor';
+    final altOyunSayisi = mod.altTipler?.length;
+    if (altOyunSayisi != null) {
+      // Izgara: kaç zorluğun bitirildiği gösterilir
+      if (tamamlananAltOyun >= altOyunSayisi) return _bitti('$tamamlananAltOyun/$altOyunSayisi');
       return Column(
         crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            skorMetni,
-            style: const TextStyle(color: Renkler.metin, fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 2),
-          const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: Renkler.basari, size: 13),
-              SizedBox(width: 4),
-              Text('Bitti', style: TextStyle(color: Renkler.basari, fontSize: 12, fontWeight: FontWeight.w600)),
-            ],
-          ),
+          _oynaButonu(),
+          if (tamamlananAltOyun > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              '$tamamlananAltOyun/$altOyunSayisi bitti',
+              style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+          ],
         ],
       );
     }
 
-    if (mod.durum == OyunDurumu.aktif) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(color: mod.renk, borderRadius: BorderRadius.circular(8)),
-        child: const Text(
-          'Oyna',
-          style: TextStyle(color: Renkler.arkaPlan, fontSize: 14, fontWeight: FontWeight.w700),
-        ),
-      );
+    if (bugunkuSkor != null) {
+      return _bitti(mod.maksimumSkor != null ? '$bugunkuSkor/${mod.maksimumSkor}' : '$bugunkuSkor');
     }
 
+    if (mod.durum == OyunDurumu.aktif) return _oynaButonu();
+
     return const Text('Hazırlanıyor', style: TextStyle(color: Renkler.metinSoluk, fontSize: 13));
+  }
+
+  Widget _bitti(String skorMetni) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          skorMetni,
+          style: const TextStyle(color: Renkler.metin, fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 2),
+        const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: Renkler.basari, size: 13),
+            SizedBox(width: 4),
+            Text('Bitti', style: TextStyle(color: Renkler.basari, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _oynaButonu() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(color: mod.renk, borderRadius: BorderRadius.circular(8)),
+      child: const Text(
+        'Oyna',
+        style: TextStyle(color: Renkler.arkaPlan, fontSize: 14, fontWeight: FontWeight.w700),
+      ),
+    );
   }
 }
 

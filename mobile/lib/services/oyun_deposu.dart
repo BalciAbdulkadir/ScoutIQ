@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/izgara.dart';
 import '../models/oyuncu_oneri.dart';
 
 // Aynı gün aynı oyun için kayıt zaten varsa (örneğin başka bir cihazda başlanmışsa) fırlatılır
@@ -36,6 +37,20 @@ abstract class OyunDeposu {
   // 'basladi' durumundaki kaydın skorunu yazar, bittiyse kilitler.
   // Güncellenecek kayıt yoksa (başka yerden kapatılmışsa) false döner.
   Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti});
+
+  // Izgara: tahminler, skor ve haklar sunucuda tutulur (011_izgara.sql)
+
+  // Kullanıcının bu tahtadaki önceki tahminleri, sırayla. Uygulama yeniden açılınca tahta bunlarla kurulur.
+  Future<List<IzgaraTahmini>> izgaraTahminleri(String oyunId);
+
+  // Oyuncuyu uygun boş hücreye yerleştirmeyi dener
+  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId});
+
+  // Oyunu o anki skorla bitirir, skoru döndürür
+  Future<int> izgaraPesEt(String oyunId);
+
+  // Bitmiş tahtanın her hücresi için örnek bir doğru cevap: hücre -> oyuncu adı
+  Future<Map<int, String>> izgaraOrnekCevaplar(String oyunId);
 }
 
 class SupabaseOyunDeposu implements OyunDeposu {
@@ -142,6 +157,38 @@ class SupabaseOyunDeposu implements OyunDeposu {
         .eq('durum', 'basladi')
         .select('skor');
     return guncellenen.isNotEmpty;
+  }
+
+  @override
+  Future<List<IzgaraTahmini>> izgaraTahminleri(String oyunId) async {
+    final satirlar = await _supabase
+        .from('izgara_tahminleri')
+        .select('sira, oyuncu_isim, hucre, oyuncular(foto_url)')
+        .eq('kullanici_id', kullaniciId!)
+        .eq('oyun_id', oyunId)
+        .order('sira');
+    return satirlar.map(IzgaraTahmini.fromJson).toList();
+  }
+
+  @override
+  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId}) async {
+    final sonuc = await _supabase.rpc('izgara_tahmin', params: {'p_oyun_id': oyunId, 'p_oyuncu_id': oyuncuId});
+    return IzgaraTahminSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<int> izgaraPesEt(String oyunId) async {
+    final skor = await _supabase.rpc('izgara_pes_et', params: {'p_oyun_id': oyunId});
+    return (skor as num).toInt();
+  }
+
+  @override
+  Future<Map<int, String>> izgaraOrnekCevaplar(String oyunId) async {
+    final satirlar = await _supabase.rpc('izgara_ornek_cevaplar', params: {'p_oyun_id': oyunId}) as List<dynamic>;
+    return {
+      for (final satir in satirlar.cast<Map<String, dynamic>>())
+        if (satir['oyuncu_isim'] != null) (satir['hucre'] as num).toInt(): satir['oyuncu_isim'] as String,
+    };
   }
 }
 

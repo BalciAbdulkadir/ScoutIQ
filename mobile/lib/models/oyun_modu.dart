@@ -11,6 +11,8 @@ class OyunModu {
   final Color renk;
   final OyunDurumu durum;
   final int? maksimumSkor;
+  // Doluysa mod birden fazla ayrı günlük oyundan oluşur (ör. Izgara'nın kolay/orta/zor tahtaları)
+  final List<String>? altTipler;
 
   const OyunModu({
     this.tip,
@@ -20,11 +22,15 @@ class OyunModu {
     required this.renk,
     required this.durum,
     this.maksimumSkor,
+    this.altTipler,
   });
+
+  // Bu modun veritabanındaki günlük oyun tipleri
+  List<String> get oyunTipleri => altTipler ?? [?tip];
 }
 
-// Hub'da gösterilen modlar. İlk faz: Kesişim ve Bonservis.
-// Izgara ve Bingo proje planında ileriki fazlar için öngörülüyor.
+// Hub'da gösterilen modlar. İlk faz: Kesişim, Bonservis ve Izgara.
+// Bingo proje planında ileriki fazlar için öngörülüyor.
 const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'kesisim',
@@ -45,11 +51,15 @@ const List<OyunModu> oyunModlari = [
     maksimumSkor: 5,
   ),
   OyunModu(
-    baslik: '9\'lu Izgara',
-    aciklama: 'Satır ve sütunlardaki koşullara uyan oyuncularla ızgarayı doldur.',
+    tip: 'izgara',
+    baslik: 'Izgara',
+    aciklama: 'Satır ve sütundaki takımlara uyan oyuncularla tahtayı doldur.',
     ikon: Icons.grid_view_rounded,
-    renk: Renkler.metinSoluk,
-    durum: OyunDurumu.yakinda,
+    renk: Renkler.izgara,
+    durum: OyunDurumu.aktif,
+    maksimumSkor: 9,
+    // Kolay, orta ve zor ayrı oyunlardır, her biri günde bir kez oynanır
+    altTipler: ['izgara_kolay', 'izgara_orta', 'izgara_zor'],
   ),
   OyunModu(
     baslik: 'Bingo',

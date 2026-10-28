@@ -52,12 +52,17 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
 
   final kayitlar = await supabase
       .from('kullanici_oyun_gecmisi')
-      .select('oyun_tipi, skor')
+      .select('oyun_tipi, skor, durum')
       .eq('kullanici_id', userId)
       .eq('tarih', bugununTarihi());
 
   return {
     for (final kayit in kayitlar)
-      kayit['oyun_tipi'] as String: (kayit['skor'] as num?)?.toInt() ?? 0,
+      // Yarıda bırakılan Izgara tahtası kaldığı yerden devam eder, bitmiş sayılmaz.
+      // Diğer oyunlarda başlanmış oyun tekrar açılamadığı için oynanmış sayılır.
+      if (!(izgaraTipiMi(kayit['oyun_tipi'] as String) && kayit['durum'] == 'basladi'))
+        kayit['oyun_tipi'] as String: (kayit['skor'] as num?)?.toInt() ?? 0,
   };
 });
+
+bool izgaraTipiMi(String oyunTipi) => oyunTipi.startsWith('izgara_');
