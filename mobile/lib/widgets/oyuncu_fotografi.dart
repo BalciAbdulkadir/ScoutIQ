@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
 
-// Yuvarlak oyuncu fotoğrafı. Fotoğraf yoksa, yüklenirken ya da yüklenemezse baş harfler gösterilir.
+// Köşeleri yuvarlatılmış dikey oyuncu fotoğrafı. Fotoğraf yoksa, yüklenirken ya da yüklenemezse baş harfler gösterilir.
 // Fotoğraflar Transfermarkt'tan link olarak gelir, kopyaları tutulmaz.
 class OyuncuFotografi extends StatelessWidget {
+  // Transfermarkt portreleri 300x390 (en/boy 1:1.3). Çerçeve aynı oranda olduğu için fotoğraf kırpılmadan sığar.
+  static const double enBoyOrani = 300 / 390;
+
   final String isim;
   final String? fotoUrl;
+  // Çerçevenin genişliği; yüksekliği orana göre hesaplanır
   final double boyut;
   final Color harfRengi;
 
@@ -27,6 +31,8 @@ class OyuncuFotografi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final yukseklik = boyut / enBoyOrani;
+    final kose = BorderRadius.circular(boyut * 0.18);
     final harfler = Center(
       child: Text(
         basHarfler(isim),
@@ -36,19 +42,24 @@ class OyuncuFotografi extends StatelessWidget {
 
     return Container(
       width: boyut,
-      height: boyut,
+      height: yukseklik,
       clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
+      // Açık arka planlı fotoğraflar koyu zeminde dağılmasın diye ince bir çerçeve
+      foregroundDecoration: BoxDecoration(borderRadius: kose, border: Border.all(color: Renkler.kenar)),
+      decoration: BoxDecoration(color: Renkler.yuzeyYuksek, borderRadius: kose),
       child: fotoUrl == null
           ? harfler
           : Image.network(
               fotoUrl!,
+              width: boyut,
+              height: yukseklik,
+              // Oran aynı olduğu için cover bir şey kesmez; farklı boyutta gelen nadir fotoğrafları da boşluksuz doldurur
               fit: BoxFit.cover,
-              // Transfermarkt portreleri dikey: yüz üstte kaldığı için üstten hizalanır
               alignment: Alignment.topCenter,
               // Ekrandaki boyuta göre küçültülerek belleğe alınır
               cacheWidth: (boyut * MediaQuery.devicePixelRatioOf(context)).round(),
-              loadingBuilder: (context, child, ilerleme) => ilerleme == null ? child : harfler,
+              // İlk kare gelene kadar baş harfler gösterilir (loadingBuilder ilk veri gelmeden boş kalıyordu)
+              frameBuilder: (context, child, kare, senkron) => senkron || kare != null ? child : harfler,
               errorBuilder: (context, hata, iz) => harfler,
             ),
     );
