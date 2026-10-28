@@ -13,7 +13,7 @@ public class KesisimSoruSeciciTests
         public List<KariyerGecmisi> Kariyer { get; } = new();
         private int _oyuncuNo;
 
-        public Kulup Kulup(string transfermarktId, string isim, string lig)
+        public Kulup Kulup(string transfermarktId, string isim, string? lig)
         {
             var kulup = new Kulup { Id = $"kulup-{transfermarktId}", TransfermarktId = transfermarktId, Isim = isim, Lig = lig };
             Kulupler.Add(kulup);
@@ -202,6 +202,30 @@ public class KesisimSoruSeciciTests
 
         Assert.Null(sonuc.Sorular);
         Assert.Contains(sonuc.Uyarilar, u => u.Contains("5 eşleşme bulunamadı"));
+    }
+
+    [Fact]
+    public void Sec_LigiOlmayanKulubu_SoruOlarakSecmez()
+    {
+        var veri = ZenginVeri();
+        // Efsanelerin eski kulüpleri: ligi yok, ama ana lig kulüpleriyle çok ortak oyuncusu var
+        var santos = veri.Kulup("221", "Santos FC", null);
+        var boca = veri.Kulup("189", "CA Boca Juniors", null);
+        foreach (var kulup in veri.Kulupler.Where(k => k.Lig != null).ToList())
+        {
+            veri.OrtakOyuncuEkle(santos, kulup, 5);
+            veri.OrtakOyuncuEkle(boca, kulup, 5);
+        }
+        veri.OrtakOyuncuEkle(santos, boca, 5);
+
+        for (int tohum = 0; tohum < 50; tohum++)
+        {
+            var sonuc = new KesisimSoruSecici(new Random(tohum)).Sec(veri.Kulupler, veri.Kariyer);
+
+            Assert.NotNull(sonuc.Sorular);
+            Assert.All(sonuc.Sorular!, s => Assert.True(s.Cift.KulupA.Lig != null && s.Cift.KulupB.Lig != null,
+                $"Ligi olmayan kulüp soruldu: {s.Cift.KulupA.Isim} x {s.Cift.KulupB.Isim}"));
+        }
     }
 
     [Fact]

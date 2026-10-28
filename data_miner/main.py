@@ -8,6 +8,7 @@ Kullanım:
 Önce supabase/migrations/001_temel_veri_duzeltmeleri.sql ve 007_oyuncu_fotograflari.sql çalıştırılmış olmalıdır.
 Tekrar çalıştırmak güvenlidir: kayıtlar transfermarkt_id üzerinden güncellenir, çoğalmaz.
 Yeni eklenen oyuncuların fotoğrafları da yazılır. Mevcut oyuncuların fotoğrafları için: python fotograflar.py
+Lig kulüp listesinde logo gelmez. Yeni eklenen kulüplerin logoları için: python logolar.py
 """
 import os
 import sys

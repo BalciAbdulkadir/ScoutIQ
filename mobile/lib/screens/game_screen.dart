@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyuncu_oneri.dart';
 import '../providers/game_provider.dart';
 import '../theme/renkler.dart';
+import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_fotografi.dart';
@@ -195,6 +196,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           _KulupEslesmesi(
             kulupA: soru['kulup_a'] as String? ?? '—',
             kulupB: soru['kulup_b'] as String? ?? '—',
+            logoA: soru['kulup_a_logo'] as String?,
+            logoB: soru['kulup_b_logo'] as String?,
           ),
           const SizedBox(height: 20),
           _cevapAlani(state),
@@ -357,8 +360,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 class _KulupEslesmesi extends StatelessWidget {
   final String kulupA;
   final String kulupB;
+  final String? logoA;
+  final String? logoB;
 
-  const _KulupEslesmesi({required this.kulupA, required this.kulupB});
+  const _KulupEslesmesi({required this.kulupA, required this.kulupB, this.logoA, this.logoB});
 
   @override
   Widget build(BuildContext context) {
@@ -371,9 +376,9 @@ class _KulupEslesmesi extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _Kulup(isim: kulupA)),
+          Expanded(child: _Kulup(isim: kulupA, logoUrl: logoA)),
           const VsRozeti(),
-          Expanded(child: _Kulup(isim: kulupB)),
+          Expanded(child: _Kulup(isim: kulupB, logoUrl: logoB)),
         ],
       ),
     );
@@ -382,19 +387,15 @@ class _KulupEslesmesi extends StatelessWidget {
 
 class _Kulup extends StatelessWidget {
   final String isim;
+  final String? logoUrl;
 
-  const _Kulup({required this.isim});
+  const _Kulup({required this.isim, this.logoUrl});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
-          child: const Icon(Icons.shield_outlined, color: Renkler.kesisim, size: 28),
-        ),
+        KulupLogosu(logoUrl: logoUrl, ikonRengi: Renkler.kesisim),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
