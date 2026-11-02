@@ -34,6 +34,13 @@ if (args.Contains("--bonservis-onizleme"))
     return;
 }
 
+// "dotnet run -- --izgara-onizleme" her zorluktan bir Izgara tahtası seçip ekrana basar, veritabanına yazmaz
+if (args.Contains("--izgara-onizleme"))
+{
+    await app.Services.GetRequiredService<DailyQuestionJob>().IzgaraOnizleme();
+    return;
+}
+
 // 3. Zamanlayıcıyı yapılandıralım
 
 app.Services.UseScheduler(scheduler =>

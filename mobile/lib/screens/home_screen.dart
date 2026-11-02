@@ -6,6 +6,7 @@ import '../providers/hub_provider.dart';
 import '../services/auth_service.dart';
 import '../theme/renkler.dart';
 import '../widgets/gunluk_kart.dart';
+import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/oyun_karti.dart';
 import 'bonservis_screen.dart';
 import 'game_screen.dart';
@@ -14,6 +15,12 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
+    // Izgara'nın üç zorluğu ayrı oyunlardır: önce zorluk seçilir
+    if (mod.tip == 'izgara') {
+      await izgaraAc(context, ref);
+      return;
+    }
+
     final Widget? oyunEkrani = switch (mod.tip) {
       'kesisim' => const GameScreen(),
       'bonservis' => const BonservisScreen(),
@@ -38,13 +45,14 @@ class HomeScreen extends ConsumerWidget {
     final oynananlar = ref.watch(bugunOynananlarProvider);
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
+    final devamEdenIzgara = ref.watch(devamEdenIzgaraProvider).value;
 
     final gunlukModlar = oyunModlari.where((m) => m.durum != OyunDurumu.yakinda).toList();
     final yakindakiModlar = oyunModlari.where((m) => m.durum == OyunDurumu.yakinda).toList();
 
-    // İlerleme sadece şu an oynanabilen modlar üzerinden hesaplanır
-    final aktifModlar = oyunModlari.where((m) => m.durum == OyunDurumu.aktif);
-    final tamamlanan = aktifModlar.where((m) => skorlar.containsKey(m.tip)).length;
+    // İlerleme sadece şu an oynanabilen günlük oyunlar üzerinden hesaplanır (Izgara'nın her zorluğu ayrı sayılır)
+    final aktifOyunTipleri = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).expand((m) => m.oyunTipleri);
+    final tamamlanan = aktifOyunTipleri.where(skorlar.containsKey).length;
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -54,7 +62,10 @@ class HomeScreen extends ConsumerWidget {
           child: RefreshIndicator(
             color: Renkler.basari,
             backgroundColor: Renkler.yuzey,
-            onRefresh: () => ref.refresh(bugunOynananlarProvider.future),
+            onRefresh: () {
+              ref.invalidate(devamEdenIzgaraProvider);
+              return ref.refresh(bugunOynananlarProvider.future);
+            },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -68,7 +79,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(tarihMetni(turkiyeSaati()), style: const TextStyle(color: Renkler.metinIkincil, fontSize: 15)),
                 const SizedBox(height: 20),
-                GunlukKart(tamamlanan: tamamlanan, toplam: aktifModlar.length),
+                GunlukKart(tamamlanan: tamamlanan, toplam: aktifOyunTipleri.length),
                 const SizedBox(height: 28),
                 const _BolumBasligi('Oyunlar'),
                 for (final mod in gunlukModlar)
@@ -77,6 +88,8 @@ class HomeScreen extends ConsumerWidget {
                     child: OyunKarti(
                       mod: mod,
                       bugunkuSkor: skorlar[mod.tip],
+                      tamamlananAltOyun: mod.altTipler?.where(skorlar.containsKey).length ?? 0,
+                      devamEdiyor: mod.tip == 'izgara' && devamEdenIzgara != null,
                       onTap: () => _modaTiklandi(context, ref, mod),
                     ),
                   ),

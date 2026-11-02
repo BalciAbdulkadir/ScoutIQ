@@ -82,6 +82,44 @@ void main() {
     });
   });
 
+  group('Kulüp logoları', () {
+    test('logosu olmayan eski sorularda logolar kulüp kimliğinden tamamlanır', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.oyun = {
+          'id': 'oyun-1',
+          'soru_verisi': [
+            {'kulup_a': 'Galatasaray', 'kulup_b': 'Juventus', 'kulup_a_id': 'k-gs', 'kulup_b_id': 'k-juve'},
+            {'kulup_a': 'Fenerbahçe', 'kulup_b': 'Ajax', 'kulup_a_id': 'k-fb', 'kulup_b_id': 'k-ajax', 'kulup_a_logo': 'fb.png'},
+          ],
+        };
+        d.logolar = {'k-gs': 'gs.png', 'k-juve': 'juve.png', 'k-ajax': 'ajax.png', 'k-fb': 'baska.png'};
+      });
+      // Logolar oyun açıldıktan sonra gelir
+      await Future<void>.delayed(Duration.zero);
+
+      final sorular = durum(c).questions.cast<Map<String, dynamic>>();
+      expect(sorular[0]['kulup_a_logo'], 'gs.png');
+      expect(sorular[0]['kulup_b_logo'], 'juve.png');
+      expect(sorular[1]['kulup_a_logo'], 'fb.png'); // Soruda olan logo değişmez
+      expect(sorular[1]['kulup_b_logo'], 'ajax.png');
+      expect(depo.logoIstekSayisi, 1);
+    });
+
+    test('sorularda logo varsa kulüpler tekrar sorgulanmaz', () async {
+      final (_, depo) = await oyunuBaslat((d) {
+        d.oyun = {
+          'id': 'oyun-1',
+          'soru_verisi': [
+            {'kulup_a': 'A', 'kulup_b': 'B', 'kulup_a_id': 'a', 'kulup_b_id': 'b', 'kulup_a_logo': 'a.png', 'kulup_b_logo': 'b.png'},
+          ],
+        };
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(depo.logoIstekSayisi, 0);
+    });
+  });
+
   group('Günde tek atış', () {
     test('bugün bitirilmiş oyun tekrar açılmaz, skor gösterilir', () async {
       final (c, depo) = await oyunuBaslat((d) => d.kayit = {'skor': 6, 'durum': 'tamamlandi'});

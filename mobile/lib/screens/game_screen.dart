@@ -1,14 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/oyuncu_oneri.dart';
 import '../providers/game_provider.dart';
 import '../theme/renkler.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
-import '../widgets/oyuncu_fotografi.dart';
+import '../widgets/oyuncu_arama.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
@@ -20,103 +17,6 @@ class GameScreen extends ConsumerStatefulWidget {
 
 class _GameScreenState extends ConsumerState<GameScreen> {
   static const _maksimumSkor = 10;
-
-  final TextEditingController _guessController = TextEditingController();
-
-  // Öneri listesi: cevap sadece bu listeden seçilebilir
-  List<OyuncuOneri> _oneriler = [];
-  OyuncuOneri? _secilenOyuncu;
-  bool _araniyor = false;
-  Timer? _aramaZamanlayici;
-  int _aramaNo = 0; // Geç gelen eski arama sonuçlarının yenilerinin üstüne yazılmasını engeller
-
-  @override
-  void dispose() {
-    _aramaZamanlayici?.cancel();
-    _guessController.dispose();
-    super.dispose();
-  }
-
-  void _metinDegisti(String metin) {
-    // Seçimden sonra metin değiştirilirse seçim geçersiz olur
-    if (_secilenOyuncu != null && metin != _secilenOyuncu!.isim) {
-      setState(() => _secilenOyuncu = null);
-    }
-
-    _aramaZamanlayici?.cancel();
-    final arama = metin.trim();
-    if (arama.length < 2 || _secilenOyuncu != null) {
-      setState(() {
-        _oneriler = [];
-        _araniyor = false;
-      });
-      return;
-    }
-
-    setState(() => _araniyor = true);
-    // Her tuşta sunucuya gitmemek için yazmanın bitmesini kısaca bekliyoruz
-    _aramaZamanlayici = Timer(const Duration(milliseconds: 300), () => _ara(arama));
-  }
-
-  Future<void> _ara(String arama) async {
-    final buArama = ++_aramaNo;
-    try {
-      final sonuc = await ref.read(gameProvider.notifier).oyuncuAra(arama);
-      if (!mounted || buArama != _aramaNo) return;
-      setState(() {
-        _oneriler = sonuc;
-        _araniyor = false;
-      });
-    } catch (_) {
-      if (!mounted || buArama != _aramaNo) return;
-      setState(() {
-        _oneriler = [];
-        _araniyor = false;
-      });
-    }
-  }
-
-  void _oyuncuSec(OyuncuOneri oyuncu) {
-    _aramaZamanlayici?.cancel();
-    _aramaNo++;
-    _guessController.value = TextEditingValue(
-      text: oyuncu.isim,
-      selection: TextSelection.collapsed(offset: oyuncu.isim.length),
-    );
-    setState(() {
-      _secilenOyuncu = oyuncu;
-      _oneriler = [];
-      _araniyor = false;
-    });
-  }
-
-  Future<void> _gonder() async {
-    final secilen = _secilenOyuncu;
-    if (secilen == null) {
-      _mesajGoster('Cevabını listeden seçmelisin.');
-      return;
-    }
-
-    final hata = await ref.read(gameProvider.notifier).makeGuess(secilen);
-    if (!mounted) return;
-
-    if (hata != null) {
-      _mesajGoster(hata);
-      return;
-    }
-
-    _guessController.clear();
-    setState(() {
-      _secilenOyuncu = null;
-      _oneriler = [];
-    });
-  }
-
-  void _mesajGoster(String mesaj) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(mesaj)));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,8 +100,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             logoB: soru['kulup_b_logo'] as String?,
           ),
           const SizedBox(height: 20),
-          _cevapAlani(state),
-          _oneriListesi(),
+          OyuncuArama(
+            renk: Renkler.kesisim,
+            gonderiliyor: state.gonderiliyor,
+            ara: ref.read(gameProvider.notifier).oyuncuAra,
+            gonder: ref.read(gameProvider.notifier).makeGuess,
+          ),
           const SizedBox(height: 16),
           _oncekiSonuc(state),
         ],
@@ -215,93 +119,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         'zor' => ('Zor', Renkler.hata),
         _ => null,
       };
-
-  Widget _cevapAlani(GameState state) {
-    final gonderilebilir = _secilenOyuncu != null && !state.gonderiliyor;
-
-    OutlineInputBorder kenarlik(Color renk) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: renk),
-        );
-
-    return TextField(
-      controller: _guessController,
-      enabled: !state.gonderiliyor,
-      style: const TextStyle(color: Renkler.metin, fontSize: 16),
-      cursorColor: Renkler.kesisim,
-      textInputAction: TextInputAction.send,
-      textCapitalization: TextCapitalization.words,
-      onChanged: _metinDegisti,
-      onSubmitted: (_) => _gonder(),
-      decoration: InputDecoration(
-        hintText: 'Oyuncu ara',
-        hintStyle: const TextStyle(color: Renkler.metinSoluk),
-        filled: true,
-        fillColor: Renkler.yuzey,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        enabledBorder: kenarlik(_secilenOyuncu != null ? Renkler.kesisim : Renkler.kenar),
-        focusedBorder: kenarlik(Renkler.kesisim),
-        disabledBorder: kenarlik(Renkler.kenar),
-        prefixIcon: _secilenOyuncu != null
-            ? const Icon(Icons.check_circle, color: Renkler.kesisim, size: 22)
-            : const Icon(Icons.search_rounded, color: Renkler.metinSoluk),
-        suffixIcon: state.gonderiliyor
-            ? const Padding(
-                padding: EdgeInsets.all(14),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-              )
-            : IconButton(
-                tooltip: 'Gönder',
-                icon: Icon(Icons.send, color: gonderilebilir ? Renkler.kesisim : Renkler.metinSoluk),
-                onPressed: gonderilebilir ? _gonder : null,
-              ),
-      ),
-    );
-  }
-
-  Widget _oneriListesi() {
-    if (_araniyor) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 16),
-        child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-      );
-    }
-
-    if (_secilenOyuncu != null || _guessController.text.trim().length < 2) {
-      return const SizedBox.shrink();
-    }
-
-    if (_oneriler.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 14, left: 4),
-        child: Text('Bu isimde oyuncu bulunamadı.', style: TextStyle(color: Renkler.metinSoluk)),
-      );
-    }
-
-    // Renk Material'da: ListTile dokunma efektini en yakın Material'a çizer, renkli bir kutu onu gizlerdi
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Material(
-        color: Renkler.yuzey,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            for (var i = 0; i < _oneriler.length; i++) ...[
-              if (i > 0) const Divider(indent: 16, endIndent: 16),
-              ListTile(
-                dense: true,
-                leading: OyuncuFotografi(isim: _oneriler[i].isim, fotoUrl: _oneriler[i].fotoUrl, boyut: 32),
-                title: Text(_oneriler[i].isim, style: const TextStyle(color: Renkler.metin, fontSize: 15)),
-                trailing: const Icon(Icons.north_west_rounded, size: 16, color: Renkler.metinSoluk),
-                onTap: () => _oyuncuSec(_oneriler[i]),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
 
   // Bir önceki sorunun sonucu: "Doğru · Arda Güler"
   Widget _oncekiSonuc(GameState state) {

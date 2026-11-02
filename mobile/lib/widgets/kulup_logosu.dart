@@ -1,31 +1,34 @@
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
 
-// Yuvarlak zemin üstünde kulüp logosu. Logo yoksa, yüklenirken ya da yüklenemezse kalkan ikonu gösterilir.
-// Logolar Transfermarkt'tan link olarak gelir, kopyaları tutulmaz.
+// Açık renk yuvarlak zemin üstünde kulüp (ya da milli takım) logosu. Logo yoksa, yüklenirken ya da yüklenemezse
+// yedek ikon gösterilir. Logolar Transfermarkt'tan link olarak gelir, kopyaları tutulmaz.
 class KulupLogosu extends StatelessWidget {
   final String? logoUrl;
   final double boyut;
   final Color ikonRengi;
+  final IconData yedekIkon;
 
   const KulupLogosu({
     super.key,
     required this.logoUrl,
     this.boyut = 56,
-    this.ikonRengi = Renkler.metinIkincil,
+    this.ikonRengi = Renkler.metinSoluk,
+    this.yedekIkon = Icons.shield_outlined,
   });
 
   @override
   Widget build(BuildContext context) {
-    final ikon = Icon(Icons.shield_outlined, color: ikonRengi, size: boyut / 2);
+    final ikon = Icon(yedekIkon, color: ikonRengi, size: boyut / 2);
     // Logolar şeffaf zeminli: kesilmesin diye yuvarlağın içine boşlukla sığdırılır
-    final logoBoyutu = boyut * 0.7;
+    final logoBoyutu = boyut * 0.68;
 
     return Container(
       width: boyut,
       height: boyut,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
+      // Zemin açık renk: siyah ya da koyu logolar (Juventus, Newcastle ...) koyu temada kaybolmasın
+      decoration: const BoxDecoration(color: Renkler.logoZemini, shape: BoxShape.circle),
       child: logoUrl == null
           ? ikon
           : Image.network(
@@ -35,7 +38,8 @@ class KulupLogosu extends StatelessWidget {
               fit: BoxFit.contain,
               // Ekrandaki boyuta göre küçültülerek belleğe alınır
               cacheWidth: (logoBoyutu * MediaQuery.devicePixelRatioOf(context)).round(),
-              loadingBuilder: (context, child, ilerleme) => ilerleme == null ? child : ikon,
+              // İlk kare gelene kadar ikon gösterilir (loadingBuilder ilk veri gelmeden boş kalıyordu)
+              frameBuilder: (context, child, kare, senkron) => senkron || kare != null ? child : ikon,
               errorBuilder: (context, hata, iz) => ikon,
             ),
     );

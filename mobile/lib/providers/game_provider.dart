@@ -91,10 +91,39 @@ class GameNotifier extends Notifier<GameState> {
         OyunYok() => state.copyWith(status: 'no_game'),
         OturumYok() => state.copyWith(status: 'error', hataMesaji: oturumYokMesaji),
       };
+      if (state.status == 'playing') await _eksikLogolariTamamla();
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(status: 'error', hataMesaji: yuklemeHataMesaji);
     }
+  }
+
+  // Logolar eklenmeden önce üretilmiş sorularda kulüp logosu yoktur: kulüp ID'sinden tamamlanır.
+  // Logolar süstür; gelmezse kalkan ikonu kalır, hata kullanıcıya yansıtılmaz.
+  Future<void> _eksikLogolariTamamla() async {
+    final sorular = state.questions.whereType<Map<String, dynamic>>().toList();
+    final eksikIdler = {
+      for (final soru in sorular)
+        for (final taraf in ['a', 'b'])
+          if (soru['kulup_${taraf}_logo'] == null && soru['kulup_${taraf}_id'] is String) soru['kulup_${taraf}_id'] as String,
+    };
+    if (eksikIdler.isEmpty) return;
+
+    try {
+      final logolar = await _depo.kulupLogolari(eksikIdler.toList());
+      if (!ref.mounted || logolar.isEmpty) return;
+      state = state.copyWith(questions: [
+        for (final soru in state.questions)
+          if (soru is Map<String, dynamic>)
+            {
+              ...soru,
+              'kulup_a_logo': soru['kulup_a_logo'] ?? logolar[soru['kulup_a_id']],
+              'kulup_b_logo': soru['kulup_b_logo'] ?? logolar[soru['kulup_b_id']],
+            }
+          else
+            soru,
+      ]);
+    } catch (_) {}
   }
 
   // Cevap kutusunun altındaki öneri listesi. Tüm oyuncular arasında arar, doğru cevabı ele vermez.
