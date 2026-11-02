@@ -53,7 +53,7 @@ const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'izgara',
     baslik: 'Izgara',
-    aciklama: 'Satır ve sütundaki takımlara uyan oyuncularla tahtayı doldur.',
+    aciklama: 'Satır ve sütundaki takımlara uyan oyuncuları bul.',
     ikon: Icons.grid_view_rounded,
     renk: Renkler.izgara,
     durum: OyunDurumu.aktif,
