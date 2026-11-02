@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/izgara.dart';
 
 // Oyunlar Türkiye saatiyle 00.00'da yenilendiği için cihazın saat dilimine güvenmiyoruz.
 // Türkiye'de yaz saati uygulaması yok, saat her zaman UTC+3.
@@ -66,3 +67,25 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
 });
 
 bool izgaraTipiMi(String oyunTipi) => oyunTipi.startsWith('izgara_');
+
+// Bugün başlanıp bitirilmemiş Izgara tahtası. Hub'da Izgara'ya dokununca zorluk sorulmadan bu tahta açılır.
+// Birden fazla varsa kolaydan zora ilki.
+final devamEdenIzgaraProvider = FutureProvider.autoDispose<IzgaraZorlugu?>((ref) async {
+  final supabase = Supabase.instance.client;
+  final userId = supabase.auth.currentUser?.id;
+  if (userId == null) return null;
+
+  final kayitlar = await supabase
+      .from('kullanici_oyun_gecmisi')
+      .select('oyun_tipi')
+      .eq('kullanici_id', userId)
+      .eq('tarih', bugununTarihi())
+      .eq('durum', 'basladi')
+      .inFilter('oyun_tipi', [for (final z in IzgaraZorlugu.values) z.oyunTipi]);
+
+  final tipler = {for (final kayit in kayitlar) kayit['oyun_tipi'] as String};
+  for (final zorluk in IzgaraZorlugu.values) {
+    if (tipler.contains(zorluk.oyunTipi)) return zorluk;
+  }
+  return null;
+});

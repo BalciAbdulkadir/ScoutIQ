@@ -17,7 +17,7 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
     // Izgara'nın üç zorluğu ayrı oyunlardır: önce zorluk seçilir
     if (mod.tip == 'izgara') {
-      await izgaraZorlukSecimiAc(context, ref);
+      await izgaraAc(context, ref);
       return;
     }
 
@@ -45,6 +45,7 @@ class HomeScreen extends ConsumerWidget {
     final oynananlar = ref.watch(bugunOynananlarProvider);
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
+    final devamEdenIzgara = ref.watch(devamEdenIzgaraProvider).value;
 
     final gunlukModlar = oyunModlari.where((m) => m.durum != OyunDurumu.yakinda).toList();
     final yakindakiModlar = oyunModlari.where((m) => m.durum == OyunDurumu.yakinda).toList();
@@ -61,7 +62,10 @@ class HomeScreen extends ConsumerWidget {
           child: RefreshIndicator(
             color: Renkler.basari,
             backgroundColor: Renkler.yuzey,
-            onRefresh: () => ref.refresh(bugunOynananlarProvider.future),
+            onRefresh: () {
+              ref.invalidate(devamEdenIzgaraProvider);
+              return ref.refresh(bugunOynananlarProvider.future);
+            },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -85,6 +89,7 @@ class HomeScreen extends ConsumerWidget {
                       mod: mod,
                       bugunkuSkor: skorlar[mod.tip],
                       tamamlananAltOyun: mod.altTipler?.where(skorlar.containsKey).length ?? 0,
+                      devamEdiyor: mod.tip == 'izgara' && devamEdenIzgara != null,
                       onTap: () => _modaTiklandi(context, ref, mod),
                     ),
                   ),

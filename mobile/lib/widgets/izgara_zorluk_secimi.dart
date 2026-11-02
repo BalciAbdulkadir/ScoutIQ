@@ -6,9 +6,18 @@ import '../screens/izgara_screen.dart';
 import '../theme/renkler.dart';
 import 'oyun_ortak.dart';
 
-// Hub'da Izgara kartına dokununca açılan zorluk seçimi. Seçilen tahta açılır, dönünce hub tazelenir.
-Future<void> izgaraZorlukSecimiAc(BuildContext context, WidgetRef ref) async {
-  final secilen = await showModalBottomSheet<IzgaraZorlugu>(
+// Hub'da Izgara kartına dokununca çağrılır. Yarım kalan bir tahta varsa zorluk sorulmadan o tahta
+// kaldığı yerden açılır; yoksa zorluk seçimi gösterilir. Dönünce hub tazelenir.
+Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
+  IzgaraZorlugu? secilen;
+  try {
+    secilen = await ref.read(devamEdenIzgaraProvider.future);
+  } catch (_) {
+    // Bilinmiyorsa zorluk seçimi gösterilir; yarım tahta seçilince yine kaldığı yerden açılır
+  }
+  if (!context.mounted) return;
+
+  secilen ??= await showModalBottomSheet<IzgaraZorlugu>(
     context: context,
     backgroundColor: Renkler.yuzey,
     showDragHandle: true,
@@ -16,9 +25,11 @@ Future<void> izgaraZorlukSecimiAc(BuildContext context, WidgetRef ref) async {
   );
   if (secilen == null || !context.mounted) return;
 
-  await Navigator.push(context, MaterialPageRoute(builder: (context) => IzgaraScreen(zorluk: secilen)));
+  final zorluk = secilen;
+  await Navigator.push(context, MaterialPageRoute(builder: (context) => IzgaraScreen(zorluk: zorluk)));
   if (!context.mounted) return;
   ref.invalidate(bugunOynananlarProvider);
+  ref.invalidate(devamEdenIzgaraProvider);
 }
 
 class IzgaraZorlukSecimi extends ConsumerWidget {

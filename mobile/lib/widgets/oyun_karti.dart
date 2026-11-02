@@ -7,6 +7,7 @@ class OyunKarti extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor; // null ise bugün henüz oynanmadı
   final int tamamlananAltOyun; // Birden fazla günlük oyunu olan modlarda (Izgara) bugün bitirilenlerin sayısı
+  final bool devamEdiyor; // Yarım kalan oyun var: buton "Devam et" olur
   final VoidCallback onTap;
 
   const OyunKarti({
@@ -15,6 +16,7 @@ class OyunKarti extends StatelessWidget {
     required this.bugunkuSkor,
     required this.onTap,
     this.tamamlananAltOyun = 0,
+    this.devamEdiyor = false,
   });
 
   @override
@@ -61,7 +63,12 @@ class OyunKarti extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              _DurumEtiketi(mod: mod, bugunkuSkor: bugunkuSkor, tamamlananAltOyun: tamamlananAltOyun),
+              _DurumEtiketi(
+                mod: mod,
+                bugunkuSkor: bugunkuSkor,
+                tamamlananAltOyun: tamamlananAltOyun,
+                devamEdiyor: devamEdiyor,
+              ),
             ],
           ),
         ),
@@ -74,8 +81,14 @@ class _DurumEtiketi extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor;
   final int tamamlananAltOyun;
+  final bool devamEdiyor;
 
-  const _DurumEtiketi({required this.mod, required this.bugunkuSkor, required this.tamamlananAltOyun});
+  const _DurumEtiketi({
+    required this.mod,
+    required this.bugunkuSkor,
+    required this.tamamlananAltOyun,
+    required this.devamEdiyor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -133,9 +146,9 @@ class _DurumEtiketi extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(color: mod.renk, borderRadius: BorderRadius.circular(8)),
-      child: const Text(
-        'Oyna',
-        style: TextStyle(color: Renkler.arkaPlan, fontSize: 14, fontWeight: FontWeight.w700),
+      child: Text(
+        devamEdiyor ? 'Devam et' : 'Oyna',
+        style: const TextStyle(color: Renkler.arkaPlan, fontSize: 14, fontWeight: FontWeight.w700),
       ),
     );
   }

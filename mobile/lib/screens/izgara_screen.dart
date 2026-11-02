@@ -31,7 +31,8 @@ class IzgaraScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Izgara'),
+            // Dar ekranlarda "Pes et" butonuna yer kalsın diye isim kısalabilir
+            const Flexible(child: Text('Izgara', overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 10),
             OyunEtiketi(metin: zorluk.ad, renk: zorlukRengi(zorluk)),
           ],
