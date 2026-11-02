@@ -20,16 +20,16 @@ void main() async {
   );
 
   // Uygulamayı Riverpod ProviderScope ile sarıp başlatıyoruz ki State yönetimi çalışsın
-  runApp(const ProviderScope(child: ScoutIQApp()));
+  runApp(const ProviderScope(child: FootyLoreApp()));
 }
 
-class ScoutIQApp extends StatelessWidget {
-  const ScoutIQApp({super.key});
+class FootyLoreApp extends StatelessWidget {
+  const FootyLoreApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ScoutIQ',
+      title: 'FootyLore',
       debugShowCheckedModeBanner: false,
       theme: uygulamaTemasi(),
       home: Consumer(

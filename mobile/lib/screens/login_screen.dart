@@ -24,7 +24,7 @@ class LoginScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 20),
               const Text(
-                'ScoutIQ',
+                'FootyLore',
                 style: TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.bold,
