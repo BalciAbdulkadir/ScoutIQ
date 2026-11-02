@@ -107,7 +107,7 @@ class _UstBar extends StatelessWidget {
         const Icon(Icons.sports_soccer, color: Renkler.basari, size: 22),
         const SizedBox(width: 8),
         const Text(
-          'ScoutIQ',
+          'FootyLore',
           style: TextStyle(color: Renkler.metin, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 0.3),
         ),
         const Spacer(),

@@ -3,7 +3,7 @@
          release derlemede ve debug manifest'i olmayan makinelerde uygulama internete çıkamaz. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="mobile"
+        android:label="FootyLore"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
