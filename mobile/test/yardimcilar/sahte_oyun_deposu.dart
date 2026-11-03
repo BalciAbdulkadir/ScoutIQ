@@ -60,6 +60,14 @@ class SahteOyunDeposu implements OyunDeposu {
     for (var i = 0; i < 9; i++) i: IzgaraOyuncusu(isim: 'Örnek Oyuncu $i', fotoUrl: 'https://foto.test/$i.jpg'),
   };
 
+  // Izgara süresi: başlatılan toplam süre ve sunucuya göre kalan süre (saniye). null: süresiz.
+  int? izgaraSureToplam;
+  int? izgaraSureKalan;
+  final List<int?> sureBaslatmaIstekleri = [];
+  // Doluysa sunucu süre dolmuş gibi tahmini reddeder
+  bool izgaraSuresiDoldu = false;
+  bool izgaraSureHataVerir = false;
+
   // Kulüp ID'si -> logo (Kesişim'de logosu olmayan eski sorular için)
   Map<String, String> logolar = {};
   int logoIstekSayisi = 0;
@@ -144,6 +152,12 @@ class SahteOyunDeposu implements OyunDeposu {
     final isim = oneriler.firstWhere((o) => o.id == oyuncuId).isim;
     final dolu = izgaraTahminListesi.where((t) => t.hucre != null).length;
 
+    if (izgaraSuresiDoldu) {
+      kayit = {'skor': dolu, 'durum': 'tamamlandi'};
+      return IzgaraTahminSonucu(
+          dogru: false, sureDoldu: true, oyuncuIsim: isim, kalanHak: 9 - izgaraTahminListesi.length, skor: dolu, bitti: true);
+    }
+
     if (izgaraTahminListesi.any((t) => t.oyuncuIsim == isim)) {
       return IzgaraTahminSonucu(
         dogru: false, tekrar: true, oyuncuIsim: isim, kalanHak: 9 - izgaraTahminListesi.length, skor: dolu, bitti: false);
@@ -161,6 +175,19 @@ class SahteOyunDeposu implements OyunDeposu {
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return IzgaraTahminSonucu(
         dogru: bos, hucre: bos ? hucre : null, oyuncuIsim: isim, kalanHak: kalan, skor: skor, bitti: bitti);
+  }
+
+  @override
+  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
+    sureBaslatmaIstekleri.add(sure);
+    if (izgaraSureHataVerir) throw Exception('fonksiyon yok');
+    // Süre bir kez başlatılır, sonradan değiştirilemez
+    if (sure != null && izgaraSureToplam == null) {
+      izgaraSureToplam = sure;
+      izgaraSureKalan = sure;
+    }
+    if (izgaraSureToplam == null) return null;
+    return IzgaraSuresi(toplam: izgaraSureToplam!, kalan: izgaraSureKalan!);
   }
 
   @override

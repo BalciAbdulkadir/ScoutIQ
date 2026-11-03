@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/izgara.dart';
@@ -13,8 +15,11 @@ import '../widgets/oyuncu_fotografi.dart';
 // Kullanıcı hücre seçmez; yazdığı oyuncu uyduğu boş hücreye sunucu tarafından yerleştirilir.
 class IzgaraScreen extends ConsumerWidget {
   final IzgaraZorlugu zorluk;
+  final int? sure; // Yeni başlanan tahtanın süresi (saniye); yarım kalan tahtada sunucudaki süre kullanılır
 
-  const IzgaraScreen({super.key, required this.zorluk});
+  const IzgaraScreen({super.key, required this.zorluk, this.sure});
+
+  IzgaraAcilisi get _acilis => (zorluk: zorluk, sure: sure);
 
   static Color zorlukRengi(IzgaraZorlugu zorluk) => switch (zorluk) {
         IzgaraZorlugu.kolay => Renkler.basari,
@@ -24,7 +29,7 @@ class IzgaraScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(izgaraProvider(zorluk));
+    final state = ref.watch(izgaraProvider(_acilis));
     final oynaniyor = state.durum == IzgaraDurumu.oynaniyor;
 
     return Scaffold(
@@ -76,7 +81,7 @@ class IzgaraScreen extends ConsumerWidget {
     );
     if (onay != true) return;
 
-    final hata = await ref.read(izgaraProvider(zorluk).notifier).pesEt();
+    final hata = await ref.read(izgaraProvider(_acilis).notifier).pesEt();
     if (hata != null && context.mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -93,7 +98,7 @@ class IzgaraScreen extends ConsumerWidget {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(izgaraProvider(zorluk)),
+          onTekrarDene: () => ref.invalidate(izgaraProvider(_acilis)),
         );
       case IzgaraDurumu.oyunYok:
         return const OyunMesajKarti(
@@ -109,7 +114,7 @@ class IzgaraScreen extends ConsumerWidget {
   }
 
   Widget _oyun(WidgetRef ref, IzgaraState state) {
-    final notifier = ref.read(izgaraProvider(zorluk).notifier);
+    final notifier = ref.read(izgaraProvider(_acilis).notifier);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -117,6 +122,14 @@ class IzgaraScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _HakGostergesi(kalanHak: state.kalanHak, skor: state.skor),
+          if (state.bitisZamani != null) ...[
+            const SizedBox(height: 14),
+            _GeriSayim(
+              bitisZamani: state.bitisZamani!,
+              toplamSaniye: state.sureSaniye ?? 90,
+              onBitti: notifier.sureDoldu,
+            ),
+          ],
           const SizedBox(height: 20),
           OyuncuArama(
             renk: Renkler.izgara,
@@ -141,7 +154,7 @@ class IzgaraScreen extends ConsumerWidget {
       children: [
         const SizedBox(height: 8),
         Text(
-          bitisBasligi(state.skor, izgaraBoyutu * izgaraBoyutu),
+          state.sureDoldu ? 'Süre doldu' : bitisBasligi(state.skor, izgaraBoyutu * izgaraBoyutu),
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metin, fontSize: 24, fontWeight: FontWeight.w800),
         ),
@@ -181,6 +194,84 @@ class IzgaraScreen extends ConsumerWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: const Text('Ana menüye dön', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+}
+
+// Süreli tahtada kalan süre: sayı ve azalan çubuk. Son 10 saniyede kırmızıya döner.
+// Süre cihaz saatine göre sayılır; asıl kontrol sunucudadır, bu sayaç sadece gösterir ve süre dolunca haber verir.
+class _GeriSayim extends StatefulWidget {
+  final DateTime bitisZamani;
+  final int toplamSaniye;
+  final VoidCallback onBitti;
+
+  const _GeriSayim({required this.bitisZamani, required this.toplamSaniye, required this.onBitti});
+
+  @override
+  State<_GeriSayim> createState() => _GeriSayimState();
+}
+
+class _GeriSayimState extends State<_GeriSayim> {
+  Timer? _zamanlayici;
+  late Duration _kalan = _hesapla();
+
+  Duration _hesapla() {
+    final kalan = widget.bitisZamani.difference(DateTime.now());
+    return kalan.isNegative ? Duration.zero : kalan;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Çubuk akıcı azalsın diye saniyede birkaç kez güncellenir
+    _zamanlayici = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      setState(() => _kalan = _hesapla());
+      // Tahmin gönderilirken süre dolarsa bildirim reddedilir; sayaç sıfırda kaldıkça tekrar denenir
+      if (_kalan == Duration.zero) widget.onBitti();
+    });
+  }
+
+  @override
+  void dispose() {
+    _zamanlayici?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final saniye = (_kalan.inMilliseconds / 1000).ceil();
+    final azKaldi = saniye <= 10;
+    final renk = azKaldi ? Renkler.hata : Renkler.izgara;
+    final oran = widget.toplamSaniye == 0 ? 0.0 : (_kalan.inMilliseconds / (widget.toplamSaniye * 1000)).clamp(0.0, 1.0);
+
+    return Row(
+      children: [
+        Icon(Icons.timer_outlined, color: renk, size: 18),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 44,
+          child: Text(
+            '${saniye ~/ 60}:${(saniye % 60).toString().padLeft(2, '0')}',
+            style: TextStyle(
+              color: renk,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: oran,
+              minHeight: 6,
+              color: renk,
+              backgroundColor: Renkler.kenar,
+            ),
+          ),
         ),
       ],
     );

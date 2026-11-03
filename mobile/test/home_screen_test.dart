@@ -107,6 +107,26 @@ void main() {
     await ekraniKapat(tester);
   });
 
+  testWidgets('zorluk seçiminde süre seçilir ve tahta o süreyle açılır', (tester) async {
+    final depo = SahteOyunDeposu()..oyun = {'id': 'izgara-1', 'soru_verisi': ornekTahta};
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    await tester.tap(find.text('Izgara'));
+    await tester.pumpAndSettle();
+    expect(find.text('Süre yok'), findsOneWidget);
+
+    await tester.tap(find.text('60 sn'));
+    await tester.pump();
+    await tester.tap(find.text('KOLAY'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.byWidgetPredicate((w) => w is IzgaraScreen && w.zorluk == IzgaraZorlugu.kolay && w.sure == 60), findsOneWidget);
+    expect(depo.sureBaslatmaIstekleri, [60]);
+    await ekraniKapat(tester);
+  });
+
   testWidgets('tüm oyunlar oynandıysa hepsinin bittiği yazar', (tester) async {
     await anaMenuyuAc(tester, oynananlar: {
       'kesisim': 6,

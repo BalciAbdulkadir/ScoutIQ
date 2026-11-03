@@ -49,6 +49,10 @@ abstract class OyunDeposu {
   // Oyunu o anki skorla bitirir, skoru döndürür
   Future<int> izgaraPesEt(String oyunId);
 
+  // Süreyi başlatır (sure doluysa) ve tahtanın süre durumunu döndürür; süresiz tahtada null.
+  // Süre zaten başlatılmışsa yeni süre yok sayılır.
+  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure});
+
   // Bitmiş tahtanın her hücresi için örnek bir doğru cevap: hücre -> oyuncu
   Future<Map<int, IzgaraOyuncusu>> izgaraOrnekCevaplar(String oyunId);
 
@@ -177,6 +181,12 @@ class SupabaseOyunDeposu implements OyunDeposu {
   Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId}) async {
     final sonuc = await _supabase.rpc('izgara_tahmin', params: {'p_oyun_id': oyunId, 'p_oyuncu_id': oyuncuId});
     return IzgaraTahminSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
+    final sonuc = await _supabase.rpc('izgara_sureyi_baslat', params: {'p_oyun_id': oyunId, 'p_sure': sure});
+    return IzgaraSuresi.oku(sonuc);
   }
 
   @override

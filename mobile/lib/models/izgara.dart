@@ -3,6 +3,28 @@
 const izgaraBoyutu = 3;
 const izgaraHakSayisi = 9;
 
+// Oyuncunun tahtaya başlarken seçebileceği süreler (saniye). null: süre yok. Süre bütün tahta içindir.
+const izgaraSureleri = <int?>[null, 30, 60, 90];
+
+String izgaraSureMetni(int? sure) => sure == null ? 'Süre yok' : '$sure sn';
+
+// Bir Izgara ekranını açan seçim. Süre sadece yeni başlanan tahtada kullanılır;
+// yarım kalan tahtanın süresi sunucudan okunur.
+typedef IzgaraAcilisi = ({IzgaraZorlugu zorluk, int? sure});
+
+// Süreli tahtanın sunucudaki durumu
+class IzgaraSuresi {
+  final int toplam; // Seçilen süre (saniye)
+  final int kalan; // Sunucuya göre kalan süre (saniye)
+
+  const IzgaraSuresi({required this.toplam, required this.kalan});
+
+  static IzgaraSuresi? oku(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    return IzgaraSuresi(toplam: (json['sure'] as num).toInt(), kalan: (json['kalan'] as num).toInt());
+  }
+}
+
 // Kolay, orta ve zor ayrı oyunlardır; her biri günde bir kez oynanır
 enum IzgaraZorlugu {
   kolay('izgara_kolay', 'Kolay', 'Sadece kulüpler'),
@@ -96,6 +118,7 @@ class IzgaraTahminSonucu {
   final bool dogru;
   final int? hucre;
   final bool tekrar; // Oyuncu bu tahtada zaten kullanılmış: hak düşmedi
+  final bool sureDoldu; // Süre dolduğu için tahmin kabul edilmedi, oyun bitti
   final String oyuncuIsim;
   final String? fotoUrl;
   final int kalanHak;
@@ -106,6 +129,7 @@ class IzgaraTahminSonucu {
     required this.dogru,
     this.hucre,
     this.tekrar = false,
+    this.sureDoldu = false,
     required this.oyuncuIsim,
     this.fotoUrl,
     required this.kalanHak,
@@ -118,6 +142,7 @@ class IzgaraTahminSonucu {
       dogru: json['dogru'] == true,
       hucre: (json['hucre'] as num?)?.toInt(),
       tekrar: json['tekrar'] == true,
+      sureDoldu: json['sure_doldu'] == true,
       oyuncuIsim: json['oyuncu_isim'] as String,
       fotoUrl: json['foto_url'] as String?,
       kalanHak: (json['kalan_hak'] as num).toInt(),
