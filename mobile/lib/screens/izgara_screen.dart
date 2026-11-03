@@ -121,7 +121,7 @@ class IzgaraScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _HakGostergesi(kalanHak: state.kalanHak, skor: state.skor),
+          _Ilerleme(tahminSayisi: state.tahminSayisi, skor: state.skor),
           if (state.bitisZamani != null) ...[
             const SizedBox(height: 14),
             _GeriSayim(
@@ -278,18 +278,18 @@ class _GeriSayimState extends State<_GeriSayim> {
   }
 }
 
-// Kalan tahmin hakkı (9 nokta) ve dolu kutu sayısı
-class _HakGostergesi extends StatelessWidget {
-  final int kalanHak;
+// Dolu kutular (9 nokta) ve yapılan tahmin sayısı
+class _Ilerleme extends StatelessWidget {
+  final int tahminSayisi;
   final int skor;
 
-  const _HakGostergesi({required this.kalanHak, required this.skor});
+  const _Ilerleme({required this.tahminSayisi, required this.skor});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var i = 0; i < izgaraHakSayisi; i++) ...[
+        for (var i = 0; i < izgaraBoyutu * izgaraBoyutu; i++) ...[
           if (i > 0) const SizedBox(width: 4),
           AnimatedContainer(
             duration: const Duration(milliseconds: 250),
@@ -297,19 +297,19 @@ class _HakGostergesi extends StatelessWidget {
             height: 8,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: i < kalanHak ? Renkler.izgara : Renkler.kenar,
+              color: i < skor ? Renkler.izgara : Renkler.kenar,
             ),
           ),
         ],
         const SizedBox(width: 10),
         Text(
-          '$kalanHak hak kaldı',
-          style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13, fontWeight: FontWeight.w500),
+          '$skor/9 kutu',
+          style: const TextStyle(color: Renkler.metin, fontSize: 13, fontWeight: FontWeight.w600),
         ),
         const Spacer(),
         Text(
-          '$skor/9 kutu',
-          style: const TextStyle(color: Renkler.metin, fontSize: 13, fontWeight: FontWeight.w600),
+          '$tahminSayisi tahmin',
+          style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13, fontWeight: FontWeight.w500),
         ),
       ],
     );
@@ -338,7 +338,7 @@ class _SonTahmin extends StatelessWidget {
           Icons.info_rounded,
           Renkler.orta,
           'Zaten kullandın',
-          '${s.oyuncuIsim} bu tahtada var, hak düşmedi',
+          '${s.oyuncuIsim} bu tahtada zaten var',
         ),
       IzgaraTahminSonucu(dogru: true, hucre: final hucre?) => (
           Icons.check_circle_rounded,

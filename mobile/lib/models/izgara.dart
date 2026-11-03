@@ -1,7 +1,6 @@
 // 3x3 Izgara oyununun verileri. Tahta gunluk_oyunlar.soru_verisi'nden okunur (biçim: 011_izgara.sql).
 
 const izgaraBoyutu = 3;
-const izgaraHakSayisi = 9;
 
 // Oyuncunun tahtaya başlarken seçebileceği süreler (saniye). null: süre yok. Süre bütün tahta içindir.
 const izgaraSureleri = <int?>[null, 30, 60, 90];
@@ -117,11 +116,10 @@ class IzgaraTahmini {
 class IzgaraTahminSonucu {
   final bool dogru;
   final int? hucre;
-  final bool tekrar; // Oyuncu bu tahtada zaten kullanılmış: hak düşmedi
+  final bool tekrar; // Oyuncu bu tahtada zaten kullanılmış: tahmin sayılmadı
   final bool sureDoldu; // Süre dolduğu için tahmin kabul edilmedi, oyun bitti
   final String oyuncuIsim;
   final String? fotoUrl;
-  final int kalanHak;
   final int skor;
   final bool bitti;
 
@@ -132,7 +130,6 @@ class IzgaraTahminSonucu {
     this.sureDoldu = false,
     required this.oyuncuIsim,
     this.fotoUrl,
-    required this.kalanHak,
     required this.skor,
     required this.bitti,
   });
@@ -145,7 +142,6 @@ class IzgaraTahminSonucu {
       sureDoldu: json['sure_doldu'] == true,
       oyuncuIsim: json['oyuncu_isim'] as String,
       fotoUrl: json['foto_url'] as String?,
-      kalanHak: (json['kalan_hak'] as num).toInt(),
       skor: (json['skor'] as num).toInt(),
       bitti: json['bitti'] == true,
     );

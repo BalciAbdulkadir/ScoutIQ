@@ -66,7 +66,7 @@ class _IzgaraZorlukSecimiState extends ConsumerState<IzgaraZorlukSecimi> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Her zorluk ayrı bir tahta, her biri günde bir kez oynanır. 9 tahmin hakkın var.',
+              'Her zorluk ayrı bir tahta, her biri günde bir kez oynanır.',
               style: TextStyle(color: Renkler.metinIkincil, fontSize: 14, height: 1.4),
             ),
             const SizedBox(height: 16),

@@ -155,12 +155,12 @@ class SahteOyunDeposu implements OyunDeposu {
     if (izgaraSuresiDoldu) {
       kayit = {'skor': dolu, 'durum': 'tamamlandi'};
       return IzgaraTahminSonucu(
-          dogru: false, sureDoldu: true, oyuncuIsim: isim, kalanHak: 9 - izgaraTahminListesi.length, skor: dolu, bitti: true);
+          dogru: false, sureDoldu: true, oyuncuIsim: isim, skor: dolu, bitti: true);
     }
 
     if (izgaraTahminListesi.any((t) => t.oyuncuIsim == isim)) {
       return IzgaraTahminSonucu(
-        dogru: false, tekrar: true, oyuncuIsim: isim, kalanHak: 9 - izgaraTahminListesi.length, skor: dolu, bitti: false);
+        dogru: false, tekrar: true, oyuncuIsim: isim, skor: dolu, bitti: false);
     }
 
     final hucre = izgaraHucreleri[oyuncuId];
@@ -170,11 +170,11 @@ class SahteOyunDeposu implements OyunDeposu {
       IzgaraTahmini(sira: izgaraTahminListesi.length + 1, oyuncuIsim: isim, hucre: bos ? hucre : null),
     ];
     final skor = dolu + (bos ? 1 : 0);
-    final kalan = 9 - izgaraTahminListesi.length;
-    final bitti = kalan == 0 || skor == 9;
+    // Tahmin hakkı sınırı yoktur: oyun sadece dokuz kutu dolunca biter
+    final bitti = skor == 9;
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return IzgaraTahminSonucu(
-        dogru: bos, hucre: bos ? hucre : null, oyuncuIsim: isim, kalanHak: kalan, skor: skor, bitti: bitti);
+        dogru: bos, hucre: bos ? hucre : null, oyuncuIsim: isim, skor: skor, bitti: bitti);
   }
 
   @override

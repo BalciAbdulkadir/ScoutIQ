@@ -78,7 +78,7 @@ void main() {
       final (c, depo) = await tahtayiAc();
 
       expect(durum(c).durum, IzgaraDurumu.oynaniyor);
-      expect(durum(c).kalanHak, 9);
+      expect(durum(c).tahminSayisi, 0);
       expect(depo.kayitAcSayisi, 1);
     });
 
@@ -93,7 +93,7 @@ void main() {
 
       expect(durum(c).durum, IzgaraDurumu.oynaniyor);
       expect(durum(c).hucreler.keys, [4]);
-      expect(durum(c).kalanHak, 7);
+      expect(durum(c).tahminSayisi, 2);
       expect(depo.kayitAcSayisi, 0);
     });
 
@@ -125,51 +125,64 @@ void main() {
 
       expect(durum(c).hucreler[4]?.isim, 'Arda Güler');
       expect(durum(c).skor, 1);
-      expect(durum(c).kalanHak, 8);
+      expect(durum(c).tahminSayisi, 1);
       expect(durum(c).sonTahmin?.dogru, isTrue);
     });
 
-    test('yanlış tahmin hak yer, hücre dolmaz', () async {
+    test('yanlış tahmin sayılır, hücre dolmaz', () async {
       final (c, _) = await tahtayiAc();
 
       await notifier(c).tahminEt(yanlisOyuncu);
 
       expect(durum(c).hucreler, isEmpty);
-      expect(durum(c).kalanHak, 8);
+      expect(durum(c).tahminSayisi, 1);
       expect(durum(c).sonTahmin?.dogru, isFalse);
     });
 
-    test('aynı oyuncu tekrar yazılırsa hak düşmez', () async {
+    test('aynı oyuncu tekrar yazılırsa tahmin sayılmaz', () async {
       final (c, _) = await tahtayiAc();
 
       await notifier(c).tahminEt(dogruOyuncu);
       await notifier(c).tahminEt(dogruOyuncu);
 
-      expect(durum(c).kalanHak, 8);
+      expect(durum(c).tahminSayisi, 1);
       expect(durum(c).sonTahmin?.tekrar, isTrue);
     });
 
-    test('dokuz hak bitince oyun biter ve örnek cevaplar gelir', () async {
+    test('tahmin hakkı sınırı yok: dokuzdan fazla yanlış tahminde oyun sürer', () async {
       final (c, _) = await tahtayiAc((d) {
-        d.oneriler = [for (var i = 0; i < 9; i++) OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i')];
+        d.oneriler = [for (var i = 0; i < 12; i++) OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i')];
       });
 
-      for (var i = 0; i < 9; i++) {
+      for (var i = 0; i < 12; i++) {
         await notifier(c).tahminEt(OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i'));
       }
 
-      expect(durum(c).durum, IzgaraDurumu.bitti);
-      expect(durum(c).kalanHak, 0);
-      expect(durum(c).ornekCevaplar, hasLength(9));
+      expect(durum(c).durum, IzgaraDurumu.oynaniyor);
+      expect(durum(c).tahminSayisi, 12);
     });
 
-    test('tahmin gönderilemezse hata döner, hak düşmez', () async {
+    test('dokuz kutu dolunca oyun biter', () async {
+      final (c, _) = await tahtayiAc((d) {
+        d.oneriler = [for (var i = 0; i < 9; i++) OyuncuOneri(id: 'd-$i', isim: 'Doğru $i')];
+        d.izgaraHucreleri = {for (var i = 0; i < 9; i++) 'd-$i': i};
+      });
+
+      for (var i = 0; i < 9; i++) {
+        await notifier(c).tahminEt(OyuncuOneri(id: 'd-$i', isim: 'Doğru $i'));
+      }
+
+      expect(durum(c).durum, IzgaraDurumu.bitti);
+      expect(durum(c).skor, 9);
+    });
+
+    test('tahmin gönderilemezse hata döner, tahmin sayılmaz', () async {
       final (c, _) = await tahtayiAc((d) => d.izgaraTahminHataVerir = true);
 
       final hata = await notifier(c).tahminEt(dogruOyuncu);
 
       expect(hata, contains('gönderilemedi'));
-      expect(durum(c).kalanHak, 9);
+      expect(durum(c).tahminSayisi, 0);
       expect(durum(c).gonderiliyor, isFalse);
     });
 
@@ -308,13 +321,13 @@ void main() {
       expect(find.text('Ana menüye dön'), findsOneWidget);
     });
 
-    testWidgets('başlıklar, hak sayısı ve zorluk gösterilir', (tester) async {
+    testWidgets('başlıklar, ilerleme ve zorluk gösterilir', (tester) async {
       await ekraniAc(tester);
 
       expect(find.text('ORTA'), findsOneWidget);
       expect(find.text('Galatasaray'), findsOneWidget);
       expect(find.text('Fransa'), findsOneWidget);
-      expect(find.text('9 hak kaldı'), findsOneWidget);
+      expect(find.text('0 tahmin'), findsOneWidget);
       // Milli takım arması yüklenemezse bayrak ikonu çıkar
       expect(find.byIcon(Icons.flag_rounded), findsWidgets);
     });
@@ -330,7 +343,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.send));
       await tester.pumpAndSettle();
 
-      expect(find.text('8 hak kaldı'), findsOneWidget);
+      expect(find.text('1 tahmin'), findsOneWidget);
       expect(find.text('1/9 kutu'), findsOneWidget);
       // Sonuç satırında ve tahtadaki kutuda
       expect(find.text('Arda Güler'), findsOneWidget);
@@ -347,7 +360,7 @@ void main() {
       await tester.tap(find.text('Vazgeç'));
       await tester.pumpAndSettle();
       expect(depo.izgaraPesSayisi, 0);
-      expect(find.text('9 hak kaldı'), findsOneWidget);
+      expect(find.text('0 tahmin'), findsOneWidget);
     });
 
     testWidgets('bitmiş tahtada boş kutular örnek cevaplarla gösterilir', (tester) async {

@@ -90,7 +90,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Zorluk seçimi açılmadı, doğrudan orta tahta açıldı
-    expect(find.text('Her zorluk ayrı bir tahta, her biri günde bir kez oynanır. 9 tahmin hakkın var.'), findsNothing);
+    expect(find.text('Her zorluk ayrı bir tahta, her biri günde bir kez oynanır.'), findsNothing);
     expect(find.byType(IzgaraScreen), findsOneWidget);
     expect(find.text('ORTA'), findsOneWidget);
     await ekraniKapat(tester);

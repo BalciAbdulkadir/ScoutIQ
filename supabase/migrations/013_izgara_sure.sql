@@ -1,4 +1,4 @@
--- 013: Izgara'ya süre
+-- 013: Izgara'ya süre, tahmin hakkı sınırının kaldırılması
 -- Supabase SQL Editor'da tek seferde çalıştırılır. Hata olursa hiçbir değişiklik uygulanmaz.
 -- 011_izgara.sql'den sonra çalıştırılmalıdır.
 --
@@ -8,8 +8,14 @@
 --   - Süre seçimi bir kez yapılır, sonradan değiştirilemez.
 --   - Süre dolduktan sonra gelen tahmin kabul edilmez, oyun o anki skorla biter.
 --     Ağ gecikmesi yüzünden son saniyedeki tahmin yanmasın diye 3 saniye tolerans vardır.
+--   - Tahmin hakkı sınırı yoktur (011'deki 9 hak kaldırıldı). Oyun dokuz kutu dolunca,
+--     pes edilince ya da süre dolunca biter. Dönüşteki 'kalan_hak' alanı kaldırıldı.
 
 begin;
+
+-- 0) Tahmin sırası artık 9 ile sınırlı değil
+alter table public.izgara_tahminleri drop constraint if exists izgara_tahminleri_sira_check;
+alter table public.izgara_tahminleri add constraint izgara_tahminleri_sira_check check (sira >= 1);
 
 -- 1) Süreli tahtalar. Süresiz oynanan tahtanın satırı yoktur.
 --    Satırlar sadece izgara_sureyi_baslat fonksiyonuyla eklenir; kullanıcı kendi satırlarını okuyabilir.
@@ -84,8 +90,8 @@ $$;
 revoke execute on function public.izgara_sureyi_baslat(uuid, integer) from public, anon;
 grant execute on function public.izgara_sureyi_baslat(uuid, integer) to authenticated;
 
--- 3) Tahmin: 011'deki fonksiyonun aynısı, süre dolduysa tahmin kabul edilmez ve oyun biter.
---    Dönüşe 'sure_doldu' alanı eklendi.
+-- 3) Tahmin: 011'deki fonksiyonun aynısı, iki farkla: süre dolduysa tahmin kabul edilmez ve oyun biter;
+--    tahmin hakkı sınırı yoktur. Dönüş: { dogru, hucre, tekrar, oyuncu_isim, foto_url, skor, bitti, sure_doldu }
 create or replace function public.izgara_tahmin(p_oyun_id uuid, p_oyuncu_id uuid)
 returns jsonb
 language plpgsql
@@ -100,7 +106,6 @@ declare
     v_tahmin_sayisi integer;
     v_hucre integer;
     v_skor integer;
-    v_kalan integer;
     v_bitti boolean;
     v_bitis timestamptz;
 begin
@@ -122,7 +127,7 @@ begin
         raise exception 'Oyun bulunamadı';
     end if;
 
-    -- Kayıt kilitlenir: aynı anda gelen iki tahmin sırayla işlenir, hak sayısı aşılamaz
+    -- Kayıt kilitlenir: aynı anda gelen iki tahmin sırayla işlenir
     perform 1
     from public.kullanici_oyun_gecmisi
     where kullanici_id = v_kullanici
@@ -151,21 +156,17 @@ begin
 
         return jsonb_build_object(
             'dogru', false, 'hucre', null, 'tekrar', false, 'oyuncu_isim', v_isim, 'foto_url', v_foto,
-            'kalan_hak', 9 - v_tahmin_sayisi, 'skor', v_skor, 'bitti', true, 'sure_doldu', true);
+            'skor', v_skor, 'bitti', true, 'sure_doldu', true);
     end if;
 
-    if v_tahmin_sayisi >= 9 then
-        raise exception 'Tahmin hakkı kalmadı';
-    end if;
-
-    -- Aynı oyuncu ikinci kez yazılırsa hak yemez
+    -- Aynı oyuncu ikinci kez yazılırsa tahmin sayılmaz
     if exists (
         select 1 from public.izgara_tahminleri
         where kullanici_id = v_kullanici and oyun_id = p_oyun_id and oyuncu_isim = v_isim
     ) then
         return jsonb_build_object(
             'dogru', false, 'hucre', null, 'tekrar', true, 'oyuncu_isim', v_isim, 'foto_url', v_foto,
-            'kalan_hak', 9 - v_tahmin_sayisi, 'skor', v_skor, 'bitti', false, 'sure_doldu', false);
+            'skor', v_skor, 'bitti', false, 'sure_doldu', false);
     end if;
 
     -- Oyuncunun uyduğu boş hücrelerden en az cevabı olanı
@@ -189,8 +190,7 @@ begin
     values (v_kullanici, p_oyun_id, v_tahmin_sayisi + 1, p_oyuncu_id, v_isim, v_hucre);
 
     v_skor := v_skor + (v_hucre is not null)::integer;
-    v_kalan := 9 - (v_tahmin_sayisi + 1);
-    v_bitti := v_kalan = 0 or v_skor = 9;
+    v_bitti := v_skor = 9;
 
     update public.kullanici_oyun_gecmisi
     set skor = v_skor,
@@ -201,7 +201,7 @@ begin
 
     return jsonb_build_object(
         'dogru', v_hucre is not null, 'hucre', v_hucre, 'tekrar', false, 'oyuncu_isim', v_isim, 'foto_url', v_foto,
-        'kalan_hak', v_kalan, 'skor', v_skor, 'bitti', v_bitti, 'sure_doldu', false);
+        'skor', v_skor, 'bitti', v_bitti, 'sure_doldu', false);
 end;
 $$;
 

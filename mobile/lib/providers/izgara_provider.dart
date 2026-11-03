@@ -12,7 +12,7 @@ class IzgaraState {
   final IzgaraTahtasi? tahta;
   final String? oyunId;
   final Map<int, IzgaraOyuncusu> hucreler; // Dolu hücreler: hücre (0-8) -> oyuncu
-  final int kalanHak;
+  final int tahminSayisi; // Sayılan (tekrar olmayan) tahmin sayısı; tahmin hakkı sınırı yoktur
   final bool gonderiliyor; // Tahmin ya da pes etme sunucuda işlenirken ikinci isteği engeller
   final String? hataMesaji; // durum 'hata' iken gösterilir
   final IzgaraTahminSonucu? sonTahmin; // Arama kutusunun altında gösterilen son tahminin sonucu
@@ -26,7 +26,7 @@ class IzgaraState {
     this.tahta,
     this.oyunId,
     this.hucreler = const {},
-    this.kalanHak = izgaraHakSayisi,
+    this.tahminSayisi = 0,
     this.gonderiliyor = false,
     this.hataMesaji,
     this.sonTahmin,
@@ -44,7 +44,7 @@ class IzgaraState {
     IzgaraTahtasi? tahta,
     String? oyunId,
     Map<int, IzgaraOyuncusu>? hucreler,
-    int? kalanHak,
+    int? tahminSayisi,
     bool? gonderiliyor,
     String? hataMesaji,
     IzgaraTahminSonucu? sonTahmin,
@@ -58,7 +58,7 @@ class IzgaraState {
       tahta: tahta ?? this.tahta,
       oyunId: oyunId ?? this.oyunId,
       hucreler: hucreler ?? this.hucreler,
-      kalanHak: kalanHak ?? this.kalanHak,
+      tahminSayisi: tahminSayisi ?? this.tahminSayisi,
       gonderiliyor: gonderiliyor ?? this.gonderiliyor,
       hataMesaji: hataMesaji ?? this.hataMesaji,
       sonTahmin: sonTahmin ?? this.sonTahmin,
@@ -71,7 +71,8 @@ class IzgaraState {
 }
 
 // Izgara oyunu. Kesişim'den farkı: tahminler sunucuda tutulduğu için yarıda bırakılan tahta
-// tekrar açılınca kaldığı yerden devam eder; hak ve skor istemciden alınmaz.
+// tekrar açılınca kaldığı yerden devam eder; skor istemciden alınmaz.
+// Tahmin hakkı sınırı yoktur: oyun dokuz kutu dolunca, pes edilince ya da süre dolunca biter.
 class IzgaraNotifier extends Notifier<IzgaraState> {
   final IzgaraAcilisi acilis;
 
@@ -130,7 +131,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
       final tahminler = await _depo.izgaraTahminleri(oyunId);
       if (!ref.mounted) return;
 
-      var bitti = kayit['durum'] == 'tamamlandi' || tahminler.length >= izgaraHakSayisi;
+      var bitti = kayit['durum'] == 'tamamlandi' || tahminler.where((t) => t.hucre != null).length >= izgaraBoyutu * izgaraBoyutu;
 
       // Süre: yeni tahtada seçilen süre başlatılır, yarım kalan tahtada sunucudaki kalan süre okunur
       IzgaraSuresi? sure;
@@ -161,7 +162,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
           for (final t in tahminler)
             if (t.hucre != null) t.hucre!: IzgaraOyuncusu(isim: t.oyuncuIsim, fotoUrl: t.fotoUrl),
         },
-        kalanHak: (izgaraHakSayisi - tahminler.length).clamp(0, izgaraHakSayisi),
+        tahminSayisi: tahminler.length,
       );
       if (bitti) await _ornekCevaplariYukle();
     } catch (_) {
@@ -195,7 +196,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
     state = state.copyWith(
       durum: sonuc.bitti ? IzgaraDurumu.bitti : IzgaraDurumu.oynaniyor,
       hucreler: hucreler,
-      kalanHak: sonuc.kalanHak,
+      tahminSayisi: sonuc.tekrar || sonuc.sureDoldu ? state.tahminSayisi : state.tahminSayisi + 1,
       sonTahmin: sonuc,
       gonderiliyor: false,
       sureDoldu: sonuc.sureDoldu,

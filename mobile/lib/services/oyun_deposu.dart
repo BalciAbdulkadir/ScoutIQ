@@ -38,7 +38,7 @@ abstract class OyunDeposu {
   // Güncellenecek kayıt yoksa (başka yerden kapatılmışsa) false döner.
   Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti});
 
-  // Izgara: tahminler, skor ve haklar sunucuda tutulur (011_izgara.sql)
+  // Izgara: tahminler ve skor sunucuda tutulur (011_izgara.sql)
 
   // Kullanıcının bu tahtadaki önceki tahminleri, sırayla. Uygulama yeniden açılınca tahta bunlarla kurulur.
   Future<List<IzgaraTahmini>> izgaraTahminleri(String oyunId);
