@@ -17,6 +17,10 @@ import requests
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
+# Çıktı Tee-Object gibi bir yere yönlendirilince Windows Türkçe kod sayfası (cp1254) kullanılır; bu sayfada olmayan
+# harfler (ör. Modrić'teki ć) betiği çökertmesin, '?' olarak yazılsın. Diğer betikler de main'i içe aktardığı için geçerlidir.
+sys.stdout.reconfigure(errors="replace")
+
 load_dotenv()
 
 URL = os.getenv("SUPABASE_URL")
