@@ -5,6 +5,8 @@ import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/oyun_deposu.dart';
 
+const baskaIzgaraMesaji = 'Bugünün Izgarasını başka bir zorlukta oynadın. Yeni tahta gece yarısı açılıyor.';
+
 enum IzgaraDurumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
 
 class IzgaraState {
@@ -125,6 +127,10 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
         } on KayitZatenVar {
           // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
           kayit = await _depo.oyunKaydi(kullaniciId, zorluk.oyunTipi, tarih) ?? {'durum': 'basladi'};
+        } on BaskaIzgaraOynandi {
+          if (!ref.mounted) return;
+          state = state.copyWith(durum: IzgaraDurumu.hata, hataMesaji: baskaIzgaraMesaji);
+          return;
         }
       }
 

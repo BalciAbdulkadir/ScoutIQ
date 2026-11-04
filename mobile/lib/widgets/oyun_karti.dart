@@ -6,7 +6,6 @@ import '../theme/renkler.dart';
 class OyunKarti extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor; // null ise bugün henüz oynanmadı
-  final int tamamlananAltOyun; // Birden fazla günlük oyunu olan modlarda (Izgara) bugün bitirilenlerin sayısı
   final bool devamEdiyor; // Yarım kalan oyun var: buton "Devam et" olur
   final VoidCallback onTap;
 
@@ -15,7 +14,6 @@ class OyunKarti extends StatelessWidget {
     required this.mod,
     required this.bugunkuSkor,
     required this.onTap,
-    this.tamamlananAltOyun = 0,
     this.devamEdiyor = false,
   });
 
@@ -66,7 +64,6 @@ class OyunKarti extends StatelessWidget {
               _DurumEtiketi(
                 mod: mod,
                 bugunkuSkor: bugunkuSkor,
-                tamamlananAltOyun: tamamlananAltOyun,
                 devamEdiyor: devamEdiyor,
               ),
             ],
@@ -80,38 +77,16 @@ class OyunKarti extends StatelessWidget {
 class _DurumEtiketi extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor;
-  final int tamamlananAltOyun;
   final bool devamEdiyor;
 
   const _DurumEtiketi({
     required this.mod,
     required this.bugunkuSkor,
-    required this.tamamlananAltOyun,
     required this.devamEdiyor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final altOyunSayisi = mod.altTipler?.length;
-    if (altOyunSayisi != null) {
-      // Izgara: kaç zorluğun bitirildiği gösterilir
-      if (tamamlananAltOyun >= altOyunSayisi) return _bitti('$tamamlananAltOyun/$altOyunSayisi');
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _oynaButonu(),
-          if (tamamlananAltOyun > 0) ...[
-            const SizedBox(height: 4),
-            Text(
-              '$tamamlananAltOyun/$altOyunSayisi bitti',
-              style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ],
-        ],
-      );
-    }
-
     if (bugunkuSkor != null) {
       return _bitti(mod.maksimumSkor != null ? '$bugunkuSkor/${mod.maksimumSkor}' : '$bugunkuSkor');
     }

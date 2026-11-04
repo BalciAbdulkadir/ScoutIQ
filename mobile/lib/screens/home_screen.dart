@@ -15,7 +15,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
-    // Izgara'nın üç zorluğu ayrı oyunlardır: önce zorluk seçilir
+    // Izgara'da önce zorluk, sonra süre seçilir; günde tek tahta oynanır
     if (mod.tip == 'izgara') {
       await izgaraAc(context, ref);
       return;
@@ -45,14 +45,17 @@ class HomeScreen extends ConsumerWidget {
     final oynananlar = ref.watch(bugunOynananlarProvider);
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
-    final devamEdenIzgara = ref.watch(devamEdenIzgaraProvider).value;
+    final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
 
     final gunlukModlar = oyunModlari.where((m) => m.durum != OyunDurumu.yakinda).toList();
     final yakindakiModlar = oyunModlari.where((m) => m.durum == OyunDurumu.yakinda).toList();
 
-    // İlerleme sadece şu an oynanabilen günlük oyunlar üzerinden hesaplanır (Izgara'nın her zorluğu ayrı sayılır)
-    final aktifOyunTipleri = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).expand((m) => m.oyunTipleri);
-    final tamamlanan = aktifOyunTipleri.where(skorlar.containsKey).length;
+    // Modun bugünkü skoru. Izgara'da kullanıcı üç zorluktan birini oynar, o tahtanın skoru alınır.
+    int? modSkoru(OyunModu mod) => mod.oyunTipleri.map((t) => skorlar[t]).nonNulls.firstOrNull;
+
+    // İlerleme sadece şu an oynanabilen günlük oyunlar üzerinden hesaplanır (Izgara tek oyun sayılır)
+    final aktifModlar = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).toList();
+    final tamamlanan = aktifModlar.where((m) => modSkoru(m) != null).length;
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -63,7 +66,7 @@ class HomeScreen extends ConsumerWidget {
             color: Renkler.basari,
             backgroundColor: Renkler.yuzey,
             onRefresh: () {
-              ref.invalidate(devamEdenIzgaraProvider);
+              ref.invalidate(bugunkuIzgaraProvider);
               return ref.refresh(bugunOynananlarProvider.future);
             },
             child: ListView(
@@ -79,7 +82,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(tarihMetni(turkiyeSaati()), style: const TextStyle(color: Renkler.metinIkincil, fontSize: 15)),
                 const SizedBox(height: 20),
-                GunlukKart(tamamlanan: tamamlanan, toplam: aktifOyunTipleri.length),
+                GunlukKart(tamamlanan: tamamlanan, toplam: aktifModlar.length),
                 const SizedBox(height: 28),
                 const _BolumBasligi('Oyunlar'),
                 for (final mod in gunlukModlar)
@@ -87,9 +90,8 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: OyunKarti(
                       mod: mod,
-                      bugunkuSkor: skorlar[mod.tip],
-                      tamamlananAltOyun: mod.altTipler?.where(skorlar.containsKey).length ?? 0,
-                      devamEdiyor: mod.tip == 'izgara' && devamEdenIzgara != null,
+                      bugunkuSkor: modSkoru(mod),
+                      devamEdiyor: mod.tip == 'izgara' && bugunkuIzgara != null && !bugunkuIzgara.bitti,
                       onTap: () => _modaTiklandi(context, ref, mod),
                     ),
                   ),

@@ -19,6 +19,9 @@ class SahteOyunDeposu implements OyunDeposu {
   // kayitAc çağrıldığında başka bir cihazın kaydı atmış gibi davranılsın mı
   bool kayitAcCakisir = false;
 
+  // kayitAc çağrıldığında kullanıcı bugün başka bir zorlukta Izgara oynamış gibi davranılsın mı
+  bool baskaIzgaraOynandi = false;
+
   Map<String, dynamic>? oyun = {
     'id': 'oyun-1',
     'soru_verisi': [
@@ -103,6 +106,7 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<void> kayitAc({required String kullaniciId, required String oyunId, required String oyunTipi, required String tarih}) async {
     kayitAcSayisi++;
+    if (baskaIzgaraOynandi) throw BaskaIzgaraOynandi();
     if (kayitAcCakisir) {
       kayit = {'skor': 4, 'durum': 'basladi'};
       throw KayitZatenVar();

@@ -93,6 +93,12 @@ class IzgaraScreen extends ConsumerWidget {
     switch (state.durum) {
       case IzgaraDurumu.yukleniyor:
         return const Center(child: CircularProgressIndicator());
+      case IzgaraDurumu.hata when state.hataMesaji == baskaIzgaraMesaji:
+        return const OyunMesajKarti(
+          ikon: Icons.lock_clock_rounded,
+          baslik: 'Bugünkü hakkını kullandın',
+          aciklama: baskaIzgaraMesaji,
+        );
       case IzgaraDurumu.hata:
         return OyunMesajKarti(
           ikon: Icons.wifi_off_rounded,

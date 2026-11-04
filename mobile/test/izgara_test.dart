@@ -115,6 +115,13 @@ void main() {
       expect(durum(c).durum, IzgaraDurumu.oyunYok);
       expect(depo.kayitAcSayisi, 0);
     });
+
+    test('bugün başka zorlukta Izgara oynandıysa tahta açılmaz', () async {
+      final (c, _) = await tahtayiAc((d) => d.baskaIzgaraOynandi = true);
+
+      expect(durum(c).durum, IzgaraDurumu.hata);
+      expect(durum(c).hataMesaji, baskaIzgaraMesaji);
+    });
   });
 
   group('Tahminler', () {

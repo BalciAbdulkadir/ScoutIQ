@@ -5,8 +5,6 @@ const izgaraBoyutu = 3;
 // Oyuncunun tahtaya başlarken seçebileceği süreler (saniye). null: süre yok. Süre bütün tahta içindir.
 const izgaraSureleri = <int?>[null, 30, 60, 90];
 
-String izgaraSureMetni(int? sure) => sure == null ? 'Süre yok' : '$sure sn';
-
 // Bir Izgara ekranını açan seçim. Süre sadece yeni başlanan tahtada kullanılır;
 // yarım kalan tahtanın süresi sunucudan okunur.
 typedef IzgaraAcilisi = ({IzgaraZorlugu zorluk, int? sure});

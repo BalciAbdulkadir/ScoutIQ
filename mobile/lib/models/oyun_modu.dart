@@ -11,7 +11,7 @@ class OyunModu {
   final Color renk;
   final OyunDurumu durum;
   final int? maksimumSkor;
-  // Doluysa mod birden fazla ayrı günlük oyundan oluşur (ör. Izgara'nın kolay/orta/zor tahtaları)
+  // Doluysa mod birden fazla ayrı günlük oyundan oluşur (ör. Izgara'nın kolay/orta/zor tahtaları); kullanıcı günde bunlardan birini oynar
   final List<String>? altTipler;
 
   const OyunModu({
@@ -58,7 +58,7 @@ const List<OyunModu> oyunModlari = [
     renk: Renkler.izgara,
     durum: OyunDurumu.aktif,
     maksimumSkor: 9,
-    // Kolay, orta ve zor ayrı oyunlardır, her biri günde bir kez oynanır
+    // Kolay, orta ve zor ayrı tahtalardır; kullanıcı günde bunlardan yalnızca birini oynar
     altTipler: ['izgara_kolay', 'izgara_orta', 'izgara_zor'],
   ),
   OyunModu(
