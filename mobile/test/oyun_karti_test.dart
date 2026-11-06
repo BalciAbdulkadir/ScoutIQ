@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/oyun_modu.dart';
 import 'package:mobile/widgets/oyun_karti.dart';
+import 'package:mobile/widgets/tebesir.dart';
 
 final kesisim = oyunModlari.firstWhere((m) => m.tip == 'kesisim');
 final bonservis = oyunModlari.firstWhere((m) => m.tip == 'bonservis');
+final izgara = oyunModlari.firstWhere((m) => m.tip == 'izgara');
 
-Future<void> kartiGoster(WidgetTester tester, OyunModu mod, int? skor) {
+Future<void> kartiGoster(WidgetTester tester, OyunModu mod, int? skor, {String? zorluk, bool devam = false}) {
   return tester.pumpWidget(MaterialApp(
-    home: Scaffold(body: OyunKarti(mod: mod, bugunkuSkor: skor, onTap: () {})),
+    home: Scaffold(
+      body: OyunKarti(mod: mod, bugunkuSkor: skor, oynananZorluk: zorluk, devamEdiyor: devam, onTap: () {}),
+    ),
   ));
 }
 
@@ -17,21 +21,47 @@ void main() {
     await kartiGoster(tester, kesisim, null);
 
     expect(find.text('Oyna'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle), findsNothing);
+    expect(find.byType(TebesirDamga), findsNothing);
   });
 
-  testWidgets('bugün oynanmış oyunda "Oyna" yerine skor yazar', (tester) async {
+  testWidgets('bugün oynanmış oyunda "Oyna" yerine tebeşir damgasıyla skor yazar', (tester) async {
     await kartiGoster(tester, kesisim, 8);
 
     expect(find.text('Oyna'), findsNothing);
     expect(find.text('8/10'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.byType(TebesirDamga), findsOneWidget);
   });
 
   testWidgets('Bonservis skoru 5 üzerinden gösterilir', (tester) async {
     await kartiGoster(tester, bonservis, 3);
 
     expect(find.text('3/5'), findsOneWidget);
+  });
+
+  testWidgets('zorluksuz oyunda "tek mod", zorluklu oyunda K O Z yazar', (tester) async {
+    await kartiGoster(tester, kesisim, null);
+    expect(find.text('TEK MOD'), findsOneWidget);
+
+    await kartiGoster(tester, izgara, null);
+    expect(find.text('TEK MOD'), findsNothing);
+    expect(find.text('K'), findsOneWidget);
+    expect(find.text('O'), findsOneWidget);
+    expect(find.text('Z'), findsOneWidget);
+  });
+
+  testWidgets('zorluklu oyun bitince oynanan zorluk ve skor kalır', (tester) async {
+    await kartiGoster(tester, izgara, 7, zorluk: 'Orta');
+
+    expect(find.text('7/9'), findsOneWidget);
+    expect(find.text('ORTA'), findsOneWidget);
+    expect(find.text('K'), findsNothing);
+  });
+
+  testWidgets('yarım kalan oyunda "Devam et" ve oynanan zorluk yazar', (tester) async {
+    await kartiGoster(tester, izgara, null, zorluk: 'Zor', devam: true);
+
+    expect(find.text('Devam et'), findsOneWidget);
+    expect(find.text('ZOR'), findsOneWidget);
   });
 
   testWidgets('henüz hazır olmayan oyunda "Hazırlanıyor" yazar', (tester) async {
@@ -54,9 +84,14 @@ void main() {
     expect(aktifler, ['kesisim', 'bonservis', 'izgara']);
   });
 
-  test('Izgara zorlukları ayrı günlük oyunlardır', () {
-    final izgara = oyunModlari.firstWhere((m) => m.tip == 'izgara');
+  test('Izgara zorluklu bir oyundur, her zorluğun ayrı günlük tahtası vardır', () {
+    expect(izgara.zorluklu, isTrue);
     expect(izgara.oyunTipleri, ['izgara_kolay', 'izgara_orta', 'izgara_zor']);
+    expect(kesisim.zorluklu, isFalse);
     expect(kesisim.oyunTipleri, ['kesisim']);
+  });
+
+  test('süre seçenekleri süresiz, 30, 60 ve 90 saniyedir', () {
+    expect(OyunSuresi.values.map((s) => s.saniye), [null, 30, 60, 90]);
   });
 }

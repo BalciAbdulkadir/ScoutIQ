@@ -305,7 +305,6 @@ void main() {
       await ekraniAc(tester, null, 60);
 
       expect(find.byIcon(Icons.timer_outlined), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(find.textContaining(RegExp(r'^(1:00|0:5\d)$')), findsOneWidget);
       // Sayacın zamanlayıcısı test bitmeden kapansın
       await tester.pumpWidget(const SizedBox());
@@ -324,7 +323,7 @@ void main() {
         d.izgaraSureKalan = 0;
       });
 
-      expect(find.text('Süre doldu'), findsOneWidget);
+      expect(find.text('SÜRE DOLDU'), findsOneWidget);
       expect(find.text('Ana menüye dön'), findsOneWidget);
     });
 

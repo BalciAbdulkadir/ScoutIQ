@@ -1,26 +1,31 @@
 import 'package:flutter/material.dart';
 
-// Uygulama genelindeki siyah/yeşil karanlık tema renkleri.
+// Taktik tahtası teması: koyu çuha yeşili tahta, üstünde tebeşir beyazı ve tebeşir sarısı.
 // Ekranlar renkleri doğrudan yazmaz, buradan alır.
 class Renkler {
-  static const Color arkaPlan = Color(0xFF0A1711);
-  static const Color yuzey = Color(0xFF11241A); // Kartlar
-  static const Color yuzeyYuksek = Color(0xFF173023); // Kart içindeki kutular, giriş alanları
-  static const Color kenar = Color(0xFF213B2D);
-  static const Color logoZemini = Color(0xFFEEF2EF); // Kulüp logolarının arkasındaki açık daire
+  static const Color arkaPlan = Color(0xFF123627); // Tahta
+  static const Color arkaPlanAcik = Color(0xFF1B4A37); // Tahtanın üstüne vuran ışık (degrade)
+  static const Color yuzey = Color(0xFF163D2D); // Kutucuk, kart
+  static const Color yuzeyYuksek = Color(0xFF1C4636); // Kart içindeki kutular, alt sayfalar
+  static const Color kenar = Color(0xFF3F6153); // Soluk tebeşir çizgisi
+  static const Color logoZemini = Color(0xFFEEF0E6); // Armaların arkasındaki tebeşir beyazı daire
 
-  static const Color metin = Color(0xFFF1F5F2);
-  static const Color metinIkincil = Color(0xFFA7B8AE);
-  static const Color metinSoluk = Color(0xFF6E8277);
+  static const Color metin = Color(0xFFEEF0E6); // Tebeşir beyazı
+  static const Color metinIkincil = Color(0xFFACB8AD);
+  static const Color metinSoluk = Color(0xFF758A7D);
 
-  static const Color basari = Color(0xFF4ADE80);
-  static const Color hata = Color(0xFFF87171);
+  static const Color vurgu = Color(0xFFF3D36B); // Tebeşir sarısı: "Oyna", seçimler, yeni yazılan isim
 
-  // Oyun modlarının kendi renkleri
-  static const Color kesisim = Color(0xFF4ADE80);
-  static const Color bonservis = Color(0xFF38BDF8);
-  static const Color izgara = Color(0xFFA78BFA);
+  static const Color basari = Color(0xFF9BE3A8); // Doğru
+  static const Color hata = Color(0xFFF19A86); // Yanlış
+
+  // Oyun modlarının vurgusu. Hepsi aynı tebeşir sarısı: modları renk değil kendi tebeşir çizimleri ayırır.
+  static const Color kesisim = vurgu;
+  static const Color bonservis = vurgu;
+  static const Color izgara = vurgu;
 
   // Zorluk etiketleri
-  static const Color orta = Color(0xFFFBBF24);
+  static const Color kolay = basari;
+  static const Color orta = vurgu;
+  static const Color zor = hata;
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bonservis_sorusu.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 import 'oyuncu_fotografi.dart';
 
 // Bonservis oyunundaki oyuncu kartı. Bedel gizliyse "?" gösterir; açılınca bedel sayarak yükselir.
@@ -30,14 +31,14 @@ class BonservisOyuncuKarti extends StatelessWidget {
       duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: Renkler.yuzey,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0x08FFFFFF),
+        borderRadius: BorderRadius.circular(6),
         // Kenar kalınlığı sabit: sonuç gösterilince kart boyutu değişip yerleşim kaymasın
         border: Border.all(color: kenarRengi, width: 1.5),
       ),
       child: Row(
         children: [
-          OyuncuFotografi(isim: oyuncu.isim, fotoUrl: oyuncu.fotoUrl, harfRengi: Renkler.bonservis),
+          OyuncuFotografi(isim: oyuncu.isim, fotoUrl: oyuncu.fotoUrl, harfRengi: Renkler.vurgu),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -47,7 +48,7 @@ class BonservisOyuncuKarti extends StatelessWidget {
                   oyuncu.isim,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Renkler.metin, fontSize: 18, fontWeight: FontWeight.w700),
+                  style: Yazi.baslik(22).copyWith(height: 1.05),
                 ),
                 const SizedBox(height: 4),
                 _bedel(),
@@ -60,11 +61,8 @@ class BonservisOyuncuKarti extends StatelessWidget {
   }
 
   Widget _bedel() {
-    const stil = TextStyle(
-      fontSize: 26,
-      fontWeight: FontWeight.w800,
-      fontFeatures: [FontFeature.tabularFigures()],
-    );
+    // Bedel tahtaya tebeşirle yazılır
+    final stil = Yazi.tebesir(30);
 
     if (!bedelGorunur) {
       return Text('? M€', style: stil.copyWith(color: Renkler.metinSoluk));
@@ -73,7 +71,7 @@ class BonservisOyuncuKarti extends StatelessWidget {
     final renk = switch (dogru) {
       true => Renkler.basari,
       false => Renkler.hata,
-      null => Renkler.bonservis,
+      null => Renkler.metin,
     };
 
     if (!bedelAnimasyonlu) {
