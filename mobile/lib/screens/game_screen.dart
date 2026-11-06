@@ -1,11 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/game_provider.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_arama.dart';
+import '../widgets/tebesir.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
@@ -23,8 +27,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final state = ref.watch(gameProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Kesişim')),
-      body: SafeArea(child: _govde(state)),
+      appBar: AppBar(title: const Text('KESİŞİM')),
+      body: TahtaZemini(child: SafeArea(child: _govde(state))),
     );
   }
 
@@ -87,7 +91,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               const Expanded(
                 child: Text(
                   'İki takımda da forma giymiş bir oyuncu bul',
-                  style: TextStyle(color: Renkler.metinIkincil, fontSize: 14),
+                  style: TextStyle(color: Renkler.metinIkincil, fontSize: 14, height: 1.3),
                 ),
               ),
             ],
@@ -114,9 +118,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   (String, Color)? _zorluk(String? zorluk) => switch (zorluk) {
-        'kolay' => ('Kolay', Renkler.basari),
-        'orta' => ('Orta', const Color(0xFFFBBF24)),
-        'zor' => ('Zor', Renkler.hata),
+        'kolay' => ('Kolay', Renkler.kolay),
+        'orta' => ('Orta', Renkler.orta),
+        'zor' => ('Zor', Renkler.zor),
         _ => null,
       };
 
@@ -134,10 +138,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         children: [
           Icon(dogru ? Icons.check_circle_rounded : Icons.cancel_rounded, color: renk, size: 18),
           const SizedBox(width: 8),
-          Text(
-            dogru ? 'Doğru' : 'Yanlış',
-            style: TextStyle(color: renk, fontWeight: FontWeight.w700, fontSize: 14),
-          ),
+          Text(dogru ? 'Doğru' : 'Yanlış', style: Yazi.tebesir(16, renk: renk)),
           Expanded(
             child: Text(
               '  ·  ${state.cevaplar.last}',
@@ -173,7 +174,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 }
 
-// İki kulüp tek kartta, aralarında VS rozeti
+// İki kulüp tahtada kesişen iki tebeşir dairesinin içinde; ortak oyuncu kesişimde aranır
 class _KulupEslesmesi extends StatelessWidget {
   final String kulupA;
   final String kulupB;
@@ -184,22 +185,55 @@ class _KulupEslesmesi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-      decoration: BoxDecoration(
-        color: Renkler.yuzey,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Renkler.kenar),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _Kulup(isim: kulupA, logoUrl: logoA)),
-          const VsRozeti(),
-          Expanded(child: _Kulup(isim: kulupB, logoUrl: logoB)),
-        ],
+    return CustomPaint(
+      painter: _VennCizeri(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 30),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _Kulup(isim: kulupA, logoUrl: logoA)),
+            const SizedBox(width: 44),
+            Expanded(child: _Kulup(isim: kulupB, logoUrl: logoB)),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _VennCizeri extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final yaricap = size.height * 0.52;
+    final merkezY = size.height / 2;
+    // Daireler genişliğin çeyreklerine oturur, ortada üst üste biner
+    final solX = size.width * 0.26;
+    final sagX = size.width * 0.74;
+    final kalem = Paint()
+      ..color = Renkler.kenar
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    canvas.drawCircle(Offset(solX, merkezY), yaricap, kalem);
+    canvas.drawCircle(Offset(sagX, merkezY), yaricap, kalem);
+
+    // Kesişimde sarı kesik çizgi: oyuncunun yazılacağı yer
+    final sari = Paint()
+      ..color = Renkler.vurgu
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    final ortaX = size.width / 2;
+    final yari = (yaricap * yaricap - (ortaX - solX) * (ortaX - solX));
+    if (yari > 0) {
+      final h = math.sqrt(yari) * 0.8;
+      for (var y = merkezY - h; y < merkezY + h; y += 7) {
+        canvas.drawLine(Offset(ortaX, y), Offset(ortaX, math.min(y + 3, merkezY + h)), sari);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_VennCizeri eski) => false;
 }
 
 class _Kulup extends StatelessWidget {
@@ -212,16 +246,16 @@ class _Kulup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        KulupLogosu(logoUrl: logoUrl, ikonRengi: Renkler.kesisim),
+        KulupLogosu(logoUrl: logoUrl, ikonRengi: Renkler.arkaPlan),
         const SizedBox(height: 12),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
             isim,
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Renkler.metin, fontSize: 15, fontWeight: FontWeight.w700, height: 1.25),
+            style: Yazi.baslik(18, kalinlik: FontWeight.w800).copyWith(height: 1.05),
           ),
         ),
       ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
+import '../widgets/tebesir.dart';
 
 enum OyunDurumu { aktif, hazirlaniyor, yakinda }
 
@@ -8,6 +9,7 @@ class OyunModu {
   final String baslik;
   final String aciklama;
   final IconData ikon;
+  final TebesirCizimi? cizim; // Ana menüdeki tebeşir çizimi; boşsa ikon kullanılır
   final Color renk;
   final OyunDurumu durum;
   final int? maksimumSkor;
@@ -19,6 +21,7 @@ class OyunModu {
     required this.baslik,
     required this.aciklama,
     required this.ikon,
+    this.cizim,
     required this.renk,
     required this.durum,
     this.maksimumSkor,
@@ -27,6 +30,22 @@ class OyunModu {
 
   // Bu modun veritabanındaki günlük oyun tipleri
   List<String> get oyunTipleri => altTipler ?? [?tip];
+
+  // Zorluk seçilerek oynanan mod. Bu modlarda günde yalnızca bir zorluk oynanır.
+  bool get zorluklu => altTipler != null;
+}
+
+// Zorluklu oyunlarda zorluktan sonra seçilen süre. Her zorluklu oyunda aynı dört seçenek vardır.
+enum OyunSuresi {
+  suresiz(null, 'Süresiz'),
+  saniye30(30, '30 sn'),
+  saniye60(60, '60 sn'),
+  saniye90(90, '90 sn');
+
+  final int? saniye; // null: süre sınırı yok
+  final String ad;
+
+  const OyunSuresi(this.saniye, this.ad);
 }
 
 // Hub'da gösterilen modlar. İlk faz: Kesişim, Bonservis ve Izgara.
@@ -35,8 +54,9 @@ const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'kesisim',
     baslik: 'Kesişim',
-    aciklama: 'İki takımda da forma giymiş bir oyuncu bul.',
+    aciklama: 'İki kulübün ortak oyuncusunu bul.',
     ikon: Icons.join_inner,
+    cizim: TebesirCizimi.kesisim,
     renk: Renkler.kesisim,
     durum: OyunDurumu.aktif,
     maksimumSkor: 10,
@@ -44,8 +64,9 @@ const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'bonservis',
     baslik: 'Bonservis',
-    aciklama: 'Kariyerindeki toplam bonservis daha mı fazla, daha mı az?',
+    aciklama: 'Toplam bonservis daha mı az, daha mı fazla?',
     ikon: Icons.euro,
+    cizim: TebesirCizimi.bonservis,
     renk: Renkler.bonservis,
     durum: OyunDurumu.aktif,
     maksimumSkor: 5,
@@ -55,16 +76,18 @@ const List<OyunModu> oyunModlari = [
     baslik: 'Izgara',
     aciklama: 'Satır ve sütundaki takımlara uyan oyuncuları bul.',
     ikon: Icons.grid_view_rounded,
+    cizim: TebesirCizimi.izgara,
     renk: Renkler.izgara,
     durum: OyunDurumu.aktif,
     maksimumSkor: 9,
-    // Kolay, orta ve zor ayrı oyunlardır, her biri günde bir kez oynanır
+    // Her zorluk ayrı bir tahta; kullanıcı günde bunlardan yalnızca birini seçip oynar
     altTipler: ['izgara_kolay', 'izgara_orta', 'izgara_zor'],
   ),
   OyunModu(
     baslik: 'Bingo',
-    aciklama: 'Kartındaki özellikleri taşıyan oyuncuları bul.',
+    aciklama: 'Kartındaki özellikleri tamamla.',
     ikon: Icons.apps_rounded,
+    cizim: TebesirCizimi.bingo,
     renk: Renkler.metinSoluk,
     durum: OyunDurumu.yakinda,
   ),

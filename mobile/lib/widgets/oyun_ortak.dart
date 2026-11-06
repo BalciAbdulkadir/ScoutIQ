@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 
 // Oyun ekranlarının ortak parçaları: ilerleme çubuğu ve bitiş ekranı.
 // Kesişim ve Bonservis aynı parçaları kullanır ki iki oyun aynı uygulamanın parçası gibi görünsün.
@@ -32,9 +33,9 @@ class OyunIlerlemesi extends StatelessWidget {
               Expanded(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(1.5),
                     color: switch (i < sonuclar.length ? sonuclar[i] : null) {
                       true => Renkler.basari,
                       false => Renkler.hata,
@@ -53,12 +54,9 @@ class OyunIlerlemesi extends StatelessWidget {
           children: [
             Text(
               'Soru ${mevcutSoru + 1}/$soruSayisi',
-              style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13, fontWeight: FontWeight.w500),
+              style: Yazi.tebesir(16, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400),
             ),
-            Text(
-              sagMetin,
-              style: const TextStyle(color: Renkler.metin, fontSize: 13, fontWeight: FontWeight.w600),
-            ),
+            Text(sagMetin, style: Yazi.tebesir(16, renk: Renkler.vurgu)),
           ],
         ),
       ],
@@ -81,10 +79,7 @@ class VsRozeti extends StatelessWidget {
         color: Renkler.arkaPlan,
         border: Border.all(color: Renkler.kenar, width: 1.5),
       ),
-      child: const Text(
-        'VS',
-        style: TextStyle(color: Renkler.metinIkincil, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-      ),
+      child: Text('VS', style: Yazi.baslik(14, renk: Renkler.vurgu, kalinlik: FontWeight.w900)),
     );
   }
 }
@@ -99,12 +94,13 @@ class OyunEtiketi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: renk.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-      child: Text(
-        metin.toUpperCase(),
-        style: TextStyle(color: renk, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8),
+      padding: const EdgeInsets.fromLTRB(7, 3, 7, 2),
+      // Tebeşirle çizilmiş çerçeve
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: renk, width: 1.5),
       ),
+      child: Text(Yazi.buyuk(metin), style: Yazi.etiket(boyut: 11, renk: renk)),
     );
   }
 }
@@ -144,9 +140,9 @@ class OyunBitisEkrani extends StatelessWidget {
       children: [
         const SizedBox(height: 12),
         Text(
-          baslik,
+          Yazi.buyuk(baslik),
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Renkler.metin, fontSize: 26, fontWeight: FontWeight.w800),
+          style: Yazi.baslik(38, kalinlik: FontWeight.w900),
         ),
         const SizedBox(height: 16),
         Row(
@@ -154,34 +150,26 @@ class OyunBitisEkrani extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text(
-              skor,
-              style: TextStyle(
-                color: renk,
-                fontSize: 56,
-                fontWeight: FontWeight.w800,
-                height: 1,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
+            // Skor tahtaya elle yazılır
+            Text(skor, style: Yazi.tebesir(60, renk: renk)),
             const SizedBox(width: 8),
-            Text(skorAciklamasi, style: const TextStyle(color: Renkler.metinIkincil, fontSize: 16)),
+            Text(skorAciklamasi, style: Yazi.tebesir(20, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400)),
           ],
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Yeni oyun gece yarısı açılıyor.',
+        Text(
+          'yeni oyun gece yarısı tahtaya yazılır',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Renkler.metinSoluk, fontSize: 14),
+          style: Yazi.tebesir(16, renk: Renkler.metinSoluk, kalinlik: FontWeight.w400),
         ),
         const SizedBox(height: 32),
-        const Text(
-          'ÖZET',
-          style: TextStyle(color: Renkler.metinSoluk, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2),
-        ),
+        Text('ÖZET', style: Yazi.etiket(boyut: 12)),
         const SizedBox(height: 10),
         Container(
-          decoration: BoxDecoration(color: Renkler.yuzey, borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Renkler.kenar, width: 1.5),
+          ),
           child: Column(
             children: [
               for (var i = 0; i < ozetSatirlari.length; i++) ...[
@@ -194,11 +182,8 @@ class OyunBitisEkrani extends StatelessWidget {
         const SizedBox(height: 28),
         FilledButton(
           onPressed: () => Navigator.pop(context),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text('Ana menüye dön', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+          child: const Text('Ana menüye dön'),
         ),
       ],
     );

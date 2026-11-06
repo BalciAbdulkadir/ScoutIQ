@@ -1,204 +1,130 @@
 import 'package:flutter/material.dart';
 import '../models/oyun_modu.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
+import 'tebesir.dart';
 
-// Hub'daki oynanabilir (veya hazırlanan) oyun kartı
+// Ana menüdeki oyun kutucuğu. Dört hâli var: oynanmadı ("Oyna"), yarım kaldı ("Devam et", sarı kesik kenar),
+// bitti (soluk, köşesinde tebeşirle daire içine alınmış skor) ve yakında (silik, kesik kenar).
 class OyunKarti extends StatelessWidget {
   final OyunModu mod;
   final int? bugunkuSkor; // null ise bugün henüz oynanmadı
-  final int tamamlananAltOyun; // Birden fazla günlük oyunu olan modlarda (Izgara) bugün bitirilenlerin sayısı
-  final bool devamEdiyor; // Yarım kalan oyun var: buton "Devam et" olur
-  final VoidCallback onTap;
+  final String? oynananZorluk; // Zorluklu modlarda bugün oynanan zorluğun adı (ör. "Orta")
+  final bool devamEdiyor; // Yarım kalan oyun var: "Oyna" yerine "Devam et"
+  final VoidCallback? onTap;
 
   const OyunKarti({
     super.key,
     required this.mod,
     required this.bugunkuSkor,
-    required this.onTap,
-    this.tamamlananAltOyun = 0,
+    this.onTap,
+    this.oynananZorluk,
     this.devamEdiyor = false,
   });
 
+  bool get _yakinda => mod.durum == OyunDurumu.yakinda;
+  bool get _bitti => bugunkuSkor != null && !devamEdiyor;
+
+  String get _skorMetni => mod.maksimumSkor != null ? '$bugunkuSkor/${mod.maksimumSkor}' : '$bugunkuSkor';
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Renkler.yuzey,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Renkler.kenar),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: mod.renk.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(mod.ikon, color: mod.renk, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      mod.baslik,
-                      style: const TextStyle(color: Renkler.metin, fontSize: 17, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      mod.aciklama,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13, height: 1.35),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              _DurumEtiketi(
-                mod: mod,
-                bugunkuSkor: bugunkuSkor,
-                tamamlananAltOyun: tamamlananAltOyun,
-                devamEdiyor: devamEdiyor,
-              ),
-            ],
+    final icerik = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ikon(),
+            const Spacer(),
+            // Bitmiş kutucukta sağ üst köşe damgaya ayrılır
+            if (!_bitti) _sagUst(),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(
+          Yazi.buyuk(mod.baslik),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Yazi.baslik(19, renk: _yakinda ? Renkler.metinSoluk : Renkler.metin),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          mod.aciklama,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _yakinda ? Renkler.metinSoluk : Renkler.metinIkincil,
+            fontSize: 12,
+            height: 1.3,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _DurumEtiketi extends StatelessWidget {
-  final OyunModu mod;
-  final int? bugunkuSkor;
-  final int tamamlananAltOyun;
-  final bool devamEdiyor;
-
-  const _DurumEtiketi({
-    required this.mod,
-    required this.bugunkuSkor,
-    required this.tamamlananAltOyun,
-    required this.devamEdiyor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final altOyunSayisi = mod.altTipler?.length;
-    if (altOyunSayisi != null) {
-      // Izgara: kaç zorluğun bitirildiği gösterilir
-      if (tamamlananAltOyun >= altOyunSayisi) return _bitti('$tamamlananAltOyun/$altOyunSayisi');
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _oynaButonu(),
-          if (tamamlananAltOyun > 0) ...[
-            const SizedBox(height: 4),
-            Text(
-              '$tamamlananAltOyun/$altOyunSayisi bitti',
-              style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ],
+        if (!_yakinda) ...[
+          const SizedBox(height: 10),
+          _etiketler(),
         ],
-      );
-    }
-
-    if (bugunkuSkor != null) {
-      return _bitti(mod.maksimumSkor != null ? '$bugunkuSkor/${mod.maksimumSkor}' : '$bugunkuSkor');
-    }
-
-    if (mod.durum == OyunDurumu.aktif) return _oynaButonu();
-
-    return const Text('Hazırlanıyor', style: TextStyle(color: Renkler.metinSoluk, fontSize: 13));
-  }
-
-  Widget _bitti(String skorMetni) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          skorMetni,
-          style: const TextStyle(color: Renkler.metin, fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 2),
-        const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_circle, color: Renkler.basari, size: 13),
-            SizedBox(width: 4),
-            Text('Bitti', style: TextStyle(color: Renkler.basari, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
-        ),
       ],
     );
-  }
 
-  Widget _oynaButonu() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration: BoxDecoration(color: mod.renk, borderRadius: BorderRadius.circular(8)),
-      child: Text(
-        devamEdiyor ? 'Devam et' : 'Oyna',
-        style: const TextStyle(color: Renkler.arkaPlan, fontSize: 14, fontWeight: FontWeight.w700),
+    final kutu = TebesirKutusu(
+      kenarRengi: devamEdiyor ? Renkler.vurgu : Renkler.kenar,
+      kesik: devamEdiyor || _yakinda,
+      dolgu: _yakinda ? null : const Color(0x08FFFFFF),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: _bitti
+          ? Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Opacity(opacity: 0.5, child: icerik),
+                Positioned(top: -6, right: -6, child: TebesirDamga(metin: _skorMetni)),
+              ],
+            )
+          : icerik,
+    );
+
+    if (_yakinda) return kutu;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        splashColor: Renkler.vurgu.withValues(alpha: 0.08),
+        highlightColor: Renkler.vurgu.withValues(alpha: 0.05),
+        child: kutu,
       ),
     );
   }
-}
 
-// Hub'ın altındaki "Yakında" listesi: dokunulamaz, sadece bilgi verir
-class YakindaListesi extends StatelessWidget {
-  final List<OyunModu> modlar;
+  Widget _ikon() {
+    final cizim = mod.cizim;
+    if (cizim != null) return TebesirIkonu(cizim: cizim, soluk: _yakinda);
+    return Icon(mod.ikon, size: 30, color: _yakinda ? Renkler.metinSoluk : Renkler.metin);
+  }
 
-  const YakindaListesi({super.key, required this.modlar});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _sagUst() {
+    if (_yakinda) return Text('YAKINDA', style: Yazi.etiket(boyut: 9.5, renk: Renkler.metinSoluk));
+    if (mod.durum != OyunDurumu.aktif) {
+      return const Text('Hazırlanıyor', style: TextStyle(color: Renkler.metinSoluk, fontSize: 12));
+    }
+    // Elle yazılıp altı çizilmiş "Oyna"
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Renkler.kenar),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < modlar.length; i++) ...[
-            if (i > 0) const Divider(indent: 16, endIndent: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Icon(modlar[i].ikon, color: Renkler.metinSoluk, size: 22),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          modlar[i].baslik,
-                          style: const TextStyle(color: Renkler.metinIkincil, fontSize: 15, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          modlar[i].aciklama,
-                          style: const TextStyle(color: Renkler.metinSoluk, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+      padding: const EdgeInsets.only(bottom: 1),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Renkler.vurgu, width: 1.6))),
+      child: Text(devamEdiyor ? 'Devam et' : 'Oyna', style: Yazi.tebesir(16, renk: Renkler.vurgu)),
     );
+  }
+
+  Widget _etiketler() {
+    if (_bitti) return TebesirEtiket(oynananZorluk ?? 'Bitti', secili: true);
+    if (devamEdiyor && oynananZorluk != null) return TebesirEtiket(oynananZorluk!, secili: true);
+    if (mod.zorluklu) {
+      return const Wrap(
+        spacing: 4,
+        children: [TebesirEtiket('K'), TebesirEtiket('O'), TebesirEtiket('Z')],
+      );
+    }
+    return const TebesirEtiket('Tek mod', kesik: true);
   }
 }

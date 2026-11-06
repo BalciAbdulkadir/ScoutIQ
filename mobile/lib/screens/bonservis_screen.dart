@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bonservis_sorusu.dart';
 import '../providers/bonservis_provider.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 import '../widgets/bonservis_oyuncu_karti.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
+import '../widgets/tebesir.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
@@ -60,15 +62,15 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final durum = ref.watch(bonservisProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bonservis')),
-      body: SafeArea(child: _govde(durum)),
+      appBar: AppBar(title: const Text('BONSERVİS')),
+      body: TahtaZemini(child: SafeArea(child: _govde(durum))),
     );
   }
 
   Widget _govde(BonservisState durum) {
     switch (durum.durum) {
       case BonservisDurumu.yukleniyor:
-        return const Center(child: CircularProgressIndicator(color: Renkler.bonservis));
+        return const Center(child: CircularProgressIndicator());
       case BonservisDurumu.hata:
         return OyunMesajKarti(
           ikon: Icons.wifi_off_rounded,
@@ -184,17 +186,18 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           onPressed: aktif ? () => _tahminEt(dahaFazla) : null,
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(64),
-            backgroundColor: Renkler.yuzeyYuksek,
-            foregroundColor: Renkler.metin,
-            disabledBackgroundColor: Renkler.yuzey,
+            backgroundColor: dahaFazla ? Renkler.vurgu : Colors.transparent,
+            foregroundColor: dahaFazla ? Renkler.arkaPlan : Renkler.metin,
+            disabledBackgroundColor: Colors.transparent,
             disabledForegroundColor: Renkler.metinSoluk,
+            textStyle: Yazi.baslik(19, kalinlik: FontWeight.w900),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Renkler.kenar),
+              borderRadius: BorderRadius.circular(6),
+              side: BorderSide(color: dahaFazla && aktif ? Renkler.vurgu : Renkler.kenar, width: 1.5),
             ),
           ),
-          icon: Icon(ikon, size: 20, color: aktif ? Renkler.bonservis : Renkler.metinSoluk),
-          label: Text(metin, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          icon: Icon(ikon, size: 20),
+          label: Text(metin),
         ),
       );
     }
@@ -247,9 +250,8 @@ class _SonucBandi extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
       decoration: BoxDecoration(
-        color: Renkler.yuzey,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: renk.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: renk, width: 1.5),
       ),
       child: Row(
         children: [
@@ -260,10 +262,7 @@ class _SonucBandi extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  dogru ? 'Doğru' : 'Yanlış',
-                  style: TextStyle(color: renk, fontSize: 16, fontWeight: FontWeight.w700),
-                ),
+                Text(dogru ? 'Doğru' : 'Yanlış', style: Yazi.tebesir(18, renk: renk)),
                 Text(
                   '${soru.pahaliOlan.isim}, ${bonservisMetni(fark)} daha pahalı',
                   maxLines: 1,
@@ -275,8 +274,8 @@ class _SonucBandi extends StatelessWidget {
           ),
           TextButton(
             onPressed: onDevam,
-            style: TextButton.styleFrom(foregroundColor: Renkler.metin),
-            child: Text(butonMetni, style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: TextButton.styleFrom(foregroundColor: Renkler.vurgu),
+            child: Text(butonMetni, style: Yazi.tebesir(17, renk: Renkler.vurgu)),
           ),
         ],
       ),

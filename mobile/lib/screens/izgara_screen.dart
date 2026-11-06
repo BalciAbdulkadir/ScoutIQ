@@ -1,25 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/izgara.dart';
+import '../models/oyun_modu.dart';
 import '../providers/izgara_provider.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_arama.dart';
 import '../widgets/oyuncu_fotografi.dart';
+import '../widgets/tebesir.dart';
 
 // Izgara: satır ve sütun başlığının ikisine de uyan oyuncularla 3x3 tahtayı doldurma oyunu.
 // Kullanıcı hücre seçmez; yazdığı oyuncu uyduğu boş hücreye sunucu tarafından yerleştirilir.
 class IzgaraScreen extends ConsumerWidget {
   final IzgaraZorlugu zorluk;
+  // Ana menüde zorluktan sonra seçilen süre. Süre dolunca tahta o anki skorla biter.
+  // Yarım kalan tahta tekrar açıldığında süre bilinmediği için süresiz devam eder.
+  final OyunSuresi sure;
 
-  const IzgaraScreen({super.key, required this.zorluk});
+  const IzgaraScreen({super.key, required this.zorluk, this.sure = OyunSuresi.suresiz});
 
   static Color zorlukRengi(IzgaraZorlugu zorluk) => switch (zorluk) {
-        IzgaraZorlugu.kolay => Renkler.basari,
+        IzgaraZorlugu.kolay => Renkler.kolay,
         IzgaraZorlugu.orta => Renkler.orta,
-        IzgaraZorlugu.zor => Renkler.hata,
+        IzgaraZorlugu.zor => Renkler.zor,
       };
 
   @override
@@ -32,9 +40,13 @@ class IzgaraScreen extends ConsumerWidget {
         title: Row(
           children: [
             // Dar ekranlarda "Pes et" butonuna yer kalsın diye isim kısalabilir
-            const Flexible(child: Text('Izgara', overflow: TextOverflow.ellipsis)),
+            const Flexible(child: Text('IZGARA', overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 10),
             OyunEtiketi(metin: zorluk.ad, renk: zorlukRengi(zorluk)),
+            if (sure.saniye != null) ...[
+              const SizedBox(width: 6),
+              OyunEtiketi(metin: sure.ad, renk: Renkler.metinIkincil),
+            ],
           ],
         ),
         actions: [
@@ -43,14 +55,17 @@ class IzgaraScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(right: 8),
               child: TextButton.icon(
                 onPressed: state.gonderiliyor ? null : () => _pesEt(context, ref, state),
-                style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil),
+                style: TextButton.styleFrom(
+                  foregroundColor: Renkler.metinIkincil,
+                  textStyle: Yazi.tebesir(16, kalinlik: FontWeight.w400),
+                ),
                 icon: const Icon(Icons.flag_outlined, size: 18),
                 label: const Text('Pes et'),
               ),
             ),
         ],
       ),
-      body: SafeArea(child: _govde(context, ref, state)),
+      body: TahtaZemini(child: SafeArea(child: _govde(context, ref, state))),
     );
   }
 
@@ -58,14 +73,14 @@ class IzgaraScreen extends ConsumerWidget {
     final onay = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Renkler.yuzey,
-        title: const Text('Pes etmek istiyor musun?', style: TextStyle(color: Renkler.metin, fontSize: 18)),
-        content: Text(
-          'Oyun şu anki skorunla (${state.skor}/9) biter. Bugün bu tahtayı tekrar oynayamazsın.',
-          style: const TextStyle(color: Renkler.metinIkincil, height: 1.4),
-        ),
+        title: const Text('Pes etmek istiyor musun?'),
+        content: Text('Oyun şu anki skorunla (${state.skor}/9) biter. Bugün Izgara\'yı tekrar oynayamazsın.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil),
+            child: const Text('Vazgeç'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Renkler.hata),
@@ -82,6 +97,15 @@ class IzgaraScreen extends ConsumerWidget {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(hata)));
     }
+  }
+
+  // Süre doldu: tahta pes edilmiş gibi o anki skorla biter
+  Future<void> _sureDoldu(BuildContext context, WidgetRef ref) async {
+    final hata = await ref.read(izgaraProvider(zorluk).notifier).pesEt();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(hata ?? 'Süre doldu.')));
   }
 
   Widget _govde(BuildContext context, WidgetRef ref, IzgaraState state) {
@@ -102,13 +126,13 @@ class IzgaraScreen extends ConsumerWidget {
           aciklama: 'Biraz sonra tekrar dene.',
         );
       case IzgaraDurumu.oynaniyor:
-        return _oyun(ref, state);
+        return _oyun(context, ref, state);
       case IzgaraDurumu.bitti:
         return _bitis(context, state);
     }
   }
 
-  Widget _oyun(WidgetRef ref, IzgaraState state) {
+  Widget _oyun(BuildContext context, WidgetRef ref, IzgaraState state) {
     final notifier = ref.read(izgaraProvider(zorluk).notifier);
 
     return SingleChildScrollView(
@@ -116,7 +140,17 @@ class IzgaraScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _HakGostergesi(kalanHak: state.kalanHak, skor: state.skor),
+          _HakGostergesi(
+            kalanHak: state.kalanHak,
+            skor: state.skor,
+            sayac: sure.saniye == null
+                ? null
+                : _SureSayaci(
+                    saniye: sure.saniye!,
+                    durdu: state.gonderiliyor,
+                    onBitti: () => _sureDoldu(context, ref),
+                  ),
+          ),
           const SizedBox(height: 20),
           OyuncuArama(
             renk: Renkler.izgara,
@@ -141,9 +175,9 @@ class IzgaraScreen extends ConsumerWidget {
       children: [
         const SizedBox(height: 8),
         Text(
-          bitisBasligi(state.skor, izgaraBoyutu * izgaraBoyutu),
+          Yazi.buyuk(bitisBasligi(state.skor, izgaraBoyutu * izgaraBoyutu)),
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Renkler.metin, fontSize: 24, fontWeight: FontWeight.w800),
+          style: Yazi.baslik(34, kalinlik: FontWeight.w900),
         ),
         const SizedBox(height: 10),
         Row(
@@ -151,18 +185,9 @@ class IzgaraScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text(
-              '${state.skor}/9',
-              style: const TextStyle(
-                color: Renkler.izgara,
-                fontSize: 44,
-                fontWeight: FontWeight.w800,
-                height: 1,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
-            ),
+            Text('${state.skor}/9', style: Yazi.tebesir(52, renk: Renkler.vurgu)),
             const SizedBox(width: 8),
-            const Text('kutu', style: TextStyle(color: Renkler.metinIkincil, fontSize: 16)),
+            Text('kutu', style: Yazi.tebesir(18, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400)),
           ],
         ),
         const SizedBox(height: 8),
@@ -176,49 +201,91 @@ class IzgaraScreen extends ConsumerWidget {
         const SizedBox(height: 28),
         FilledButton(
           onPressed: () => Navigator.pop(context),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text('Ana menüye dön', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+          child: const Text('Ana menüye dön'),
         ),
       ],
     );
   }
 }
 
-// Kalan tahmin hakkı (9 nokta) ve dolu kutu sayısı
+// Kalan tahmin hakkı (9 tebeşir çentiği), varsa süre sayacı ve dolu kutu sayısı
 class _HakGostergesi extends StatelessWidget {
   final int kalanHak;
   final int skor;
+  final Widget? sayac;
 
-  const _HakGostergesi({required this.kalanHak, required this.skor});
+  const _HakGostergesi({required this.kalanHak, required this.skor, this.sayac});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var i = 0; i < izgaraHakSayisi; i++) ...[
-          if (i > 0) const SizedBox(width: 4),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i < kalanHak ? Renkler.izgara : Renkler.kenar,
-            ),
+        TebesirCentikleri(toplam: izgaraHakSayisi, biten: kalanHak),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            '$kalanHak hak kaldı',
+            overflow: TextOverflow.ellipsis,
+            style: Yazi.tebesir(15, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400),
           ),
-        ],
-        const SizedBox(width: 10),
-        Text(
-          '$kalanHak hak kaldı',
-          style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13, fontWeight: FontWeight.w500),
         ),
         const Spacer(),
+        if (sayac != null) ...[sayac!, const SizedBox(width: 12)],
+        Text('$skor/9 kutu', style: Yazi.tebesir(16)),
+      ],
+    );
+  }
+}
+
+// Geri sayım. Sıfıra inince onBitti bir kez çağrılır; tahmin gönderilirken durur.
+class _SureSayaci extends StatefulWidget {
+  final int saniye;
+  final bool durdu;
+  final VoidCallback onBitti;
+
+  const _SureSayaci({required this.saniye, required this.durdu, required this.onBitti});
+
+  @override
+  State<_SureSayaci> createState() => _SureSayaciState();
+}
+
+class _SureSayaciState extends State<_SureSayaci> {
+  late int _kalan = widget.saniye;
+  Timer? _zamanlayici;
+
+  @override
+  void initState() {
+    super.initState();
+    _zamanlayici = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (widget.durdu) return;
+      setState(() => _kalan--);
+      if (_kalan <= 0) {
+        _zamanlayici?.cancel();
+        widget.onBitti();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _zamanlayici?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kalan = _kalan < 0 ? 0 : _kalan;
+    final azKaldi = kalan <= 10;
+    final metin = '${kalan ~/ 60}:${(kalan % 60).toString().padLeft(2, '0')}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.timer_outlined, size: 16, color: azKaldi ? Renkler.hata : Renkler.metinIkincil),
+        const SizedBox(width: 4),
         Text(
-          '$skor/9 kutu',
-          style: const TextStyle(color: Renkler.metin, fontSize: 13, fontWeight: FontWeight.w600),
+          metin,
+          style: Yazi.baslik(20, renk: azKaldi ? Renkler.hata : Renkler.metin).copyWith(fontFeatures: Yazi.sabitRakam),
         ),
       ],
     );
@@ -365,7 +432,7 @@ class _Baslik extends StatelessWidget {
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Renkler.metin, fontSize: 11, fontWeight: FontWeight.w600, height: 1.15),
+          style: Yazi.baslik(12, kalinlik: FontWeight.w700, renk: Renkler.metinIkincil).copyWith(height: 1.1),
         ),
       ],
     );
@@ -385,10 +452,11 @@ class _Hucre extends StatelessWidget {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
+      // Tahtaya tebeşirle çizilmiş kare: boşken soluk, dolunca tebeşir beyazı
       decoration: BoxDecoration(
-        color: dolu ? Renkler.izgara.withValues(alpha: 0.10) : Renkler.yuzey,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: dolu ? Renkler.izgara.withValues(alpha: 0.7) : Renkler.kenar),
+        color: dolu ? Renkler.metin.withValues(alpha: 0.05) : null,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: dolu ? Renkler.metinIkincil : Renkler.kenar, width: 1.5),
       ),
       child: LayoutBuilder(
         builder: (context, kisitlar) {
@@ -431,7 +499,7 @@ class _OyuncuIcerigi extends StatelessWidget {
                 isim: oyuncu.isim,
                 fotoUrl: oyuncu.fotoUrl,
                 boyut: fotoGenisligi,
-                harfRengi: ornek ? Renkler.metinSoluk : Renkler.izgara,
+                harfRengi: ornek ? Renkler.metinSoluk : Renkler.vurgu,
               ),
             ),
             const Spacer(),
@@ -440,12 +508,12 @@ class _OyuncuIcerigi extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: ornek ? Renkler.metinIkincil : Renkler.metin,
-                fontSize: 10.5,
-                fontWeight: ornek ? FontWeight.w500 : FontWeight.w600,
-                height: 1.1,
-              ),
+              // Bulunan isim tahtaya elle yazılmış gibi; örnek cevap soluk
+              style: Yazi.tebesir(
+                12,
+                renk: ornek ? Renkler.metinSoluk : Renkler.metin,
+                kalinlik: ornek ? FontWeight.w400 : FontWeight.w700,
+              ).copyWith(height: 1.0),
             ),
           ],
         ),
