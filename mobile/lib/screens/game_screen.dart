@@ -174,7 +174,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 }
 
-// İki kulüp tahtada kesişen iki tebeşir dairesinin içinde; ortak oyuncu kesişimde aranır
+// İki kulüp tahtada kesişen iki tebeşir dairesinin içinde; ortak oyuncu kesişimde aranır.
+// Logolar dairelerin tam merkezinde, kulüp adları dairelerin altında, her biri kendi dairesine ortalı.
 class _KulupEslesmesi extends StatelessWidget {
   final String kulupA;
   final String kulupB;
@@ -183,33 +184,81 @@ class _KulupEslesmesi extends StatelessWidget {
 
   const _KulupEslesmesi({required this.kulupA, required this.kulupB, this.logoA, this.logoB});
 
+  // Yarıçap genişlikle büyür ama geniş ekranda (tablet) sınırlıdır; merkezler arası mesafe yarıçaptan biraz
+  // kısa tutulur ki daireler ortada kesişsin
+  static const _yaricapOrani = 0.26;
+  static const _enBuyukYaricap = 100.0;
+  static const _merkezUzakligiOrani = 0.88;
+
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _VennCizeri(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 30),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, kisitlar) {
+        final genislik = kisitlar.maxWidth;
+        final yaricap = (genislik * _yaricapOrani).clamp(0.0, _enBuyukYaricap);
+        final ortaX = genislik / 2;
+        final solX = ortaX - yaricap * _merkezUzakligiOrani;
+        final sagX = ortaX + yaricap * _merkezUzakligiOrani;
+        final logoBoyutu = (yaricap * 0.78).clamp(48.0, 76.0);
+        // Çizginin kalınlığı kesilmesin diye dairelerin üstünde ve altında küçük pay
+        const pay = 2.0;
+        final merkezY = yaricap + pay;
+
+        Widget logo(String? url, double merkezX) => Positioned(
+              left: merkezX - logoBoyutu / 2,
+              top: merkezY - logoBoyutu / 2,
+              child: KulupLogosu(logoUrl: url, boyut: logoBoyutu, ikonRengi: Renkler.arkaPlan),
+            );
+
+        // Ad kutusu dairenin merkezine ortalı, iki kutu birbirine taşmaz
+        final adGenisligi = (sagX - solX) - 8;
+        Widget ad(String isim, double merkezX) => Positioned(
+              left: merkezX - adGenisligi / 2,
+              width: adGenisligi,
+              top: 0,
+              child: Text(
+                isim,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Yazi.baslik(18, kalinlik: FontWeight.w800).copyWith(height: 1.05),
+              ),
+            );
+
+        return Column(
           children: [
-            Expanded(child: _Kulup(isim: kulupA, logoUrl: logoA)),
-            const SizedBox(width: 44),
-            Expanded(child: _Kulup(isim: kulupB, logoUrl: logoB)),
+            SizedBox(
+              width: genislik,
+              height: 2 * merkezY,
+              child: CustomPaint(
+                painter: _VennCizeri(solX: solX, sagX: sagX, merkezY: merkezY, yaricap: yaricap),
+                child: Stack(children: [logo(logoA, solX), logo(logoB, sagX)]),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // İki satırlık isme yer: kısa isimde de yükseklik değişmez, alttaki içerik kaymaz
+            SizedBox(
+              width: genislik,
+              height: 18 * 1.05 * 2 + 4,
+              child: Stack(children: [ad(kulupA, solX), ad(kulupB, sagX)]),
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 class _VennCizeri extends CustomPainter {
+  final double solX;
+  final double sagX;
+  final double merkezY;
+  final double yaricap;
+
+  const _VennCizeri({required this.solX, required this.sagX, required this.merkezY, required this.yaricap});
+
   @override
   void paint(Canvas canvas, Size size) {
-    final yaricap = size.height * 0.52;
-    final merkezY = size.height / 2;
-    // Daireler genişliğin çeyreklerine oturur, ortada üst üste biner
-    final solX = size.width * 0.26;
-    final sagX = size.width * 0.74;
     final kalem = Paint()
       ..color = Renkler.kenar
       ..style = PaintingStyle.stroke
@@ -222,7 +271,7 @@ class _VennCizeri extends CustomPainter {
       ..color = Renkler.vurgu
       ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round;
-    final ortaX = size.width / 2;
+    final ortaX = (solX + sagX) / 2;
     final yari = (yaricap * yaricap - (ortaX - solX) * (ortaX - solX));
     if (yari > 0) {
       final h = math.sqrt(yari) * 0.8;
@@ -233,32 +282,6 @@ class _VennCizeri extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_VennCizeri eski) => false;
-}
-
-class _Kulup extends StatelessWidget {
-  final String isim;
-  final String? logoUrl;
-
-  const _Kulup({required this.isim, this.logoUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        KulupLogosu(logoUrl: logoUrl, ikonRengi: Renkler.arkaPlan),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            isim,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Yazi.baslik(18, kalinlik: FontWeight.w800).copyWith(height: 1.05),
-          ),
-        ),
-      ],
-    );
-  }
+  bool shouldRepaint(_VennCizeri eski) =>
+      eski.solX != solX || eski.sagX != sagX || eski.merkezY != merkezY || eski.yaricap != yaricap;
 }

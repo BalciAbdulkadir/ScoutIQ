@@ -15,7 +15,7 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 6. Uygulama, futbol11.com benzeri ızgara (grid) yapısında birden fazla oyunu barındıran merkezi bir **Oyun Hub'ı**dır.
 7. İlk faz oyun modları:
    - **Mod 1 – Kesişim Bulmacası:** Rastgele seçilen iki takımın ortak oyuncusunu bulma. (Mevcut geliştirme aşamasındaki oyun.)
-   - **Mod 2 – Bonservis Kıyaslaması:** İki oyuncunun geçmiş transfer bedellerini Daha Az / Daha Fazla mantığıyla karşılaştırma.
+   - **Mod 2 – Bonservis Kıyaslaması:** İki oyuncunun geçmiş transfer bedellerini Daha Az / Daha Fazla mantığıyla karşılaştırma. 5 soru vardır; yanlış cevapta oyun bitmez, her doğru tahmin 2 puandır (en fazla 10).
    - **Mod 3 – Izgara (3x3):** Satır ve sütun başlıklarının ikisine de uyan oyuncuları bulma. Kolay (sadece kulüpler), Orta (kulüpler + bilinen 20 milli takım) ve Zor (kulüpler + diğer milli takımlar) ayrı tahtalardır; kullanıcı günde bunlardan yalnızca birini oynar. Bir tahtada en fazla 2 milli takım olur. Tahmin hakkı sınırı yoktur; oyun dokuz kutu dolunca, pes edilince ya da süre dolunca biter. Kullanıcı hücre seçmez, doğru oyuncu uygun hücreye yerleşir. Aynı oyuncu iki kez kullanılamaz, pes edilebilir. Oyuncu önce zorluğu, ardından süreyi seçer (süre yok, 30, 60 ya da 90 saniye); süre bütün tahta içindir, sunucuda tutulur ve dolunca oyun o anki skorla biter.
 8. Bingo tarzı modlar **ileride** eklenecektir; ilk fazın parçası değildir.
 9. Aşağıdakiler **Faz 2** kapsamındadır, ilk fazda yapılmaz:

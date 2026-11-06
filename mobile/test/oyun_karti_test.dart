@@ -32,10 +32,10 @@ void main() {
     expect(find.byType(TebesirDamga), findsOneWidget);
   });
 
-  testWidgets('Bonservis skoru 5 üzerinden gösterilir', (tester) async {
-    await kartiGoster(tester, bonservis, 3);
+  testWidgets('Bonservis skoru 10 üzerinden gösterilir (her doğru 2 puan)', (tester) async {
+    await kartiGoster(tester, bonservis, 6);
 
-    expect(find.text('3/5'), findsOneWidget);
+    expect(find.text('6/10'), findsOneWidget);
   });
 
   testWidgets('zorluksuz oyunda "tek mod", zorluklu oyunda K O Z yazar', (tester) async {

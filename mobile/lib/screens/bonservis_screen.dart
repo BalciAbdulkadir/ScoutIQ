@@ -23,7 +23,7 @@ class BonservisScreen extends ConsumerStatefulWidget {
 }
 
 class _BonservisScreenState extends ConsumerState<BonservisScreen> {
-  static const _maksimumSkor = 5;
+  static const _maksimumSkor = 10;
 
   Timer? _devamZamanlayici;
 
@@ -122,7 +122,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
                   mevcutSoru: durum.soruIndex,
                   sonuclar: durum.sonuclar,
                   renk: Renkler.bonservis,
-                  sagMetin: '${durum.skor} doğru',
+                  sagMetin: '${durum.skor} puan',
                 ),
                 const SizedBox(height: 24),
                 const Spacer(),
@@ -212,10 +212,12 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   }
 
   Widget _bitis(BonservisState durum) {
+    final dogruSayisi = durum.sonuclar.where((d) => d).length;
+
     return OyunBitisEkrani(
-      skor: '${durum.skor}/${durum.sorular.length}',
-      skorAciklamasi: 'doğru',
-      baslik: bitisBasligi(durum.skor, durum.sorular.length),
+      skor: '${durum.skor}/$_maksimumSkor',
+      skorAciklamasi: 'puan',
+      baslik: bitisBasligi(dogruSayisi, durum.sorular.length),
       renk: Renkler.bonservis,
       ozetSatirlari: [
         for (var i = 0; i < durum.sonuclar.length; i++) _ozetSatiri(durum.sorular[i], durum.sonuclar[i]),
@@ -245,7 +247,7 @@ class _SonucBandi extends StatelessWidget {
   Widget build(BuildContext context) {
     final renk = dogru ? Renkler.basari : Renkler.hata;
     final fark = (soru.rakip.toplamBonservis - soru.referans.toplamBonservis).abs();
-    final butonMetni = (!dogru || sonSoru) ? 'Sonuçları gör' : 'Devam';
+    final butonMetni = sonSoru ? 'Sonuçları gör' : 'Devam';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),

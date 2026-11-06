@@ -100,15 +100,15 @@ void main() {
       expect(depo.kayit, {'skor': 0, 'durum': 'basladi'});
     });
 
-    test('doğru tahmin skoru artırır, sonuç gösterilir, devam edince sıradaki soruya geçilir', () async {
+    test('doğru tahmin 2 puan kazandırır, sonuç gösterilir, devam edince sıradaki soruya geçilir', () async {
       final (c, depo) = await oyunuBaslat();
 
       await notifier(c).tahminEt(dahaFazla: true);
 
-      expect(durum(c).skor, 1);
+      expect(durum(c).skor, 2);
       expect(durum(c).sonCevapDogru, isTrue);
       expect(durum(c).soruIndex, 0);
-      expect(depo.yazilanSkorlar.single, (skor: 1, bitti: false));
+      expect(depo.yazilanSkorlar.single, (skor: 2, bitti: false));
 
       notifier(c).devamEt();
 
@@ -117,19 +117,37 @@ void main() {
       expect(durum(c).soru!.referans.isim, 'Kane');
     });
 
-    test('yanlış tahminde oyun biter ve kayıt kilitlenir', () async {
+    test('yanlış tahminde oyun bitmez, puan artmaz, sıradaki soruya geçilir', () async {
       final (c, depo) = await oyunuBaslat();
 
       await notifier(c).tahminEt(dahaFazla: false);
 
       expect(durum(c).sonCevapDogru, isFalse);
-      expect(depo.kayit, {'skor': 0, 'durum': 'tamamlandi'});
+      expect(durum(c).skor, 0);
+      expect(depo.kayit, {'skor': 0, 'durum': 'basladi'});
 
       notifier(c).devamEt();
-      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).durum, BonservisDurumu.oynaniyor);
+      expect(durum(c).soruIndex, 1);
     });
 
-    test('beş soruyu da bilen 5 puanla bitirir', () async {
+    test('yanlışlar olsa da beş soru oynanır, oyun son soruda biter ve kayıt kilitlenir', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      // 1., 3. ve 5. soru doğru, 2. ve 4. yanlış
+      for (var i = 0; i < dogruTahminler.length; i++) {
+        await notifier(c).tahminEt(dahaFazla: i.isEven ? dogruTahminler[i] : !dogruTahminler[i]);
+        notifier(c).devamEt();
+      }
+
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).skor, 6);
+      expect(durum(c).sonuclar, [true, false, true, false, true]);
+      expect(depo.yazilanSkorlar.where((s) => s.bitti), hasLength(1));
+      expect(depo.kayit, {'skor': 6, 'durum': 'tamamlandi'});
+    });
+
+    test('beş soruyu da bilen 10 puanla bitirir', () async {
       final (c, depo) = await oyunuBaslat();
 
       for (final tahmin in dogruTahminler) {
@@ -138,10 +156,10 @@ void main() {
       }
 
       expect(durum(c).durum, BonservisDurumu.bitti);
-      expect(durum(c).skor, 5);
+      expect(durum(c).skor, 10);
       expect(durum(c).sonuclar, [true, true, true, true, true]);
       expect(depo.yazilanSkorlar.where((s) => s.bitti), hasLength(1));
-      expect(depo.kayit, {'skor': 5, 'durum': 'tamamlandi'});
+      expect(depo.kayit, {'skor': 10, 'durum': 'tamamlandi'});
     });
 
     test('sonuç gösterilirken yeni tahmin yok sayılır', () async {
@@ -150,7 +168,7 @@ void main() {
       await notifier(c).tahminEt(dahaFazla: true);
       await notifier(c).tahminEt(dahaFazla: true);
 
-      expect(durum(c).skor, 1);
+      expect(durum(c).skor, 2);
       expect(depo.yazilanSkorlar, hasLength(1));
     });
 
@@ -178,7 +196,7 @@ void main() {
 
       depo.skorYazHataVerir = false;
       await notifier(c).tahminEt(dahaFazla: true);
-      expect(durum(c).skor, 1);
+      expect(durum(c).skor, 2);
     });
 
     test('bugün oynanmış oyun açılmaz', () async {
@@ -271,7 +289,7 @@ void main() {
       await tahminEt(tester, 'Daha az'); // 2. soru: Dumfries (40) < Kane (90)
 
       expect(find.text('Doğru'), findsOneWidget);
-      expect(find.text('2 doğru'), findsOneWidget);
+      expect(find.text('4 puan'), findsOneWidget);
     });
 
     testWidgets('"Sıradaki" butonu beklemeden geçirir', (tester) async {
@@ -284,7 +302,7 @@ void main() {
       expect(find.text('Soru 2/5'), findsOneWidget);
     });
 
-    testWidgets('yanlış tahminde oyun biter ve eşleşmeler listelenir', (tester) async {
+    testWidgets('yanlış tahminde oyun sürer, beş soru bitince puan ve eşleşmeler listelenir', (tester) async {
       await ekraniAc(tester);
 
       await tahminEt(tester, 'Daha fazla'); // doğru
@@ -293,10 +311,20 @@ void main() {
       await tahminEt(tester, 'Daha fazla'); // yanlış: Dumfries daha ucuz
 
       expect(find.text('Yanlış'), findsOneWidget);
-      await tester.tap(find.text('Sonuçları gör'));
+      await tester.tap(find.text('Devam'));
       await tester.pumpAndSettle();
+      expect(find.text('Soru 3/5'), findsOneWidget);
 
-      expect(find.text('1/5'), findsOneWidget);
+      // Kalan üç soruyu doğru bil: 4 doğru, 8 puan
+      for (final buton in ['Daha fazla', 'Daha az', 'Daha fazla']) {
+        await tahminEt(tester, buton);
+        // Son soruda buton "Sonuçları gör" olur
+        final sonSoru = find.text('Sonuçları gör').evaluate().isNotEmpty;
+        await tester.tap(find.text(sonSoru ? 'Sonuçları gör' : 'Devam'));
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.text('8/10'), findsOneWidget);
       expect(find.text('ÖZET'), findsOneWidget);
       expect(find.textContaining('Dumfries'), findsOneWidget);
     });

@@ -69,7 +69,7 @@ const List<OyunModu> oyunModlari = [
     cizim: TebesirCizimi.bonservis,
     renk: Renkler.bonservis,
     durum: OyunDurumu.aktif,
-    maksimumSkor: 5,
+    maksimumSkor: 10, // 5 soru, her doğru 2 puan
   ),
   OyunModu(
     tip: 'izgara',

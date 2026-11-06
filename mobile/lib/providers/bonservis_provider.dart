@@ -11,7 +11,7 @@ class BonservisState {
   final BonservisDurumu durum;
   final List<BonservisSorusu> sorular;
   final int soruIndex;
-  final int skor; // Doğru tahmin sayısı
+  final int skor; // Puan: her doğru tahmin 2 puan
   final List<bool> sonuclar; // Cevaplanan soruların doğru/yanlış sonucu, ilerleme çubuğu için
   final bool? sonCevapDogru; // Doluysa şu anki sorunun cevabı verildi ve sonuç gösteriliyor
   final bool gonderiliyor;
@@ -60,9 +60,10 @@ class BonservisState {
 }
 
 // Bonservis oyunu: her soruda bir oyuncunun bedeli görünür, diğerininki için "daha fazla / daha az" tahmin edilir.
-// Yanlış tahminde oyun biter.
+// Yanlış tahminde oyun bitmez, beş sorunun hepsi oynanır. Her doğru tahmin 2 puan (en fazla 10).
 class BonservisNotifier extends Notifier<BonservisState> {
   static const _oyunTipi = 'bonservis';
+  static const puan = 2;
 
   late OyunDeposu _depo;
 
@@ -104,8 +105,8 @@ class BonservisNotifier extends Notifier<BonservisState> {
     state = state.copyWith(gonderiliyor: true);
 
     final dogru = dahaFazla == soru.rakipDahaPahali;
-    final yeniSkor = dogru ? state.skor + 1 : state.skor;
-    final bitti = !dogru || state.sonSoru;
+    final yeniSkor = dogru ? state.skor + puan : state.skor;
+    final bitti = state.sonSoru;
 
     try {
       // Skoru her tahminden sonra kaydediyoruz, oyun bittiyse kaydı kilitliyoruz
@@ -140,10 +141,9 @@ class BonservisNotifier extends Notifier<BonservisState> {
 
   // Sonuç gösterildikten sonra sıradaki soruya geçer ya da oyunu bitirir
   void devamEt() {
-    final dogru = state.sonCevapDogru;
-    if (dogru == null) return;
+    if (state.sonCevapDogru == null) return;
 
-    if (!dogru || state.sonSoru) {
+    if (state.sonSoru) {
       state = state.copyWith(durum: BonservisDurumu.bitti);
       return;
     }
