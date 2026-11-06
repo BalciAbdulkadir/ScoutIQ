@@ -5,7 +5,7 @@ Kullanım:
     python toplu_cekim.py           # tüm adımlar
     python toplu_cekim.py 3         # 3. adımdan başla (önceki adımlar bittiyse)
 
-Önce supabase/migrations/013_onem_verileri.sql çalıştırılmış ve Transfermarkt API (Docker) açık olmalıdır.
+Önce supabase/migrations/015_onem_verileri.sql çalıştırılmış ve Transfermarkt API (Docker) açık olmalıdır.
 Adımların hepsi kaldığı yerden devam eder: Ctrl+C ile durdurup aynı komutla (ya da adım numarasıyla) tekrar başlatmak güvenlidir.
 Bir adımda bazı oyuncular hata alırsa ('!!' satırları) sonraki adıma geçilir; o oyuncular adım tekrar çalıştırılınca
 yeniden denenir. Bir adım çökerse çekim durur ve hangi adımdan devam edileceği yazılır.

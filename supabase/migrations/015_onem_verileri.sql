@@ -1,4 +1,4 @@
--- 013: Önem kriterleri için ham veri (genel tanınmışlık ve kulüp önemi)
+-- 015: Önem kriterleri için ham veri (genel tanınmışlık ve kulüp önemi)
 -- Supabase SQL Editor'da tek seferde çalıştırılır. Hata olursa hiçbir değişiklik uygulanmaz.
 -- Bu dosyadan sonra veri data_miner/onem_verileri.py ile çekilir (ya da hepsi birden: python toplu_cekim.py).
 --

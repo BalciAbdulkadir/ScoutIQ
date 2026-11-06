@@ -7,12 +7,12 @@ Kullanım:
     python onem_verileri.py --hepsi  # tüm oyuncular baştan (değerler güncellenir)
     python onem_verileri.py --is 8   # API'ye aynı anda atılan oyuncu sayısı (varsayılan 4)
 
-Önce supabase/migrations/013_onem_verileri.sql çalıştırılmış olmalıdır.
+Önce supabase/migrations/015_onem_verileri.sql çalıştırılmış olmalıdır.
 Sadece veritabanında zaten olan oyuncular işlenir, yeni oyuncu eklenmez.
 Yazılanlar:
   - oyuncular.zirve_piyasa_degeri / guncel_piyasa_degeri
   - oyuncu_kulup_istatistikleri: kulüp başına toplam maç, gol, asist, dakika, sezon ve o kulüpteki zirve piyasa değeri
-  - oyuncu_basarilari: kazanılan başlıklar, kulüp başına adet
+  - oyuncu_basarilari: kazanılan başlıklar (sadece KALAN_BASLIKLAR), kulüp başına adet
 Yarıda kesilirse (Ctrl+C) tekrar çalıştırmak yeterli: çekilmiş oyuncular atlanır, kayıtlar çoğalmaz.
 Üç istekten biri bile hata alırsa oyuncu işaretlenmez, bir sonraki çalıştırmada tekrar denenir.
 """
@@ -25,6 +25,21 @@ from main import api_istek_at, supabase
 
 SAYFA_BOYUTU = 1000  # Supabase tek istekte en fazla 1000 satır döndürür
 VARSAYILAN_IS_SAYISI = 4
+
+# oyuncu_basarilari'na sadece bu başlıklar yazılır: Avrupa kupaları, 6 ligin şampiyonluk/kupa/süper kupaları,
+# büyük milli turnuvalar ve bireysel ödüller. Aynı liste supabase/migrations/016_basari_temizligi.sql'dedir.
+KALAN_BASLIKLAR = {
+    "UEFA Champions League winner", "European Champion Clubs' Cup winner",
+    "Europa League winner", "Uefa Cup winner",
+    "Uefa Supercup winner",
+    "Turkish champion", "English Champion", "Spanish champion", "Italian champion", "German Champion", "French champion",
+    "Turkish cup winner", "English FA Cup winner", "Spanish cup winner", "Italian cup winner", "German cup winner",
+    "French cup winner",
+    "Turkish Super Cup winner", "English Super Cup winner", "Spanish Super Cup winner", "Italian Super Cup winner",
+    "German Super Cup winner", "French Super Cup winner",
+    "World Cup winner", "European champion", "Copa América winner", "Winner UEFA Nations League",
+    "Winner Ballon d'Or", "The Best FIFA Men's Player", "UEFA Best Player in Europe", "Golden Boot winner (Europe)",
+}
 
 
 def oyunculari_oku(hepsi):
@@ -98,7 +113,7 @@ def basari_satirlari(oyuncu_id, basarilar):
     """Başlık ve kulüp başına adet. Ayrıntısı olmayan başlıklar kulüpsüz tek satırdır."""
     adetler = {}
     for b in basarilar:
-        if not b.get("title"):
+        if b.get("title") not in KALAN_BASLIKLAR:
             continue
         detaylar = b.get("details") or []
         if not detaylar:
