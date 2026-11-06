@@ -19,6 +19,9 @@ class SahteOyunDeposu implements OyunDeposu {
   // kayitAc çağrıldığında başka bir cihazın kaydı atmış gibi davranılsın mı
   bool kayitAcCakisir = false;
 
+  // kayitAc çağrıldığında kullanıcı bugün başka bir zorlukta Izgara oynamış gibi davranılsın mı
+  bool baskaIzgaraOynandi = false;
+
   Map<String, dynamic>? oyun = {
     'id': 'oyun-1',
     'soru_verisi': [
@@ -60,6 +63,14 @@ class SahteOyunDeposu implements OyunDeposu {
     for (var i = 0; i < 9; i++) i: IzgaraOyuncusu(isim: 'Örnek Oyuncu $i', fotoUrl: 'https://foto.test/$i.jpg'),
   };
 
+  // Izgara süresi: başlatılan toplam süre ve sunucuya göre kalan süre (saniye). null: süresiz.
+  int? izgaraSureToplam;
+  int? izgaraSureKalan;
+  final List<int?> sureBaslatmaIstekleri = [];
+  // Doluysa sunucu süre dolmuş gibi tahmini reddeder
+  bool izgaraSuresiDoldu = false;
+  bool izgaraSureHataVerir = false;
+
   // Kulüp ID'si -> logo (Kesişim'de logosu olmayan eski sorular için)
   Map<String, String> logolar = {};
   int logoIstekSayisi = 0;
@@ -95,6 +106,7 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<void> kayitAc({required String kullaniciId, required String oyunId, required String oyunTipi, required String tarih}) async {
     kayitAcSayisi++;
+    if (baskaIzgaraOynandi) throw BaskaIzgaraOynandi();
     if (kayitAcCakisir) {
       kayit = {'skor': 4, 'durum': 'basladi'};
       throw KayitZatenVar();
@@ -144,9 +156,15 @@ class SahteOyunDeposu implements OyunDeposu {
     final isim = oneriler.firstWhere((o) => o.id == oyuncuId).isim;
     final dolu = izgaraTahminListesi.where((t) => t.hucre != null).length;
 
+    if (izgaraSuresiDoldu) {
+      kayit = {'skor': dolu, 'durum': 'tamamlandi'};
+      return IzgaraTahminSonucu(
+          dogru: false, sureDoldu: true, oyuncuIsim: isim, skor: dolu, bitti: true);
+    }
+
     if (izgaraTahminListesi.any((t) => t.oyuncuIsim == isim)) {
       return IzgaraTahminSonucu(
-        dogru: false, tekrar: true, oyuncuIsim: isim, kalanHak: 9 - izgaraTahminListesi.length, skor: dolu, bitti: false);
+        dogru: false, tekrar: true, oyuncuIsim: isim, skor: dolu, bitti: false);
     }
 
     final hucre = izgaraHucreleri[oyuncuId];
@@ -156,11 +174,24 @@ class SahteOyunDeposu implements OyunDeposu {
       IzgaraTahmini(sira: izgaraTahminListesi.length + 1, oyuncuIsim: isim, hucre: bos ? hucre : null),
     ];
     final skor = dolu + (bos ? 1 : 0);
-    final kalan = 9 - izgaraTahminListesi.length;
-    final bitti = kalan == 0 || skor == 9;
+    // Tahmin hakkı sınırı yoktur: oyun sadece dokuz kutu dolunca biter
+    final bitti = skor == 9;
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return IzgaraTahminSonucu(
-        dogru: bos, hucre: bos ? hucre : null, oyuncuIsim: isim, kalanHak: kalan, skor: skor, bitti: bitti);
+        dogru: bos, hucre: bos ? hucre : null, oyuncuIsim: isim, skor: skor, bitti: bitti);
+  }
+
+  @override
+  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
+    sureBaslatmaIstekleri.add(sure);
+    if (izgaraSureHataVerir) throw Exception('fonksiyon yok');
+    // Süre bir kez başlatılır, sonradan değiştirilemez
+    if (sure != null && izgaraSureToplam == null) {
+      izgaraSureToplam = sure;
+      izgaraSureKalan = sure;
+    }
+    if (izgaraSureToplam == null) return null;
+    return IzgaraSuresi(toplam: izgaraSureToplam!, kalan: izgaraSureKalan!);
   }
 
   @override

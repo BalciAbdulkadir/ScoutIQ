@@ -6,6 +6,9 @@ import '../models/oyuncu_oneri.dart';
 // Aynı gün aynı oyun için kayıt zaten varsa (örneğin başka bir cihazda başlanmışsa) fırlatılır
 class KayitZatenVar implements Exception {}
 
+// Kullanıcı bugün başka bir zorlukta Izgara'ya başlamış: günde tek Izgara oynanır (014_izgara_gunde_bir.sql)
+class BaskaIzgaraOynandi implements Exception {}
+
 // Oyunların veritabanı işlemleri. Oyun mantığı bu arayüz üzerinden çalışır,
 // böylece testlerde Supabase yerine sahte bir depo verilebilir.
 abstract class OyunDeposu {
@@ -38,7 +41,7 @@ abstract class OyunDeposu {
   // Güncellenecek kayıt yoksa (başka yerden kapatılmışsa) false döner.
   Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti});
 
-  // Izgara: tahminler, skor ve haklar sunucuda tutulur (011_izgara.sql)
+  // Izgara: tahminler ve skor sunucuda tutulur (011_izgara.sql)
 
   // Kullanıcının bu tahtadaki önceki tahminleri, sırayla. Uygulama yeniden açılınca tahta bunlarla kurulur.
   Future<List<IzgaraTahmini>> izgaraTahminleri(String oyunId);
@@ -48,6 +51,10 @@ abstract class OyunDeposu {
 
   // Oyunu o anki skorla bitirir, skoru döndürür
   Future<int> izgaraPesEt(String oyunId);
+
+  // Süreyi başlatır (sure doluysa) ve tahtanın süre durumunu döndürür; süresiz tahtada null.
+  // Süre zaten başlatılmışsa yeni süre yok sayılır.
+  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure});
 
   // Bitmiş tahtanın her hücresi için örnek bir doğru cevap: hücre -> oyuncu
   Future<Map<int, IzgaraOyuncusu>> izgaraOrnekCevaplar(String oyunId);
@@ -118,6 +125,7 @@ class SupabaseOyunDeposu implements OyunDeposu {
     } on PostgrestException catch (e) {
       // 23505: aynı gün için kayıt zaten var
       if (e.code == '23505') throw KayitZatenVar();
+      if (e.hint == 'izgara_gunde_bir') throw BaskaIzgaraOynandi();
       rethrow;
     }
   }
@@ -177,6 +185,12 @@ class SupabaseOyunDeposu implements OyunDeposu {
   Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId}) async {
     final sonuc = await _supabase.rpc('izgara_tahmin', params: {'p_oyun_id': oyunId, 'p_oyuncu_id': oyuncuId});
     return IzgaraTahminSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
+    final sonuc = await _supabase.rpc('izgara_sureyi_baslat', params: {'p_oyun_id': oyunId, 'p_sure': sure});
+    return IzgaraSuresi.oku(sonuc);
   }
 
   @override

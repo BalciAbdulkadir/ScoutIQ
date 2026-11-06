@@ -7,6 +7,9 @@ using ScoutIQ.API.Models;
 using ScoutIQ.API.Oyunlar;
 using System.Linq;
 using static Supabase.Postgrest.Constants;
+using Supabase.Postgrest.Exceptions;
+using Supabase.Postgrest.Models;
+using Supabase.Postgrest.Responses;
 
 namespace ScoutIQ.API.Jobs
 {
@@ -157,21 +160,35 @@ namespace ScoutIQ.API.Jobs
             }
         }
 
+        // Sayfalı okumada bir sayfayı getirir. Satır sayısı sayfa boyutunun tam katıysa son istek boş sayfaya düşer;
+        // Supabase (PostgREST) bunu boş liste yerine PGRST103 "Requested range not satisfiable" hatasıyla bildirir.
+        private static async Task<List<T>> SayfayiGetir<T>(Task<ModeledResponse<T>> istek) where T : BaseModel, new()
+        {
+            try
+            {
+                return (await istek).Models;
+            }
+            catch (PostgrestException ex) when (ex.Message.Contains("PGRST103"))
+            {
+                return new List<T>();
+            }
+        }
+
         private async Task<List<MilliTakimKariyeri>> TumMilliTakimKariyeri()
         {
             var tumu = new List<MilliTakimKariyeri>();
 
             for (int bas = 0; ; bas += SayfaBoyutu)
             {
-                var sayfa = await _supabaseClient.From<MilliTakimKariyeri>()
+                var sayfa = await SayfayiGetir(_supabaseClient.From<MilliTakimKariyeri>()
                     .Select("oyuncu_id, milli_takim_tm_id, milli_takim_isim")
                     .Order("oyuncu_id", Ordering.Ascending)
                     .Order("milli_takim_tm_id", Ordering.Ascending)
                     .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get();
+                    .Get());
 
-                tumu.AddRange(sayfa.Models);
-                if (sayfa.Models.Count < SayfaBoyutu) break;
+                tumu.AddRange(sayfa);
+                if (sayfa.Count < SayfaBoyutu) break;
             }
 
             return tumu;
@@ -364,16 +381,16 @@ namespace ScoutIQ.API.Jobs
 
             for (int bas = 0; ; bas += SayfaBoyutu)
             {
-                var sayfa = await _supabaseClient.From<KariyerGecmisi>()
+                var sayfa = await SayfayiGetir(_supabaseClient.From<KariyerGecmisi>()
                     .Select("oyuncu_id, kulup_id, bitis_yili")
                     .Filter("kulup_id", Operator.In, filtre)
                     .Order("oyuncu_id", Ordering.Ascending)
                     .Order("kulup_id", Ordering.Ascending)
                     .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get();
+                    .Get());
 
-                tumu.AddRange(sayfa.Models);
-                if (sayfa.Models.Count < SayfaBoyutu) break;
+                tumu.AddRange(sayfa);
+                if (sayfa.Count < SayfaBoyutu) break;
             }
 
             return tumu;
@@ -386,15 +403,15 @@ namespace ScoutIQ.API.Jobs
 
             for (int bas = 0; ; bas += SayfaBoyutu)
             {
-                var sayfa = await _supabaseClient.From<Oyuncu>()
+                var sayfa = await SayfayiGetir(_supabaseClient.From<Oyuncu>()
                     .Select("id, isim, toplam_bonservis, foto_url")
                     .Filter("toplam_bonservis", Operator.GreaterThan, BonservisSoruSecici.MinToplamBonservis.ToString())
                     .Order("id", Ordering.Ascending)
                     .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get();
+                    .Get());
 
-                tumu.AddRange(sayfa.Models);
-                if (sayfa.Models.Count < SayfaBoyutu) break;
+                tumu.AddRange(sayfa);
+                if (sayfa.Count < SayfaBoyutu) break;
             }
 
             return tumu;
@@ -407,15 +424,15 @@ namespace ScoutIQ.API.Jobs
             // Sayfalar arasında satır kaymasın diye benzersiz (oyuncu_id, kulup_id) sırasıyla okunur
             for (int bas = 0; ; bas += SayfaBoyutu)
             {
-                var sayfa = await _supabaseClient.From<KariyerGecmisi>()
+                var sayfa = await SayfayiGetir(_supabaseClient.From<KariyerGecmisi>()
                     .Select("oyuncu_id, kulup_id")
                     .Order("oyuncu_id", Ordering.Ascending)
                     .Order("kulup_id", Ordering.Ascending)
                     .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get();
+                    .Get());
 
-                tumu.AddRange(sayfa.Models);
-                if (sayfa.Models.Count < SayfaBoyutu) break;
+                tumu.AddRange(sayfa);
+                if (sayfa.Count < SayfaBoyutu) break;
             }
 
             return tumu;

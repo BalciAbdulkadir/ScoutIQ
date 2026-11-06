@@ -1,7 +1,24 @@
 // 3x3 Izgara oyununun verileri. Tahta gunluk_oyunlar.soru_verisi'nden okunur (biçim: 011_izgara.sql).
 
 const izgaraBoyutu = 3;
-const izgaraHakSayisi = 9;
+
+
+// Bir Izgara ekranını açan seçim. Süre sadece yeni başlanan tahtada kullanılır;
+// yarım kalan tahtanın süresi sunucudan okunur.
+typedef IzgaraAcilisi = ({IzgaraZorlugu zorluk, int? sure});
+
+// Süreli tahtanın sunucudaki durumu
+class IzgaraSuresi {
+  final int toplam; // Seçilen süre (saniye)
+  final int kalan; // Sunucuya göre kalan süre (saniye)
+
+  const IzgaraSuresi({required this.toplam, required this.kalan});
+
+  static IzgaraSuresi? oku(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    return IzgaraSuresi(toplam: (json['sure'] as num).toInt(), kalan: (json['kalan'] as num).toInt());
+  }
+}
 
 // Kolay, orta ve zor ayrı oyunlardır; her biri günde bir kez oynanır
 enum IzgaraZorlugu {
@@ -95,10 +112,10 @@ class IzgaraTahmini {
 class IzgaraTahminSonucu {
   final bool dogru;
   final int? hucre;
-  final bool tekrar; // Oyuncu bu tahtada zaten kullanılmış: hak düşmedi
+  final bool tekrar; // Oyuncu bu tahtada zaten kullanılmış: tahmin sayılmadı
+  final bool sureDoldu; // Süre dolduğu için tahmin kabul edilmedi, oyun bitti
   final String oyuncuIsim;
   final String? fotoUrl;
-  final int kalanHak;
   final int skor;
   final bool bitti;
 
@@ -106,9 +123,9 @@ class IzgaraTahminSonucu {
     required this.dogru,
     this.hucre,
     this.tekrar = false,
+    this.sureDoldu = false,
     required this.oyuncuIsim,
     this.fotoUrl,
-    required this.kalanHak,
     required this.skor,
     required this.bitti,
   });
@@ -118,9 +135,9 @@ class IzgaraTahminSonucu {
       dogru: json['dogru'] == true,
       hucre: (json['hucre'] as num?)?.toInt(),
       tekrar: json['tekrar'] == true,
+      sureDoldu: json['sure_doldu'] == true,
       oyuncuIsim: json['oyuncu_isim'] as String,
       fotoUrl: json['foto_url'] as String?,
-      kalanHak: (json['kalan_hak'] as num).toInt(),
       skor: (json['skor'] as num).toInt(),
       bitti: json['bitti'] == true,
     );

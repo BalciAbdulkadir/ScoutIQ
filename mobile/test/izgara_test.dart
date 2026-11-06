@@ -28,12 +28,16 @@ SahteOyunDeposu izgaraDeposu([void Function(SahteOyunDeposu)? ayarla]) {
   return depo;
 }
 
-Future<(ProviderContainer, SahteOyunDeposu)> tahtayiAc([void Function(SahteOyunDeposu)? ayarla]) async {
+// Testin açtığı tahta: kolay, varsayılan olarak süresiz
+IzgaraAcilisi acilis = (zorluk: IzgaraZorlugu.kolay, sure: null);
+
+Future<(ProviderContainer, SahteOyunDeposu)> tahtayiAc([void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
   final depo = izgaraDeposu(ayarla);
   final container = ProviderContainer(overrides: [oyunDeposuProvider.overrideWithValue(depo)]);
   addTearDown(container.dispose);
 
-  final provider = izgaraProvider(IzgaraZorlugu.kolay);
+  acilis = (zorluk: IzgaraZorlugu.kolay, sure: sure);
+  final provider = izgaraProvider(acilis);
   container.listen(provider, (_, _) {});
   for (var i = 0; i < 100 && container.read(provider).durum == IzgaraDurumu.yukleniyor; i++) {
     await Future<void>.delayed(Duration.zero);
@@ -41,8 +45,8 @@ Future<(ProviderContainer, SahteOyunDeposu)> tahtayiAc([void Function(SahteOyunD
   return (container, depo);
 }
 
-IzgaraState durum(ProviderContainer c) => c.read(izgaraProvider(IzgaraZorlugu.kolay));
-IzgaraNotifier notifier(ProviderContainer c) => c.read(izgaraProvider(IzgaraZorlugu.kolay).notifier);
+IzgaraState durum(ProviderContainer c) => c.read(izgaraProvider(acilis));
+IzgaraNotifier notifier(ProviderContainer c) => c.read(izgaraProvider(acilis).notifier);
 
 void main() {
   group('Tahta verisi', () {
@@ -74,7 +78,7 @@ void main() {
       final (c, depo) = await tahtayiAc();
 
       expect(durum(c).durum, IzgaraDurumu.oynaniyor);
-      expect(durum(c).kalanHak, 9);
+      expect(durum(c).tahminSayisi, 0);
       expect(depo.kayitAcSayisi, 1);
     });
 
@@ -89,7 +93,7 @@ void main() {
 
       expect(durum(c).durum, IzgaraDurumu.oynaniyor);
       expect(durum(c).hucreler.keys, [4]);
-      expect(durum(c).kalanHak, 7);
+      expect(durum(c).tahminSayisi, 2);
       expect(depo.kayitAcSayisi, 0);
     });
 
@@ -111,6 +115,13 @@ void main() {
       expect(durum(c).durum, IzgaraDurumu.oyunYok);
       expect(depo.kayitAcSayisi, 0);
     });
+
+    test('bugün başka zorlukta Izgara oynandıysa tahta açılmaz', () async {
+      final (c, _) = await tahtayiAc((d) => d.baskaIzgaraOynandi = true);
+
+      expect(durum(c).durum, IzgaraDurumu.hata);
+      expect(durum(c).hataMesaji, baskaIzgaraMesaji);
+    });
   });
 
   group('Tahminler', () {
@@ -121,51 +132,64 @@ void main() {
 
       expect(durum(c).hucreler[4]?.isim, 'Arda Güler');
       expect(durum(c).skor, 1);
-      expect(durum(c).kalanHak, 8);
+      expect(durum(c).tahminSayisi, 1);
       expect(durum(c).sonTahmin?.dogru, isTrue);
     });
 
-    test('yanlış tahmin hak yer, hücre dolmaz', () async {
+    test('yanlış tahmin sayılır, hücre dolmaz', () async {
       final (c, _) = await tahtayiAc();
 
       await notifier(c).tahminEt(yanlisOyuncu);
 
       expect(durum(c).hucreler, isEmpty);
-      expect(durum(c).kalanHak, 8);
+      expect(durum(c).tahminSayisi, 1);
       expect(durum(c).sonTahmin?.dogru, isFalse);
     });
 
-    test('aynı oyuncu tekrar yazılırsa hak düşmez', () async {
+    test('aynı oyuncu tekrar yazılırsa tahmin sayılmaz', () async {
       final (c, _) = await tahtayiAc();
 
       await notifier(c).tahminEt(dogruOyuncu);
       await notifier(c).tahminEt(dogruOyuncu);
 
-      expect(durum(c).kalanHak, 8);
+      expect(durum(c).tahminSayisi, 1);
       expect(durum(c).sonTahmin?.tekrar, isTrue);
     });
 
-    test('dokuz hak bitince oyun biter ve örnek cevaplar gelir', () async {
+    test('tahmin hakkı sınırı yok: dokuzdan fazla yanlış tahminde oyun sürer', () async {
       final (c, _) = await tahtayiAc((d) {
-        d.oneriler = [for (var i = 0; i < 9; i++) OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i')];
+        d.oneriler = [for (var i = 0; i < 12; i++) OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i')];
       });
 
-      for (var i = 0; i < 9; i++) {
+      for (var i = 0; i < 12; i++) {
         await notifier(c).tahminEt(OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i'));
       }
 
-      expect(durum(c).durum, IzgaraDurumu.bitti);
-      expect(durum(c).kalanHak, 0);
-      expect(durum(c).ornekCevaplar, hasLength(9));
+      expect(durum(c).durum, IzgaraDurumu.oynaniyor);
+      expect(durum(c).tahminSayisi, 12);
     });
 
-    test('tahmin gönderilemezse hata döner, hak düşmez', () async {
+    test('dokuz kutu dolunca oyun biter', () async {
+      final (c, _) = await tahtayiAc((d) {
+        d.oneriler = [for (var i = 0; i < 9; i++) OyuncuOneri(id: 'd-$i', isim: 'Doğru $i')];
+        d.izgaraHucreleri = {for (var i = 0; i < 9; i++) 'd-$i': i};
+      });
+
+      for (var i = 0; i < 9; i++) {
+        await notifier(c).tahminEt(OyuncuOneri(id: 'd-$i', isim: 'Doğru $i'));
+      }
+
+      expect(durum(c).durum, IzgaraDurumu.bitti);
+      expect(durum(c).skor, 9);
+    });
+
+    test('tahmin gönderilemezse hata döner, tahmin sayılmaz', () async {
       final (c, _) = await tahtayiAc((d) => d.izgaraTahminHataVerir = true);
 
       final hata = await notifier(c).tahminEt(dogruOyuncu);
 
       expect(hata, contains('gönderilemedi'));
-      expect(durum(c).kalanHak, 9);
+      expect(durum(c).tahminSayisi, 0);
       expect(durum(c).gonderiliyor, isFalse);
     });
 
@@ -182,8 +206,81 @@ void main() {
     });
   });
 
+  group('Süre', () {
+    test('süresiz tahtada sayaç yoktur', () async {
+      final (c, depo) = await tahtayiAc();
+
+      expect(durum(c).bitisZamani, isNull);
+      expect(depo.izgaraSureToplam, isNull);
+    });
+
+    test('yeni tahtada seçilen süre sunucuda başlatılır', () async {
+      final (c, depo) = await tahtayiAc(null, 60);
+
+      expect(depo.sureBaslatmaIstekleri, [60]);
+      expect(durum(c).sureSaniye, 60);
+      final kalan = durum(c).bitisZamani!.difference(DateTime.now()).inSeconds;
+      expect(kalan, inInclusiveRange(58, 60));
+    });
+
+    test('yarım kalan tahtada yeni süre gönderilmez, sunucudaki kalan süreyle devam edilir', () async {
+      final (c, depo) = await tahtayiAc((d) {
+        d.kayit = {'skor': 0, 'durum': 'basladi'};
+        d.izgaraSureToplam = 90;
+        d.izgaraSureKalan = 25;
+      }, 30);
+
+      expect(depo.sureBaslatmaIstekleri, [null]);
+      expect(durum(c).sureSaniye, 90);
+      final kalan = durum(c).bitisZamani!.difference(DateTime.now()).inSeconds;
+      expect(kalan, inInclusiveRange(23, 25));
+    });
+
+    test('uygulama kapalıyken süre dolduysa tahta açılınca kapatılır', () async {
+      final (c, depo) = await tahtayiAc((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.izgaraSureToplam = 30;
+        d.izgaraSureKalan = 0;
+      });
+
+      expect(durum(c).durum, IzgaraDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(depo.izgaraPesSayisi, 1);
+    });
+
+    test('süre sunucudan alınamazsa tahta süresiz açılır', () async {
+      final (c, _) = await tahtayiAc((d) => d.izgaraSureHataVerir = true, 60);
+
+      expect(durum(c).durum, IzgaraDurumu.oynaniyor);
+      expect(durum(c).bitisZamani, isNull);
+    });
+
+    test('sayaç sıfırlanınca oyun o anki skorla biter', () async {
+      final (c, depo) = await tahtayiAc(null, 30);
+      await notifier(c).tahminEt(dogruOyuncu);
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).durum, IzgaraDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).skor, 1);
+      expect(depo.izgaraPesSayisi, 1);
+    });
+
+    test('süre dolduktan sonra gelen tahmini sunucu reddederse oyun biter', () async {
+      final (c, depo) = await tahtayiAc(null, 30);
+      depo.izgaraSuresiDoldu = true;
+
+      await notifier(c).tahminEt(dogruOyuncu);
+
+      expect(durum(c).durum, IzgaraDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).hucreler, isEmpty);
+    });
+  });
+
   group('Ekran', () {
-    Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDeposu)? ayarla]) async {
+    Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.625;
       addTearDown(tester.view.reset);
@@ -191,19 +288,52 @@ void main() {
       final depo = izgaraDeposu(ayarla);
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-        child: const MaterialApp(home: IzgaraScreen(zorluk: IzgaraZorlugu.orta)),
+        child: MaterialApp(home: IzgaraScreen(zorluk: IzgaraZorlugu.orta, sure: sure)),
       ));
-      await tester.pumpAndSettle();
+      // Sayaç sürekli güncellendiği için süreli tahtada pumpAndSettle bitmez
+      if (sure == null) {
+        await tester.pumpAndSettle();
+      } else {
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
       return depo;
     }
 
-    testWidgets('başlıklar, hak sayısı ve zorluk gösterilir', (tester) async {
+    testWidgets('süreli tahtada geri sayım gösterilir', (tester) async {
+      await ekraniAc(tester, null, 60);
+
+      expect(find.byIcon(Icons.timer_outlined), findsOneWidget);
+      expect(find.textContaining(RegExp(r'^(1:00|0:5\d)$')), findsOneWidget);
+      // Sayacın zamanlayıcısı test bitmeden kapansın
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('süresiz tahtada geri sayım yoktur', (tester) async {
+      await ekraniAc(tester);
+
+      expect(find.byIcon(Icons.timer_outlined), findsNothing);
+    });
+
+    testWidgets('süre dolan tahtanın bitiş ekranında "Süre doldu" yazar', (tester) async {
+      await ekraniAc(tester, (d) {
+        d.kayit = {'skor': 0, 'durum': 'basladi'};
+        d.izgaraSureToplam = 30;
+        d.izgaraSureKalan = 0;
+      });
+
+      expect(find.text('SÜRE DOLDU'), findsOneWidget);
+      expect(find.text('Ana menüye dön'), findsOneWidget);
+    });
+
+    testWidgets('başlıklar, ilerleme ve zorluk gösterilir', (tester) async {
       await ekraniAc(tester);
 
       expect(find.text('ORTA'), findsOneWidget);
       expect(find.text('Galatasaray'), findsOneWidget);
       expect(find.text('Fransa'), findsOneWidget);
-      expect(find.text('9 hak kaldı'), findsOneWidget);
+      expect(find.text('0 tahmin'), findsOneWidget);
       // Milli takım arması yüklenemezse bayrak ikonu çıkar
       expect(find.byIcon(Icons.flag_rounded), findsWidgets);
     });
@@ -219,7 +349,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.send));
       await tester.pumpAndSettle();
 
-      expect(find.text('8 hak kaldı'), findsOneWidget);
+      expect(find.text('1 tahmin'), findsOneWidget);
       expect(find.text('1/9 kutu'), findsOneWidget);
       // Sonuç satırında ve tahtadaki kutuda
       expect(find.text('Arda Güler'), findsOneWidget);
@@ -236,7 +366,7 @@ void main() {
       await tester.tap(find.text('Vazgeç'));
       await tester.pumpAndSettle();
       expect(depo.izgaraPesSayisi, 0);
-      expect(find.text('9 hak kaldı'), findsOneWidget);
+      expect(find.text('0 tahmin'), findsOneWidget);
     });
 
     testWidgets('bitmiş tahtada boş kutular örnek cevaplarla gösterilir', (tester) async {

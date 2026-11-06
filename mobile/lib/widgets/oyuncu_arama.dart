@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/oyuncu_oneri.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 import 'oyuncu_fotografi.dart';
 
 // Cevap kutusu ve altındaki öneri listesi. Cevap sadece listeden seçilebilir, seçilen oyuncu gönder butonuyla gönderilir.
@@ -136,8 +137,8 @@ class _OyuncuAramaState extends State<OyuncuArama> {
     final gonderilebilir = _secilenOyuncu != null && !widget.gonderiliyor;
 
     OutlineInputBorder kenarlik(Color renk) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: renk),
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: renk, width: 1.5),
         );
 
     return TextField(
@@ -150,10 +151,10 @@ class _OyuncuAramaState extends State<OyuncuArama> {
       onChanged: _metinDegisti,
       onSubmitted: (_) => _gonder(),
       decoration: InputDecoration(
-        hintText: 'Oyuncu ara',
-        hintStyle: const TextStyle(color: Renkler.metinSoluk),
+        hintText: 'oyuncu yaz…',
+        hintStyle: Yazi.tebesir(17, renk: Renkler.metinSoluk, kalinlik: FontWeight.w400),
         filled: true,
-        fillColor: Renkler.yuzey,
+        fillColor: const Color(0x0AFFFFFF),
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
         enabledBorder: kenarlik(_secilenOyuncu != null ? widget.renk : Renkler.kenar),
         focusedBorder: kenarlik(widget.renk),
@@ -199,7 +200,10 @@ class _OyuncuAramaState extends State<OyuncuArama> {
       padding: const EdgeInsets.only(top: 8),
       child: Material(
         color: Renkler.yuzey,
-        borderRadius: BorderRadius.circular(12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: Renkler.kenar, width: 1.5),
+        ),
         clipBehavior: Clip.antiAlias,
         child: Column(
           children: [

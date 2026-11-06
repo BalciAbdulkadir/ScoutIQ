@@ -5,9 +5,13 @@ import '../models/oyun_modu.dart';
 import '../providers/hub_provider.dart';
 import '../services/auth_service.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
+import '../models/izgara.dart';
 import '../widgets/gunluk_kart.dart';
 import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/oyun_karti.dart';
+import '../widgets/logo.dart';
+import '../widgets/tebesir.dart';
 import 'bonservis_screen.dart';
 import 'game_screen.dart';
 
@@ -15,7 +19,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
-    // Izgara'nın üç zorluğu ayrı oyunlardır: önce zorluk seçilir
+    // Zorluklu oyun: önce zorluk, sonra süre seçilir (yarım ya da bitmiş tahta varsa o açılır)
     if (mod.tip == 'izgara') {
       await izgaraAc(context, ref);
       return;
@@ -45,64 +49,101 @@ class HomeScreen extends ConsumerWidget {
     final oynananlar = ref.watch(bugunOynananlarProvider);
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
-    final devamEdenIzgara = ref.watch(devamEdenIzgaraProvider).value;
+    final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
 
-    final gunlukModlar = oyunModlari.where((m) => m.durum != OyunDurumu.yakinda).toList();
-    final yakindakiModlar = oyunModlari.where((m) => m.durum == OyunDurumu.yakinda).toList();
+    // Oynanabilenler önce, yakındakiler en sonda; hepsi tek bir ızgarada, kategorisiz
+    final modlar = [
+      ...oyunModlari.where((m) => m.durum != OyunDurumu.yakinda),
+      ...oyunModlari.where((m) => m.durum == OyunDurumu.yakinda),
+    ];
 
-    // İlerleme sadece şu an oynanabilen günlük oyunlar üzerinden hesaplanır (Izgara'nın her zorluğu ayrı sayılır)
-    final aktifOyunTipleri = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).expand((m) => m.oyunTipleri);
-    final tamamlanan = aktifOyunTipleri.where(skorlar.containsKey).length;
+    // İlerleme oyun sayar: zorluklu bir oyunda herhangi bir zorluk bittiyse o oyun bugünlük bitmiştir
+    final aktifModlar = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).toList();
+    final tamamlanan = aktifModlar.where((m) => m.oyunTipleri.any(skorlar.containsKey)).length;
+
+    final kutucuklar = [
+      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, mod.tip == 'izgara' ? bugunkuIzgara : null),
+    ];
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        body: SafeArea(
-          child: RefreshIndicator(
-            color: Renkler.basari,
-            backgroundColor: Renkler.yuzey,
-            onRefresh: () {
-              ref.invalidate(devamEdenIzgaraProvider);
-              return ref.refresh(bugunOynananlarProvider.future);
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-              children: [
-                _UstBar(kullanici: kullanici),
-                const SizedBox(height: 24),
-                Text(
-                  kullanici != null ? 'Merhaba, ${kullanici.ilkAd}' : 'Merhaba',
-                  style: const TextStyle(color: Renkler.metin, fontSize: 26, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(tarihMetni(turkiyeSaati()), style: const TextStyle(color: Renkler.metinIkincil, fontSize: 15)),
-                const SizedBox(height: 20),
-                GunlukKart(tamamlanan: tamamlanan, toplam: aktifOyunTipleri.length),
-                const SizedBox(height: 28),
-                const _BolumBasligi('Oyunlar'),
-                for (final mod in gunlukModlar)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: OyunKarti(
-                      mod: mod,
-                      bugunkuSkor: skorlar[mod.tip],
-                      tamamlananAltOyun: mod.altTipler?.where(skorlar.containsKey).length ?? 0,
-                      devamEdiyor: mod.tip == 'izgara' && devamEdenIzgara != null,
-                      onTap: () => _modaTiklandi(context, ref, mod),
-                    ),
+        body: TahtaZemini(
+          child: SafeArea(
+            child: RefreshIndicator(
+              color: Renkler.vurgu,
+              backgroundColor: Renkler.yuzey,
+              onRefresh: () {
+                ref.invalidate(bugunkuIzgaraProvider);
+                return ref.refresh(bugunOynananlarProvider.future);
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(18, 6, 18, 32),
+                children: [
+                  _UstBar(kullanici: kullanici),
+                  const SizedBox(height: 14),
+                  Text(
+                    kullanici != null ? 'Merhaba, ${kullanici.ilkAd}' : 'Merhaba',
+                    style: Yazi.tebesir(26, kalinlik: FontWeight.w400),
                   ),
-                if (yakindakiModlar.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  const _BolumBasligi('Yakında'),
-                  YakindaListesi(modlar: yakindakiModlar),
+                  GunlukSerit(tamamlanan: tamamlanan, toplam: aktifModlar.length),
+                  const SizedBox(height: 18),
+                  // İki sütunlu ızgara: yan yana iki kutucuk aynı boyda durur
+                  for (var i = 0; i < kutucuklar.length; i += 2)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: kutucuklar[i]),
+                            const SizedBox(width: 10),
+                            Expanded(child: i + 1 < kutucuklar.length ? kutucuklar[i + 1] : const SizedBox()),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'gece yarısı tahta silinir, yeni oyunlar yazılır',
+                    textAlign: TextAlign.center,
+                    style: Yazi.tebesir(15, renk: Renkler.metinSoluk, kalinlik: FontWeight.w400),
+                  ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _kutucuk(
+    BuildContext context,
+    WidgetRef ref,
+    OyunModu mod,
+    Map<String, int> skorlar,
+    BugunkuIzgara? bugunku,
+  ) {
+    if (mod.zorluklu) {
+      // Zorluklu oyunda günde tek zorluk oynanır: bugün başlanan tahta (yarım ya da bitmiş) kutucukta gösterilir
+      final devamEdiyor = bugunku != null && !bugunku.bitti;
+      final oynanan = devamEdiyor ? null : IzgaraZorlugu.values.where((z) => skorlar.containsKey(z.oyunTipi)).firstOrNull;
+      return OyunKarti(
+        mod: mod,
+        bugunkuSkor: oynanan != null ? skorlar[oynanan.oyunTipi] : null,
+        oynananZorluk: (oynanan ?? bugunku?.zorluk)?.ad,
+        devamEdiyor: devamEdiyor,
+        onTap: () => _modaTiklandi(context, ref, mod),
+      );
+    }
+    return OyunKarti(
+      mod: mod,
+      bugunkuSkor: skorlar[mod.tip],
+      onTap: () => _modaTiklandi(context, ref, mod),
     );
   }
 }
@@ -117,12 +158,7 @@ class _UstBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.sports_soccer, color: Renkler.basari, size: 22),
-        const SizedBox(width: 8),
-        const Text(
-          'FootyLore',
-          style: TextStyle(color: Renkler.metin, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 0.3),
-        ),
+        const FootyLoreLogo(),
         const Spacer(),
         IconButton(
           tooltip: 'Hesap',
@@ -180,13 +216,14 @@ class _UstBar extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Renkler.yuzey,
-        title: const Text('Çıkış yapılsın mı?', style: TextStyle(color: Renkler.metin)),
-        content: const Text(
-          'Tekrar oynamak için Google hesabınla yeniden giriş yapman gerekecek.',
-          style: TextStyle(color: Renkler.metinIkincil),
-        ),
+        title: const Text('Çıkış yapılsın mı?'),
+        content: const Text('Tekrar oynamak için Google hesabınla yeniden giriş yapman gerekecek.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil),
+            child: const Text('Vazgeç'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Renkler.hata),
@@ -210,37 +247,21 @@ class _Avatar extends StatelessWidget {
     final fotoUrl = kullanici?.fotoUrl;
     final ad = kullanici?.ilkAd ?? '';
 
-    return CircleAvatar(
+    final avatar = CircleAvatar(
       radius: yaricap,
-      backgroundColor: Renkler.yuzeyYuksek,
+      backgroundColor: Renkler.yuzey,
       foregroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
       onForegroundImageError: fotoUrl != null ? (_, _) {} : null,
       child: Text(
         ad.isNotEmpty ? ad[0].toUpperCase() : '?',
-        style: TextStyle(color: Renkler.basari, fontWeight: FontWeight.w700, fontSize: yaricap * 0.8),
+        style: Yazi.baslik(yaricap * 0.9, kalinlik: FontWeight.w800),
       ),
     );
-  }
-}
-
-class _BolumBasligi extends StatelessWidget {
-  final String metin;
-
-  const _BolumBasligi(this.metin);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 2, bottom: 10),
-      child: Text(
-        metin.toUpperCase(),
-        style: const TextStyle(
-          color: Renkler.metinSoluk,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
-        ),
-      ),
+    // Tebeşirle çizilmiş çerçeve
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Renkler.kenar, width: 1.5)),
+      child: avatar,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/screens/game_screen.dart';
+import 'package:mobile/widgets/kulup_logosu.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
@@ -47,13 +48,14 @@ void main() {
       sorular[0] = {'kulup_a': 'Galatasaray', 'kulup_b': 'Parma', 'kulup_a_logo': 'https://logo.test/141.png', 'zorluk': 'kolay'};
     });
 
-    // Kulübün ismiyle logosunu taşıyan en yakın sütun
-    Finder kulup(String isim) => find.ancestor(of: find.text(isim), matching: find.byType(Column)).first;
+    // Logolar soldan sağa kulüp sırasıyla: önce Galatasaray, sonra Parma
+    final logolar = find.byType(KulupLogosu);
+    expect(logolar, findsNWidgets(2));
 
-    final logo = tester.widget<Image>(find.descendant(of: kulup('Galatasaray'), matching: find.byType(Image)));
+    final logo = tester.widget<Image>(find.descendant(of: logolar.at(0), matching: find.byType(Image)));
     expect((logo.image as ResizeImage).imageProvider, isA<NetworkImage>());
-    expect(find.descendant(of: kulup('Parma'), matching: find.byType(Image)), findsNothing);
-    expect(find.descendant(of: kulup('Parma'), matching: find.byIcon(Icons.shield_outlined)), findsOneWidget);
+    expect(find.descendant(of: logolar.at(1), matching: find.byType(Image)), findsNothing);
+    expect(find.descendant(of: logolar.at(1), matching: find.byIcon(Icons.shield_outlined)), findsOneWidget);
   });
 
   testWidgets('tek harfle arama yapılmaz, iki harften sonra öneri listesi çıkar', (tester) async {

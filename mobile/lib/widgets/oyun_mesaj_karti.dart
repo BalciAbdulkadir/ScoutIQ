@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 
 // Oyun ekranlarında oyun yerine gösterilen durum mesajı (oyun yok, bugün oynandı, bağlantı sorunu...)
 class OyunMesajKarti extends StatelessWidget {
@@ -27,14 +28,14 @@ class OyunMesajKarti extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(color: Renkler.yuzey, shape: BoxShape.circle),
-              child: Icon(ikon, size: 32, color: Renkler.metinIkincil),
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Renkler.kenar, width: 1.5)),
+              child: Icon(ikon, size: 30, color: Renkler.vurgu),
             ),
             const SizedBox(height: 20),
             Text(
               baslik,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Renkler.metin),
+              style: Yazi.baslik(26, kalinlik: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             Text(
@@ -47,7 +48,7 @@ class OyunMesajKarti extends StatelessWidget {
               FilledButton(
                 onPressed: onTekrarDene,
                 style: FilledButton.styleFrom(minimumSize: const Size(200, 48)),
-                child: const Text('Tekrar dene', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: const Text('Tekrar dene'),
               ),
               const SizedBox(height: 8),
             ],

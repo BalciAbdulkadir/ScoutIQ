@@ -12,7 +12,7 @@ namespace ScoutIQ.API.Oyunlar
     // Kolay: sadece kulüpler. Orta: kulüpler + çok bilinen milli takımlardan 1-2 tanesi.
     // Zor: kulüpler + diğer milli takımlardan 1-2 tanesi.
     // Milli takımlar hep aynı eksende olur: "Fransa x İspanya" gibi neredeyse çözümsüz hücre oluşmaz.
-    // Oyun kuralları (9 tahmin hakkı, oyuncu tekrarı yok, hücreye yerleştirme) sunucuda, 011_izgara.sql'de.
+    // Oyun kuralları (oyuncu tekrarı yok, hücreye yerleştirme, süre) sunucuda, 011_izgara.sql ve 013_izgara_sure.sql'de.
     public class IzgaraSoruSecici
     {
         public enum Zorluk { Kolay, Orta, Zor }

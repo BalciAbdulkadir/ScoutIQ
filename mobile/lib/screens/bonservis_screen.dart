@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bonservis_sorusu.dart';
 import '../providers/bonservis_provider.dart';
 import '../theme/renkler.dart';
+import '../theme/yazi.dart';
 import '../widgets/bonservis_oyuncu_karti.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
+import '../widgets/tebesir.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
@@ -21,7 +23,7 @@ class BonservisScreen extends ConsumerStatefulWidget {
 }
 
 class _BonservisScreenState extends ConsumerState<BonservisScreen> {
-  static const _maksimumSkor = 5;
+  static const _maksimumSkor = 10;
 
   Timer? _devamZamanlayici;
 
@@ -60,15 +62,15 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final durum = ref.watch(bonservisProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bonservis')),
-      body: SafeArea(child: _govde(durum)),
+      appBar: AppBar(title: const Text('BONSERVİS')),
+      body: TahtaZemini(child: SafeArea(child: _govde(durum))),
     );
   }
 
   Widget _govde(BonservisState durum) {
     switch (durum.durum) {
       case BonservisDurumu.yukleniyor:
-        return const Center(child: CircularProgressIndicator(color: Renkler.bonservis));
+        return const Center(child: CircularProgressIndicator());
       case BonservisDurumu.hata:
         return OyunMesajKarti(
           ikon: Icons.wifi_off_rounded,
@@ -120,7 +122,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
                   mevcutSoru: durum.soruIndex,
                   sonuclar: durum.sonuclar,
                   renk: Renkler.bonservis,
-                  sagMetin: '${durum.skor} doğru',
+                  sagMetin: '${durum.skor} puan',
                 ),
                 const SizedBox(height: 24),
                 const Spacer(),
@@ -184,17 +186,18 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           onPressed: aktif ? () => _tahminEt(dahaFazla) : null,
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(64),
-            backgroundColor: Renkler.yuzeyYuksek,
-            foregroundColor: Renkler.metin,
-            disabledBackgroundColor: Renkler.yuzey,
+            backgroundColor: dahaFazla ? Renkler.vurgu : Colors.transparent,
+            foregroundColor: dahaFazla ? Renkler.arkaPlan : Renkler.metin,
+            disabledBackgroundColor: Colors.transparent,
             disabledForegroundColor: Renkler.metinSoluk,
+            textStyle: Yazi.baslik(19, kalinlik: FontWeight.w900),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Renkler.kenar),
+              borderRadius: BorderRadius.circular(6),
+              side: BorderSide(color: dahaFazla && aktif ? Renkler.vurgu : Renkler.kenar, width: 1.5),
             ),
           ),
-          icon: Icon(ikon, size: 20, color: aktif ? Renkler.bonservis : Renkler.metinSoluk),
-          label: Text(metin, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          icon: Icon(ikon, size: 20),
+          label: Text(metin),
         ),
       );
     }
@@ -209,10 +212,12 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   }
 
   Widget _bitis(BonservisState durum) {
+    final dogruSayisi = durum.sonuclar.where((d) => d).length;
+
     return OyunBitisEkrani(
-      skor: '${durum.skor}/${durum.sorular.length}',
-      skorAciklamasi: 'doğru',
-      baslik: bitisBasligi(durum.skor, durum.sorular.length),
+      skor: '${durum.skor}/$_maksimumSkor',
+      skorAciklamasi: 'puan',
+      baslik: bitisBasligi(dogruSayisi, durum.sorular.length),
       renk: Renkler.bonservis,
       ozetSatirlari: [
         for (var i = 0; i < durum.sonuclar.length; i++) _ozetSatiri(durum.sorular[i], durum.sonuclar[i]),
@@ -242,14 +247,13 @@ class _SonucBandi extends StatelessWidget {
   Widget build(BuildContext context) {
     final renk = dogru ? Renkler.basari : Renkler.hata;
     final fark = (soru.rakip.toplamBonservis - soru.referans.toplamBonservis).abs();
-    final butonMetni = (!dogru || sonSoru) ? 'Sonuçları gör' : 'Devam';
+    final butonMetni = sonSoru ? 'Sonuçları gör' : 'Devam';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
       decoration: BoxDecoration(
-        color: Renkler.yuzey,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: renk.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: renk, width: 1.5),
       ),
       child: Row(
         children: [
@@ -262,7 +266,9 @@ class _SonucBandi extends StatelessWidget {
               children: [
                 Text(
                   dogru ? 'Doğru' : 'Yanlış',
-                  style: TextStyle(color: renk, fontSize: 16, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Yazi.tebesir(17, renk: renk).copyWith(height: 1.0),
                 ),
                 Text(
                   '${soru.pahaliOlan.isim}, ${bonservisMetni(fark)} daha pahalı',
@@ -275,8 +281,8 @@ class _SonucBandi extends StatelessWidget {
           ),
           TextButton(
             onPressed: onDevam,
-            style: TextButton.styleFrom(foregroundColor: Renkler.metin),
-            child: Text(butonMetni, style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: TextButton.styleFrom(foregroundColor: Renkler.vurgu),
+            child: Text(butonMetni, style: Yazi.tebesir(15, renk: Renkler.vurgu)),
           ),
         ],
       ),
