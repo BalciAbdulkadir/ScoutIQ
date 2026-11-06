@@ -37,9 +37,15 @@ class OyunKarti extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _ikon(),
-            const Spacer(),
-            // Bitmiş kutucukta sağ üst köşe damgaya ayrılır
-            if (!_bitti) _sagUst(),
+            const SizedBox(width: 8),
+            // Bitmiş kutucukta sağ üst köşe damgaya ayrılır. Dar ekranda yazı küçülür, taşmaz.
+            if (!_bitti)
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: FittedBox(fit: BoxFit.scaleDown, child: _sagUst()),
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 14),

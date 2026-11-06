@@ -43,10 +43,6 @@ class IzgaraScreen extends ConsumerWidget {
             const Flexible(child: Text('IZGARA', overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 10),
             OyunEtiketi(metin: zorluk.ad, renk: zorlukRengi(zorluk)),
-            if (sure.saniye != null) ...[
-              const SizedBox(width: 6),
-              OyunEtiketi(metin: sure.ad, renk: Renkler.metinIkincil),
-            ],
           ],
         ),
         actions: [

@@ -66,9 +66,14 @@ class _GunlukSeritState extends ConsumerState<GunlukSerit> {
                     children: [
                       Flexible(child: TebesirCentikleri(toplam: widget.toplam, biten: widget.tamamlanan)),
                       const SizedBox(width: 4),
-                      Text(
-                        hepsiBitti ? 'Hepsi bitti' : '${widget.tamamlanan} / ${widget.toplam}',
-                        style: Yazi.tebesir(16, renk: Renkler.vurgu),
+                      Flexible(
+                        child: Text(
+                          hepsiBitti ? 'Hepsi bitti' : '${widget.tamamlanan} / ${widget.toplam}',
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                          style: Yazi.tebesir(16, renk: Renkler.vurgu),
+                        ),
                       ),
                     ],
                   ),

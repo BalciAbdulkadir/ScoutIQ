@@ -110,7 +110,6 @@ void main() {
     final ekran = tester.widget<IzgaraScreen>(find.byType(IzgaraScreen));
     expect(ekran.zorluk, IzgaraZorlugu.orta);
     expect(ekran.sure, OyunSuresi.saniye60);
-    expect(find.text('60 SN'), findsOneWidget);
     expect(find.text('1:00'), findsOneWidget);
     await ekraniKapat(tester);
   });

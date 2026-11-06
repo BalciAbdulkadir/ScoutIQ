@@ -262,7 +262,12 @@ class _SonucBandi extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(dogru ? 'Doğru' : 'Yanlış', style: Yazi.tebesir(18, renk: renk)),
+                Text(
+                  dogru ? 'Doğru' : 'Yanlış',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Yazi.tebesir(17, renk: renk).copyWith(height: 1.0),
+                ),
                 Text(
                   '${soru.pahaliOlan.isim}, ${bonservisMetni(fark)} daha pahalı',
                   maxLines: 1,
@@ -275,7 +280,7 @@ class _SonucBandi extends StatelessWidget {
           TextButton(
             onPressed: onDevam,
             style: TextButton.styleFrom(foregroundColor: Renkler.vurgu),
-            child: Text(butonMetni, style: Yazi.tebesir(17, renk: Renkler.vurgu)),
+            child: Text(butonMetni, style: Yazi.tebesir(15, renk: Renkler.vurgu)),
           ),
         ],
       ),
