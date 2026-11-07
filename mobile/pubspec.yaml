@@ -57,6 +57,10 @@ flutter_launcher_icons:
   android: true
   ios: true
   remove_alpha_ios: true
+  # Android 8+: görsel olduğu gibi ön katmanda, görünür alanı tam kaplar (beyaz çerçeve olmaz).
+  adaptive_icon_background: "#133729"
+  adaptive_icon_foreground: "assets/icons/icon_v1.jpeg"
+  adaptive_icon_foreground_inset: 16
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
