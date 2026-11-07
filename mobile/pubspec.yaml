@@ -49,6 +49,20 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# Uygulama ikonu: değiştirdikten sonra `dart run flutter_launcher_icons` ile yeniden üretilir.
+# Android 8+: ikonun şeklini (daire, yuvarlatılmış kare ...) telefon belirler. Zemin ikonun tamamını kaplar,
+# tebeşir çizimi her maskede görünen orta alanda durur. Katmanlar assets/icons/ikon_katmanlari.py ile üretilir.
+# iOS ve Android 7 ve öncesi: tebeşir çerçeveli asıl görsel.
+flutter_launcher_icons:
+  image_path: "assets/icons/icon_v1.jpeg"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  adaptive_icon_background: "assets/icons/ikon_zemin.png"
+  adaptive_icon_foreground: "assets/icons/ikon_on_katman.png"
+  adaptive_icon_foreground_inset: 0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -60,6 +74,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Tebeşirle çizilmiş FootyLore logosu (zemini şeffaf)
+  assets:
+    - assets/images/footylore_logo.png
 
   # Taktik tahtası teması: başlıklar Big Shoulders Display, tebeşir yazısı Kalam, gövde Instrument Sans.
   # Hepsi SIL Open Font License ile dağıtılır (assets/fonts/OFL.txt).

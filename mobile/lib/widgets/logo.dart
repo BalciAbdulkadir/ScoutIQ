@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
-import '../theme/renkler.dart';
-import '../theme/yazi.dart';
 
-// FOOTY beyaz, LORE tebeşir sarısı
+// Tebeşirle çizilmiş FootyLore logosu: FOOTY LORE yazısı, O'dan çıkan taktik oku ve topa dönüşen O.
+// Zemini şeffaf, tahta zemininin üstüne oturur.
 class FootyLoreLogo extends StatelessWidget {
-  final double boyut;
+  final double genislik;
 
-  const FootyLoreLogo({super.key, this.boyut = 24});
+  const FootyLoreLogo({super.key, this.genislik = 170});
+
+  // Görselin en / boy oranı (1200 x 262)
+  static const enBoyOrani = 1200 / 262;
 
   @override
   Widget build(BuildContext context) {
-    final stil = Yazi.baslik(boyut, kalinlik: FontWeight.w900).copyWith(letterSpacing: boyut * 0.05);
-    return Text.rich(
-      TextSpan(children: [
-        const TextSpan(text: 'FOOTY'),
-        TextSpan(text: 'LORE', style: stil.copyWith(color: Renkler.vurgu)),
-      ]),
-      style: stil,
-      semanticsLabel: 'FootyLore',
+    return Semantics(
+      label: 'FootyLore',
+      image: true,
+      child: Image.asset(
+        'assets/images/footylore_logo.png',
+        width: genislik,
+        height: genislik / enBoyOrani,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        excludeFromSemantics: true,
+      ),
     );
   }
 }
