@@ -37,6 +37,9 @@ final sorular = [
 // Her sorunun doğru tahmini: sağdaki oyuncu daha mı pahalı
 const dogruTahminler = [true, false, true, false, true];
 
+// Testler Bonservis'in zor zorluğunu oynar
+const testOyunTipi = 'bonservis_zor';
+
 SahteOyunDeposu bonservisDeposu() => SahteOyunDeposu()..oyun = {'id': 'oyun-b', 'soru_verisi': sorular};
 
 Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyunDeposu)? ayarla]) async {
@@ -45,16 +48,16 @@ Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyu
 
   final container = ProviderContainer(overrides: [oyunDeposuProvider.overrideWithValue(depo)]);
   addTearDown(container.dispose);
-  container.listen(bonservisProvider, (_, _) {});
+  container.listen(bonservisProvider(testOyunTipi), (_, _) {});
 
-  for (var i = 0; i < 100 && container.read(bonservisProvider).durum == BonservisDurumu.yukleniyor; i++) {
+  for (var i = 0; i < 100 && container.read(bonservisProvider(testOyunTipi)).durum == BonservisDurumu.yukleniyor; i++) {
     await Future<void>.delayed(Duration.zero);
   }
   return (container, depo);
 }
 
-BonservisNotifier notifier(ProviderContainer c) => c.read(bonservisProvider.notifier);
-BonservisState durum(ProviderContainer c) => c.read(bonservisProvider);
+BonservisNotifier notifier(ProviderContainer c) => c.read(bonservisProvider(testOyunTipi).notifier);
+BonservisState durum(ProviderContainer c) => c.read(bonservisProvider(testOyunTipi));
 
 void main() {
   group('Sorular', () {
@@ -224,7 +227,7 @@ void main() {
       final depo = bonservisDeposu();
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-        child: const MaterialApp(home: BonservisScreen()),
+        child: const MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi)),
       ));
       await tester.pumpAndSettle();
       return depo;
@@ -242,7 +245,7 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(bonservisDeposu())],
-        child: const MaterialApp(home: BonservisScreen()),
+        child: const MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi)),
       ));
       await tester.pumpAndSettle();
 

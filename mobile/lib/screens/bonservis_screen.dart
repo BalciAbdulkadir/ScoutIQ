@@ -13,7 +13,10 @@ import '../widgets/tebesir.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
-  const BonservisScreen({super.key});
+  // Oynanan zorluğun günlük oyunu: bonservis_kolay, bonservis_orta ya da bonservis_zor
+  final String oyunTipi;
+
+  const BonservisScreen({super.key, required this.oyunTipi});
 
   // Sonuç gösterildikten sonra sıradaki soruya kendiliğinden geçmeden önceki bekleme
   static const sonucBeklemesi = Duration(milliseconds: 1800);
@@ -34,7 +37,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   }
 
   Future<void> _tahminEt(bool dahaFazla) async {
-    final hata = await ref.read(bonservisProvider.notifier).tahminEt(dahaFazla: dahaFazla);
+    final hata = await ref.read(bonservisProvider(widget.oyunTipi).notifier).tahminEt(dahaFazla: dahaFazla);
     if (!mounted) return;
 
     if (hata != null) {
@@ -45,7 +48,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     }
 
     // Bedel açıldı: kullanıcı sonucu görsün, sonra sıradaki soruya geç
-    if (ref.read(bonservisProvider).sonCevapDogru != null) {
+    if (ref.read(bonservisProvider(widget.oyunTipi)).sonCevapDogru != null) {
       _devamZamanlayici?.cancel();
       _devamZamanlayici = Timer(BonservisScreen.sonucBeklemesi, _devamEt);
     }
@@ -54,12 +57,12 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   void _devamEt() {
     _devamZamanlayici?.cancel();
     if (!mounted) return;
-    ref.read(bonservisProvider.notifier).devamEt();
+    ref.read(bonservisProvider(widget.oyunTipi).notifier).devamEt();
   }
 
   @override
   Widget build(BuildContext context) {
-    final durum = ref.watch(bonservisProvider);
+    final durum = ref.watch(bonservisProvider(widget.oyunTipi));
 
     return Scaffold(
       appBar: AppBar(title: const Text('BONSERVİS')),
@@ -76,7 +79,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: durum.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(bonservisProvider),
+          onTekrarDene: () => ref.invalidate(bonservisProvider(widget.oyunTipi)),
         );
       case BonservisDurumu.oyunYok:
         return const OyunMesajKarti(

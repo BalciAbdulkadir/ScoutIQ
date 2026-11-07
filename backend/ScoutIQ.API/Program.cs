@@ -20,21 +20,21 @@ builder.Services.AddTransient<DailyQuestionJob>();
 
 var app = builder.Build();
 
-// Zorluk ayarı için: "dotnet run -- --kesisim-onizleme" bir soru seti seçip ekrana basar, veritabanına yazmaz
+// Zorluk ayarı için: "dotnet run -- --kesisim-onizleme" her moddan (kolay, orta, zor) bir soru seti seçip ekrana basar, veritabanına yazmaz
 if (args.Contains("--kesisim-onizleme"))
 {
     await app.Services.GetRequiredService<DailyQuestionJob>().KesisimOnizleme();
     return;
 }
 
-// "dotnet run -- --bonservis-onizleme" bir Bonservis soru seti seçip ekrana basar, veritabanına yazmaz
+// "dotnet run -- --bonservis-onizleme" her moddan bir Bonservis soru seti seçip ekrana basar, veritabanına yazmaz
 if (args.Contains("--bonservis-onizleme"))
 {
     await app.Services.GetRequiredService<DailyQuestionJob>().BonservisOnizleme();
     return;
 }
 
-// "dotnet run -- --izgara-onizleme" her zorluktan bir Izgara tahtası seçip ekrana basar, veritabanına yazmaz
+// "dotnet run -- --izgara-onizleme" her moddan bir Izgara tahtası seçip ekrana basar, veritabanına yazmaz
 if (args.Contains("--izgara-onizleme"))
 {
     await app.Services.GetRequiredService<DailyQuestionJob>().IzgaraOnizleme();

@@ -8,9 +8,50 @@ import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import 'tebesir.dart';
 
+// Ana menüde Kesişim ya da Bonservis kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipiyle oyun ekranını kurar.
+// - Bugün bir zorluk açıldıysa sorulmadan o zorluk açılır (oyun ekranı bitmiş oyunun sonucunu gösterir).
+//   Her oyunda günde tek zorluk oynanır, sunucu da buna izin vermez (018_zorluk_modlari.sql).
+// - Yoksa zorluk seçilir ve oyun açılır. Bu oyunlarda süre seçimi yoktur.
+// Dönünce ana menü tazelenir.
+Future<void> zorlukluOyunuAc(BuildContext context, WidgetRef ref, OyunModu mod, Widget Function(String oyunTipi) ekran) async {
+  final oyun = mod.tip!;
+  final altTipler = mod.altTipler!;
+  int? zorluk;
+
+  try {
+    zorluk = (await ref.read(bugunkuModProvider(oyun).future))?.zorluk;
+  } catch (_) {
+    // Bilinmiyorsa seçim gösterilir; sunucu ikinci bir zorluğun başlatılmasına zaten izin vermez
+  }
+  if (!context.mounted) return;
+
+  if (zorluk == null) {
+    final secim = await showModalBottomSheet<ZorlukSureSecimi>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => ZorlukSureSecimSayfasi(
+        oyunAdi: mod.baslik,
+        cizim: mod.cizim ?? TebesirCizimi.kesisim,
+        zorluklar: [
+          for (var i = 0; i < altTipler.length; i++) (ad: zorlukAdlari[i], aciklama: mod.zorlukAciklamalari?[i] ?? ''),
+        ],
+        sureSecilir: false,
+      ),
+    );
+    if (secim == null || !context.mounted) return;
+    zorluk = secim.zorluk;
+  }
+
+  await Navigator.push(context, MaterialPageRoute(builder: (context) => ekran(altTipler[zorluk!])));
+  if (!context.mounted) return;
+  ref.invalidate(bugunOynananlarProvider);
+  ref.invalidate(bugunkuModProvider(oyun));
+}
+
 // Ana menüde Izgara kutucuğuna dokununca çağrılır.
 // - Bugün bir tahtaya başlandıysa sorulmadan o tahta açılır: yarımsa kaldığı yerden (sunucudaki kalan süresiyle),
-//   bittiyse sonucuyla. Zorluklu oyunlarda günde tek zorluk oynanır, sunucu da buna izin vermez (014).
+//   bittiyse sonucuyla. Zorluklu oyunlarda günde tek zorluk oynanır, sunucu da buna izin vermez (018).
 // - Yoksa önce zorluk, sonra süre seçilir ve tahta açılır.
 // Dönünce ana menü tazelenir.
 Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
@@ -44,19 +85,28 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
   await Navigator.push(context, MaterialPageRoute(builder: (context) => IzgaraScreen(zorluk: zorluk, sure: sure.saniye)));
   if (!context.mounted) return;
   ref.invalidate(bugunOynananlarProvider);
+  ref.invalidate(bugunkuModProvider('izgara'));
   ref.invalidate(bugunkuIzgaraProvider);
 }
 
 // Seçim sayfasının sonucu: zorluğun sırası (0 kolay, 1 orta, 2 zor) ve süre
 typedef ZorlukSureSecimi = ({int zorluk, OyunSuresi sure});
 
-// Zorluklu her oyunda kullanılan iki adımlı alt sayfa: önce 3 zorluktan biri, sonra 4 süreden biri.
+// Zorluklu her oyunda kullanılan alt sayfa: önce 3 zorluktan biri, sureSecilir ise sonra 4 süreden biri.
+// Süre seçilmeyen oyunlarda zorluğa dokununca sayfa kapanır ve oyun süresiz açılır.
 class ZorlukSureSecimSayfasi extends StatefulWidget {
   final String oyunAdi;
   final TebesirCizimi cizim;
   final List<({String ad, String aciklama})> zorluklar;
+  final bool sureSecilir;
 
-  const ZorlukSureSecimSayfasi({super.key, required this.oyunAdi, required this.cizim, required this.zorluklar});
+  const ZorlukSureSecimSayfasi({
+    super.key,
+    required this.oyunAdi,
+    required this.cizim,
+    required this.zorluklar,
+    this.sureSecilir = true,
+  });
 
   @override
   State<ZorlukSureSecimSayfasi> createState() => _ZorlukSureSecimSayfasiState();
@@ -126,13 +176,22 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _baslik(aciklama: 'Bugün yalnızca bir zorluk oynayabilirsin.'),
-        _adim('1 · Zorluk seç'),
+        _adim(widget.sureSecilir ? '1 · Zorluk seç' : 'Zorluk seç'),
         for (var i = 0; i < widget.zorluklar.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
           _SecimSatiri(
             baslik: widget.zorluklar[i].ad,
             aciklama: widget.zorluklar[i].aciklama,
-            onTap: () => setState(() => _zorluk = i),
+            onTap: () => widget.sureSecilir
+                ? setState(() => _zorluk = i)
+                : Navigator.pop(context, (zorluk: i, sure: OyunSuresi.suresiz)),
+          ),
+        ],
+        if (!widget.sureSecilir) ...[
+          const SizedBox(height: 14),
+          Text(
+            'Seçtiğin anda ${widget.oyunAdi} başlar ve bugünlük kapanır, başka zorluk seçilemez.',
+            style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
           ),
         ],
       ],

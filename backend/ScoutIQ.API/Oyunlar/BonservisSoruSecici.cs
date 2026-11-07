@@ -4,12 +4,13 @@ using System.Linq;
 
 namespace ScoutIQ.API.Oyunlar
 {
-    // Bonservis oyununun 5 sorusunu seçer. Veritabanına dokunmaz: aday oyuncuları parametre olarak alır,
+    // Bonservis oyununun bir modu için 5 soruyu seçer. Veritabanına dokunmaz: aday oyuncuları parametre olarak alır,
     // böylece kurallar gerçek veri olmadan test edilebilir.
     //
     // Her soruda rastgele iki oyuncu çıkar, toplam bonservisi fazla olan doğru cevaptır.
     // Bir oyunda aynı oyuncu iki kez çıkmaz: 5 soru, 10 farklı oyuncu.
-    // Yanlış cevapta oyun biter (bu kural mobil tarafta).
+    // 10 oyuncunun kademeleri modun dağılımına uyar (ZorlukDagilimi): kolay 10 ünlü, orta 5 ünlü + 5 bilinen,
+    // zor 4 ünlü + 3 bilinen + 3 diğer. Puanlama mobil tarafta: her doğru 2 puan, yanlışta oyun bitmez.
     public class BonservisSoruSecici
     {
         public const int SoruSayisi = 5;
@@ -40,7 +41,7 @@ namespace ScoutIQ.API.Oyunlar
         };
 
         // FotoUrl seçimi etkilemez, sadece soruyla birlikte uygulamaya taşınır
-        public record Aday(string Id, string Isim, long ToplamBonservis, string? FotoUrl = null);
+        public record Aday(string Id, string Isim, long ToplamBonservis, Kademe Kademe, string? FotoUrl = null);
 
         // Sol ve Sag ekrandaki yerlerdir; doğru cevabın hangi tarafta olacağı rastgeledir
         public record BonservisSorusu(Aday Sol, Aday Sag)
@@ -66,11 +67,13 @@ namespace ScoutIQ.API.Oyunlar
         }
 
         // 5 soruyu döndürür, kurallara uyan 5 ikili bulunamazsa null
-        public List<BonservisSorusu>? Sec(IEnumerable<Aday> adaylar)
+        public List<BonservisSorusu>? Sec(Zorluk zorluk, IEnumerable<Aday> adaylar)
         {
+            var kota = ZorlukDagilimi.Dagit(zorluk, SoruSayisi * 2);
+
             // Sıralı alınıp sonra karıştırılır ki aynı tohumla (seed) aynı sonuç çıksın
             var havuz = adaylar
-                .Where(a => a.ToplamBonservis > MinToplamBonservis)
+                .Where(a => a.ToplamBonservis > MinToplamBonservis && kota.GetValueOrDefault(a.Kademe) > 0)
                 .GroupBy(a => a.Id)
                 .Select(g => g.First())
                 .OrderBy(a => a.Id, StringComparer.Ordinal)
@@ -79,39 +82,49 @@ namespace ScoutIQ.API.Oyunlar
 
             _adim = 0;
             var ikililer = new List<(Aday, Aday)>();
-            if (!IkilileriTamamla(havuz, 0, new HashSet<string>(), ikililer)) return null;
+            if (!IkilileriTamamla(havuz, 0, new HashSet<string>(), kota, ikililer)) return null;
 
             return ikililer
                 .Select(i => _random.Next(2) == 0 ? new BonservisSorusu(i.Item1, i.Item2) : new BonservisSorusu(i.Item2, i.Item1))
                 .ToList();
         }
 
-        // Karışık sırada gezer, her oyuncuya kurallara uyan kullanılmamış bir eş arar.
-        // Bir ikili sonraki soruları imkânsız kılarsa geri dönüp başka eş ya da başka oyuncu dener.
-        private bool IkilileriTamamla(List<Aday> havuz, int bas, HashSet<string> kullanilan, List<(Aday, Aday)> ikililer)
+        // Karışık sırada gezer, her oyuncuya kurallara uyan kullanılmamış bir eş arar. Kota, her kademeden
+        // daha kaç oyuncu alınabileceğidir. Bir ikili sonraki soruları imkânsız kılarsa geri dönüp başka eş ya da başka oyuncu dener.
+        private bool IkilileriTamamla(List<Aday> havuz, int bas, HashSet<string> kullanilan, Dictionary<Kademe, int> kota,
+            List<(Aday, Aday)> ikililer)
         {
             if (ikililer.Count == SoruSayisi) return true;
 
             for (int i = bas; i < havuz.Count; i++)
             {
                 var a = havuz[i];
-                if (kullanilan.Contains(a.Id)) continue;
+                if (kullanilan.Contains(a.Id) || kota[a.Kademe] == 0) continue;
+                kota[a.Kademe]--;
 
                 for (int j = i + 1; j < havuz.Count; j++)
                 {
-                    if (++_adim > MaxAdim) return false;
+                    if (++_adim > MaxAdim)
+                    {
+                        kota[a.Kademe]++;
+                        return false;
+                    }
 
                     var b = havuz[j];
-                    if (kullanilan.Contains(b.Id) || !Eslesebilir(a, b)) continue;
+                    if (kullanilan.Contains(b.Id) || kota[b.Kademe] == 0 || !Eslesebilir(a, b)) continue;
 
+                    kota[b.Kademe]--;
                     kullanilan.Add(a.Id);
                     kullanilan.Add(b.Id);
                     ikililer.Add((a, b));
-                    if (IkilileriTamamla(havuz, i + 1, kullanilan, ikililer)) return true;
+                    if (IkilileriTamamla(havuz, i + 1, kullanilan, kota, ikililer)) return true;
                     ikililer.RemoveAt(ikililer.Count - 1);
                     kullanilan.Remove(a.Id);
                     kullanilan.Remove(b.Id);
+                    kota[b.Kademe]++;
                 }
+
+                kota[a.Kademe]++;
             }
 
             return false;

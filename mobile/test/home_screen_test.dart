@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/providers/hub_provider.dart';
+import 'package:mobile/screens/bonservis_screen.dart';
+import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/izgara_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
@@ -16,6 +18,7 @@ Future<void> anaMenuyuAc(
   WidgetTester tester, {
   Map<String, int> oynananlar = const {},
   BugunkuIzgara? bugunkuIzgara,
+  Map<String, BugunkuMod> bugunkuModlar = const {}, // oyun -> bugün açılan zorluk (Kesişim, Bonservis)
   List<Override> ekOverridelar = const [],
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
@@ -27,6 +30,7 @@ Future<void> anaMenuyuAc(
       kullaniciProvider.overrideWithValue(const KullaniciBilgisi(ad: 'Celal Test', eposta: 'test@ornek.com')),
       bugunOynananlarProvider.overrideWith((ref) async => oynananlar),
       bugunkuIzgaraProvider.overrideWith((ref) async => bugunkuIzgara),
+      bugunkuModProvider.overrideWith((ref, oyun) async => bugunkuModlar[oyun]),
       ...ekOverridelar,
     ],
     child: MaterialApp(theme: uygulamaTemasi(), home: const HomeScreen()),
@@ -46,25 +50,65 @@ void main() {
   });
 
   testWidgets('günlük ilerleme bitirilen oyunları sayar, biten kutucukta skor yazar', (tester) async {
-    await anaMenuyuAc(tester, oynananlar: {'kesisim': 6});
+    await anaMenuyuAc(tester, oynananlar: {'kesisim_kolay': 6});
 
     // Kesişim, Bonservis ve Izgara: 3 günlük oyun (Izgara'nın zorlukları tek oyun sayılır)
     expect(find.text('1 / 3'), findsOneWidget);
     expect(find.text('6/10'), findsOneWidget);
+    expect(find.text('KOLAY'), findsOneWidget); // Kesişim'de oynanan zorluk
     expect(find.text('Oyna'), findsNWidgets(2)); // Bonservis ve Izgara henüz oynanmadı
     await ekraniKapat(tester);
   });
 
-  testWidgets('oyunlar kategorisiz tek ızgarada, zorluklu oyunda K O Z, diğerlerinde tek mod yazar', (tester) async {
+  testWidgets('oyunlar kategorisiz tek ızgarada, her oyunda K O Z yazar', (tester) async {
     await anaMenuyuAc(tester);
 
     expect(find.text('KESİŞİM'), findsOneWidget);
     expect(find.text('BONSERVİS'), findsOneWidget);
     expect(find.text('IZGARA'), findsOneWidget);
-    expect(find.text('K'), findsOneWidget);
-    expect(find.text('O'), findsOneWidget);
-    expect(find.text('Z'), findsOneWidget);
-    expect(find.text('TEK MOD'), findsNWidgets(2));
+    expect(find.text('K'), findsNWidgets(3));
+    expect(find.text('O'), findsNWidgets(3));
+    expect(find.text('Z'), findsNWidgets(3));
+    expect(find.text('TEK MOD'), findsNothing);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('Kesişim\'e dokununca süre sorulmadan zorluk seçilir ve o zorluğun oyunu açılır', (tester) async {
+    final depo = SahteOyunDeposu();
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ZORLUK SEÇ'), findsOneWidget);
+    expect(find.text('Sadece ünlü oyuncular'), findsOneWidget);
+
+    await tester.tap(find.text('ORTA'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 · SÜRE SEÇ'), findsNothing);
+    expect(tester.widget<GameScreen>(find.byType(GameScreen)).oyunTipi, 'kesisim_orta');
+    expect(depo.istenenOyunTipleri, ['kesisim_orta']);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('bugün Bonservis\'in bir zorluğu açıldıysa seçim sorulmaz, o zorluk açılır', (tester) async {
+    final depo = SahteOyunDeposu()..kayit = {'skor': 6, 'durum': 'tamamlandi'};
+    await anaMenuyuAc(
+      tester,
+      oynananlar: {'bonservis_zor': 6},
+      bugunkuModlar: {'bonservis': (zorluk: 2, bitti: true)},
+      ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)],
+    );
+
+    expect(find.text('ZOR'), findsOneWidget);
+
+    await tester.tap(find.text('BONSERVİS'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ZORLUK SEÇ'), findsNothing);
+    expect(tester.widget<BonservisScreen>(find.byType(BonservisScreen)).oyunTipi, 'bonservis_zor');
+    expect(depo.kayitAcSayisi, 0);
     await ekraniKapat(tester);
   });
 
@@ -171,8 +215,8 @@ void main() {
 
   testWidgets('tüm oyunlar oynandıysa hepsinin bittiği yazar', (tester) async {
     await anaMenuyuAc(tester, oynananlar: {
-      'kesisim': 6,
-      'bonservis': 3,
+      'kesisim_kolay': 6,
+      'bonservis_zor': 3,
       'izgara_orta': 4,
     });
 

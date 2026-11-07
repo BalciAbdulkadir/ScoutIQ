@@ -4,6 +4,7 @@ import 'oyun_deposu.dart';
 const oturumYokMesaji = 'Oturumun kapanmış görünüyor. Lütfen tekrar giriş yap.';
 const yuklemeHataMesaji = 'Oyun yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.';
 const gonderimHataMesaji = 'Cevap gönderilemedi. İnternet bağlantını kontrol edip tekrar dene.';
+const baskaZorlukMesaji = 'Bu oyunu bugün başka bir zorlukta oynadın. Yeni oyunlar gece yarısı açılıyor.';
 
 // Bir günlük oyunu açmaya çalışmanın sonucu. Tüm oyun modları aynı "günde tek atış" kurallarını kullanır.
 sealed class OyunAcilisi {}
@@ -31,6 +32,9 @@ class YaridaBirakildi extends OyunAcilisi {
 class OyunYok extends OyunAcilisi {}
 
 class OturumYok extends OyunAcilisi {}
+
+// Kullanıcı bu oyunun bugün başka bir zorluğunu açmış: her oyunda günde tek zorluk oynanır
+class BaskaZorlukOynandi extends OyunAcilisi {}
 
 // Oyun günü telefonun saatinden değil sunucudan alınır, veritabanı kuralları da bu tarihe göre çalışır.
 // Sunucuya ulaşılamazsa aynı hesabı yapan yerel fonksiyona düşüyoruz.
@@ -82,6 +86,8 @@ Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi) async {
     final mevcut = await depo.oyunKaydi(userId, oyunTipi, tarih);
     if (mevcut != null) return _kayittanKilitle(depo, mevcut, userId, oyunTipi, tarih);
     rethrow;
+  } on BaskaModOynandi {
+    return BaskaZorlukOynandi();
   }
 
   return Oynanabilir(oyun['id'], sorular, tarih);

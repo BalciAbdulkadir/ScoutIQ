@@ -13,14 +13,17 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 
 ## C. Kapsam ve Fazlar
 6. Uygulama, futbol11.com benzeri ızgara (grid) yapısında birden fazla oyunu barındıran merkezi bir **Oyun Hub'ı**dır.
-7. İlk faz oyun modları:
-   - **Mod 1 – Kesişim Bulmacası:** Rastgele seçilen iki takımın ortak oyuncusunu bulma. (Mevcut geliştirme aşamasındaki oyun.)
-   - **Mod 2 – Bonservis Kıyaslaması:** İki oyuncunun geçmiş transfer bedellerini Daha Az / Daha Fazla mantığıyla karşılaştırma. 5 soru vardır; yanlış cevapta oyun bitmez, her doğru tahmin 2 puandır (en fazla 10).
-   - **Mod 3 – Izgara (3x3):** Satır ve sütun başlıklarının ikisine de uyan oyuncuları bulma. Kolay (sadece kulüpler), Orta (kulüpler + bilinen 20 milli takım) ve Zor (kulüpler + diğer milli takımlar) ayrı tahtalardır; kullanıcı günde bunlardan yalnızca birini oynar. Bir tahtada en fazla 2 milli takım olur. Tahmin hakkı sınırı yoktur; oyun dokuz kutu dolunca, pes edilince ya da süre dolunca biter. Kullanıcı hücre seçmez, doğru oyuncu uygun hücreye yerleşir. Aynı oyuncu iki kez kullanılamaz, pes edilebilir. Oyuncu önce zorluğu, ardından süreyi seçer (süre yok, 30, 60 ya da 90 saniye); süre bütün tahta içindir, sunucuda tutulur ve dolunca oyun o anki skorla biter.
+7. İlk faz oyun modları. Her oyunun Kolay, Orta ve Zor modu ayrı günlük oyundur; kullanıcı her oyunda günde bunlardan yalnızca birini seçip oynar. Zorluk, soruların oyuncu kademesinden gelir (kademeler: `unlu`, `bilinen`, `diger`; `data_miner/kademeler.py`):
+   - **Kolay:** sorular sadece ünlü oyunculardan. **Orta:** %50 ünlü, %50 bilinen. **Zor:** %40 ünlü, %30 bilinen, %30 diğer.
+   - Birden fazla doğru cevabı olan soru (Kesişim sorusu, Izgara hücresi) en bilinen cevabının kademesinden sayılır.
+   - Tam bölünmeyen yüzdeler kolaya yuvarlanır: 5 soruda orta 3+2, zor 2+2+1; 9 hücrede orta 5+4, zor 4+3+2; 10 oyuncuda orta 5+5, zor 4+3+3.
+   - **Mod 1 – Kesişim Bulmacası:** Rastgele seçilen iki takımın ortak oyuncusunu bulma. 5 soru vardır.
+   - **Mod 2 – Bonservis Kıyaslaması:** İki oyuncunun geçmiş transfer bedellerini Daha Az / Daha Fazla mantığıyla karşılaştırma. 5 soru (10 oyuncu) vardır; yanlış cevapta oyun bitmez, her doğru tahmin 2 puandır (en fazla 10).
+   - **Mod 3 – Izgara (3x3):** Satır ve sütun başlıklarının ikisine de uyan oyuncuları bulma. Kolay sadece kulüplerden, Orta kulüpler + bilinen 20 milli takımdan, Zor kulüpler + diğer milli takımlardan kurulur. Bir tahtada en fazla 2 milli takım olur. Tahmin hakkı sınırı yoktur; oyun dokuz kutu dolunca, pes edilince ya da süre dolunca biter. Kullanıcı hücre seçmez, doğru oyuncu uygun hücreye yerleşir. Aynı oyuncu iki kez kullanılamaz, pes edilebilir. Oyuncu önce zorluğu, ardından süreyi seçer (süre yok, 30, 60 ya da 90 saniye); süre bütün tahta içindir, sunucuda tutulur ve dolunca oyun o anki skorla biter.
 8. Bingo tarzı modlar **ileride** eklenecektir; ilk fazın parçası değildir.
 9. Aşağıdakiler **Faz 2** kapsamındadır, ilk fazda yapılmaz:
    - **Zamanlayıcı:** Belirli oyunlarda geri sayım sayacı. (Izgara'nın süre seçimi istisnadır, Mod 3'e bakınız.)
-   - **Zorluk Seviyeleri:** "Kolay" (ör. son 5 yıldaki oyuncular) / "Zor" (ör. tüm zamanlar). (Izgara'nın kendi zorlukları istisnadır, Mod 3'e bakınız.)
+   - **Zorluk Seviyeleri:** "Kolay" (ör. son 5 yıldaki oyuncular) / "Zor" (ör. tüm zamanlar). (Oyunların kademeye dayalı Kolay / Orta / Zor modları istisnadır, madde 7'ye bakınız.)
    - **Can Hakkı Sistemi:** Bazı oyunlarda 3 veya 5 yanlış cevap hakkı (kalp/can).
 
 ## D. Teknik Mimari

@@ -6,7 +6,6 @@ import '../providers/hub_provider.dart';
 import '../services/auth_service.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
-import '../models/izgara.dart';
 import '../widgets/gunluk_kart.dart';
 import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/oyun_karti.dart';
@@ -19,25 +18,14 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
-    // Zorluklu oyun: önce zorluk, sonra süre seçilir (yarım ya da bitmiş tahta varsa o açılır)
-    if (mod.tip == 'izgara') {
-      await izgaraAc(context, ref);
-      return;
-    }
-
-    final Widget? oyunEkrani = switch (mod.tip) {
-      'kesisim' => const GameScreen(),
-      'bonservis' => const BonservisScreen(),
+    // Her oyunda önce zorluk seçilir (bugün bir zorluk açıldıysa o açılır). Izgara'da zorluktan sonra süre de seçilir.
+    final Widget Function(String oyunTipi)? ekran = switch (mod.tip) {
+      'kesisim' => (oyunTipi) => GameScreen(oyunTipi: oyunTipi),
+      'bonservis' => (oyunTipi) => BonservisScreen(oyunTipi: oyunTipi),
       _ => null,
     };
-
-    if (oyunEkrani != null) {
-      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani));
-      // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
-      if (!context.mounted) return;
-      ref.invalidate(bugunOynananlarProvider);
-      return;
-    }
+    if (mod.tip == 'izgara') return izgaraAc(context, ref);
+    if (ekran != null) return zorlukluOyunuAc(context, ref, mod, ekran);
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -75,6 +63,7 @@ class HomeScreen extends ConsumerWidget {
               color: Renkler.vurgu,
               backgroundColor: Renkler.yuzey,
               onRefresh: () {
+                ref.invalidate(bugunkuModProvider);
                 ref.invalidate(bugunkuIzgaraProvider);
                 return ref.refresh(bugunOynananlarProvider.future);
               },
@@ -129,13 +118,15 @@ class HomeScreen extends ConsumerWidget {
     BugunkuIzgara? bugunku,
   ) {
     if (mod.zorluklu) {
-      // Zorluklu oyunda günde tek zorluk oynanır: bugün başlanan tahta (yarım ya da bitmiş) kutucukta gösterilir
+      // Zorluklu oyunda günde tek zorluk oynanır: bugün oynanan zorluk kutucukta gösterilir.
+      // Sadece Izgara yarıda bırakılıp devam ettirilebilir (bugunku sadece Izgara için gelir).
+      final altTipler = mod.altTipler!;
       final devamEdiyor = bugunku != null && !bugunku.bitti;
-      final oynanan = devamEdiyor ? null : IzgaraZorlugu.values.where((z) => skorlar.containsKey(z.oyunTipi)).firstOrNull;
+      final oynanan = devamEdiyor ? -1 : altTipler.indexWhere(skorlar.containsKey);
       return OyunKarti(
         mod: mod,
-        bugunkuSkor: oynanan != null ? skorlar[oynanan.oyunTipi] : null,
-        oynananZorluk: (oynanan ?? bugunku?.zorluk)?.ad,
+        bugunkuSkor: oynanan >= 0 ? skorlar[altTipler[oynanan]] : null,
+        oynananZorluk: oynanan >= 0 ? zorlukAdlari[oynanan] : bugunku?.zorluk.ad,
         devamEdiyor: devamEdiyor,
         onTap: () => _modaTiklandi(context, ref, mod),
       );

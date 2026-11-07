@@ -61,9 +61,12 @@ class BonservisState {
 
 // Bonservis oyunu: her soruda bir oyuncunun bedeli görünür, diğerininki için "daha fazla / daha az" tahmin edilir.
 // Yanlış tahminde oyun bitmez, beş sorunun hepsi oynanır. Her doğru tahmin 2 puan (en fazla 10).
+// Her zorluk ayrı bir günlük oyundur: oyunTipi bonservis_kolay, bonservis_orta ya da bonservis_zor.
 class BonservisNotifier extends Notifier<BonservisState> {
-  static const _oyunTipi = 'bonservis';
+  final String _oyunTipi;
   static const puan = 2;
+
+  BonservisNotifier(this._oyunTipi);
 
   late OyunDeposu _depo;
 
@@ -87,6 +90,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
         YaridaBirakildi(:final skor) => state.copyWith(durum: BonservisDurumu.yaridaBirakildi, skor: skor),
         OyunYok() => state.copyWith(durum: BonservisDurumu.oyunYok),
         OturumYok() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: oturumYokMesaji),
+        BaskaZorlukOynandi() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: baskaZorlukMesaji),
       };
     } catch (e) {
       if (!ref.mounted) return;
@@ -152,6 +156,6 @@ class BonservisNotifier extends Notifier<BonservisState> {
   }
 }
 
-final bonservisProvider = NotifierProvider.autoDispose<BonservisNotifier, BonservisState>(() {
-  return BonservisNotifier();
-});
+// Parametre oyun tipidir: bonservis_kolay, bonservis_orta ya da bonservis_zor
+final bonservisProvider =
+    NotifierProvider.autoDispose.family<BonservisNotifier, BonservisState, String>(BonservisNotifier.new);

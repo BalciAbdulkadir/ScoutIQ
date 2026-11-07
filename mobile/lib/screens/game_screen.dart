@@ -13,7 +13,10 @@ import '../widgets/tebesir.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
-  const GameScreen({super.key});
+  // Oynanan zorluğun günlük oyunu: kesisim_kolay, kesisim_orta ya da kesisim_zor
+  final String oyunTipi;
+
+  const GameScreen({super.key, required this.oyunTipi});
 
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
@@ -24,7 +27,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(gameProvider);
+    final state = ref.watch(gameProvider(widget.oyunTipi));
 
     return Scaffold(
       appBar: AppBar(title: const Text('KESİŞİM')),
@@ -41,7 +44,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(gameProvider),
+          onTekrarDene: () => ref.invalidate(gameProvider(widget.oyunTipi)),
         );
       case 'no_game':
         return const OyunMesajKarti(
@@ -107,8 +110,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           OyuncuArama(
             renk: Renkler.kesisim,
             gonderiliyor: state.gonderiliyor,
-            ara: ref.read(gameProvider.notifier).oyuncuAra,
-            gonder: ref.read(gameProvider.notifier).makeGuess,
+            ara: ref.read(gameProvider(widget.oyunTipi).notifier).oyuncuAra,
+            gonder: ref.read(gameProvider(widget.oyunTipi).notifier).makeGuess,
           ),
           const SizedBox(height: 16),
           _oncekiSonuc(state),

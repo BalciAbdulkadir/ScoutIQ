@@ -117,7 +117,7 @@ void main() {
     });
 
     test('bugün başka zorlukta Izgara oynandıysa tahta açılmaz', () async {
-      final (c, _) = await tahtayiAc((d) => d.baskaIzgaraOynandi = true);
+      final (c, _) = await tahtayiAc((d) => d.baskaModOynandi = true);
 
       expect(durum(c).durum, IzgaraDurumu.hata);
       expect(durum(c).hataMesaji, baskaIzgaraMesaji);

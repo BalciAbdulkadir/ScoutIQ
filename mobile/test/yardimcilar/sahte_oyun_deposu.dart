@@ -19,8 +19,8 @@ class SahteOyunDeposu implements OyunDeposu {
   // kayitAc çağrıldığında başka bir cihazın kaydı atmış gibi davranılsın mı
   bool kayitAcCakisir = false;
 
-  // kayitAc çağrıldığında kullanıcı bugün başka bir zorlukta Izgara oynamış gibi davranılsın mı
-  bool baskaIzgaraOynandi = false;
+  // kayitAc çağrıldığında kullanıcı bu oyunu bugün başka bir zorlukta oynamış gibi davranılsın mı
+  bool baskaModOynandi = false;
 
   Map<String, dynamic>? oyun = {
     'id': 'oyun-1',
@@ -81,6 +81,8 @@ class SahteOyunDeposu implements OyunDeposu {
   final List<String> arananlar = [];
   final List<({int skor, bool bitti})> yazilanSkorlar = [];
   bool yarimKayitKapatildi = false;
+  final List<String> istenenOyunTipleri = []; // gununOyunu ile istenen oyun tipleri
+  final List<String> acilanKayitTipleri = []; // kayitAc ile açılan oyun tipleri
 
   @override
   Future<String> oyunTarihi() async {
@@ -99,6 +101,7 @@ class SahteOyunDeposu implements OyunDeposu {
 
   @override
   Future<Map<String, dynamic>?> gununOyunu(String oyunTipi, String tarih) async {
+    istenenOyunTipleri.add(oyunTipi);
     if (oyunYuklemeHataVerir) throw Exception('bağlantı yok');
     return oyun;
   }
@@ -106,7 +109,8 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<void> kayitAc({required String kullaniciId, required String oyunId, required String oyunTipi, required String tarih}) async {
     kayitAcSayisi++;
-    if (baskaIzgaraOynandi) throw BaskaIzgaraOynandi();
+    acilanKayitTipleri.add(oyunTipi);
+    if (baskaModOynandi) throw BaskaModOynandi();
     if (kayitAcCakisir) {
       kayit = {'skor': 4, 'durum': 'basladi'};
       throw KayitZatenVar();

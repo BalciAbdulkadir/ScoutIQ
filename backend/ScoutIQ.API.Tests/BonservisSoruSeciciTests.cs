@@ -7,9 +7,10 @@ public class BonservisSoruSeciciTests
 {
     private const long M = 1_000_000;
 
-    private static Aday Oyuncu(int no, long milyon) => new($"oyuncu-{no}", $"Oyuncu {no}", milyon * M);
+    private static Aday Oyuncu(int no, long milyon, Kademe kademe = Kademe.Unlu) =>
+        new($"oyuncu-{no}", $"Oyuncu {no}", milyon * M, kademe);
 
-    // 6 ile 200 milyon arasında, kurallara uyan pek çok ikili kurulabilen bir havuz
+    // 6 ile 200 milyon arasında, kurallara uyan pek çok ikili kurulabilen bir havuz. Hepsi ünlü.
     private static List<Aday> GenisHavuz()
     {
         var havuz = new List<Aday>();
@@ -20,6 +21,42 @@ public class BonservisSoruSeciciTests
         return havuz;
     }
 
+    // Aynı havuz, kademeler sırayla ünlü, bilinen, diğer
+    private static List<Aday> KarisikHavuz() =>
+        Enumerable.Range(0, 120).Select(i => Oyuncu(i, 6 + i * 3 / 2, (Kademe)(i % 3))).ToList();
+
+    public static IEnumerable<object[]> TohumVeZorluklar() =>
+        from tohum in new[] { 1, 2, 3, 42, 2026 }
+        from zorluk in Enum.GetValues<Zorluk>()
+        select new object[] { tohum, zorluk };
+
+    [Theory]
+    [MemberData(nameof(TohumVeZorluklar))]
+    public void Oyuncularin_kademeleri_modun_dagilimina_uyar(int tohum, Zorluk zorluk)
+    {
+        var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(zorluk, KarisikHavuz());
+
+        Assert.NotNull(sorular);
+        var oyuncular = sorular!.SelectMany(s => new[] { s.Sol, s.Sag }).ToList();
+        Assert.Equal(SoruSayisi * 2, oyuncular.Select(o => o.Id).Distinct().Count());
+
+        var dagilim = ZorlukDagilimi.Dagit(zorluk, SoruSayisi * 2);
+        foreach (var kademe in Enum.GetValues<Kademe>())
+            Assert.Equal(dagilim.GetValueOrDefault(kademe), oyuncular.Count(o => o.Kademe == kademe));
+
+        Assert.All(sorular, s => Assert.InRange(Math.Abs(s.Sol.ToplamBonservis - s.Sag.ToplamBonservis), 1, MaxFark));
+    }
+
+    [Fact]
+    public void Ortada_yeterli_bilinen_oyuncu_yoksa_null_doner()
+    {
+        // 4 bilinen oyuncu var, orta mod 5 bilinen ister
+        var havuz = GenisHavuz();
+        havuz.AddRange(Enumerable.Range(200, 4).Select(i => Oyuncu(i, 50 + i % 10, Kademe.Bilinen)));
+
+        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(Zorluk.Orta, havuz));
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
@@ -28,7 +65,7 @@ public class BonservisSoruSeciciTests
     [InlineData(2026)]
     public void Bes_soru_ve_on_farkli_oyuncu_secer(int tohum)
     {
-        var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(GenisHavuz());
+        var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(Zorluk.Kolay,GenisHavuz());
 
         Assert.NotNull(sorular);
         Assert.Equal(SoruSayisi, sorular!.Count);
@@ -43,7 +80,7 @@ public class BonservisSoruSeciciTests
     [InlineData(99)]
     public void Her_soruda_fark_sifirdan_buyuk_ve_en_fazla_30_milyon(int tohum)
     {
-        var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(GenisHavuz())!;
+        var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(Zorluk.Kolay,GenisHavuz())!;
 
         foreach (var s in sorular)
         {
@@ -56,7 +93,7 @@ public class BonservisSoruSeciciTests
     public void Dogru_cevap_bazen_solda_bazen_sagda_olur()
     {
         var taraflar = Enumerable.Range(0, 20)
-            .SelectMany(tohum => new BonservisSoruSecici(new Random(tohum)).Sec(GenisHavuz())!)
+            .SelectMany(tohum => new BonservisSoruSecici(new Random(tohum)).Sec(Zorluk.Kolay,GenisHavuz())!)
             .Select(s => s.Dogru == s.Sol)
             .ToList();
 
@@ -78,13 +115,13 @@ public class BonservisSoruSeciciTests
     public void Bes_milyon_ve_alti_oyuncular_soruda_cikmaz()
     {
         var havuz = GenisHavuz();
-        havuz.Add(new Aday("ucuz-1", "Ucuz 1", 5 * M));
-        havuz.Add(new Aday("ucuz-2", "Ucuz 2", 3 * M));
-        havuz.Add(new Aday("ucuz-3", "Ucuz 3", 0));
+        havuz.Add(new Aday("ucuz-1", "Ucuz 1", 5 * M, Kademe.Unlu));
+        havuz.Add(new Aday("ucuz-2", "Ucuz 2", 3 * M, Kademe.Unlu));
+        havuz.Add(new Aday("ucuz-3", "Ucuz 3", 0, Kademe.Unlu));
 
         for (int tohum = 0; tohum < 20; tohum++)
         {
-            var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(havuz)!;
+            var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(Zorluk.Kolay,havuz)!;
             Assert.All(sorular, s =>
             {
                 Assert.True(s.Sol.ToplamBonservis > MinToplamBonservis);
@@ -104,7 +141,7 @@ public class BonservisSoruSeciciTests
     public void Otuz_milyon_sinir_dahildir_fazlasi_eslesmez()
     {
         Assert.True(Eslesebilir(Oyuncu(1, 10), Oyuncu(2, 40)));
-        Assert.False(Eslesebilir(new Aday("a", "A", 10 * M), new Aday("b", "B", 40 * M + 1)));
+        Assert.False(Eslesebilir(new Aday("a", "A", 10 * M, Kademe.Unlu), new Aday("b", "B", 40 * M + 1, Kademe.Unlu)));
     }
 
     [Fact]
@@ -113,7 +150,7 @@ public class BonservisSoruSeciciTests
         var havuz = GenisHavuz();
         havuz.AddRange(GenisHavuz());
 
-        var sorular = new BonservisSoruSecici(new Random(3)).Sec(havuz)!;
+        var sorular = new BonservisSoruSecici(new Random(3)).Sec(Zorluk.Kolay,havuz)!;
 
         var oyuncular = sorular.SelectMany(s => new[] { s.Sol.Id, s.Sag.Id }).Distinct().Count();
         Assert.Equal(SoruSayisi * 2, oyuncular);
@@ -122,8 +159,8 @@ public class BonservisSoruSeciciTests
     [Fact]
     public void Ayni_tohumla_ayni_sorular_cikar()
     {
-        var a = new BonservisSoruSecici(new Random(77)).Sec(GenisHavuz())!;
-        var b = new BonservisSoruSecici(new Random(77)).Sec(GenisHavuz())!;
+        var a = new BonservisSoruSecici(new Random(77)).Sec(Zorluk.Kolay,GenisHavuz())!;
+        var b = new BonservisSoruSecici(new Random(77)).Sec(Zorluk.Kolay,GenisHavuz())!;
 
         Assert.Equal(a, b);
     }
@@ -141,7 +178,7 @@ public class BonservisSoruSeciciTests
 
         for (int tohum = 0; tohum < 20; tohum++)
         {
-            var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(havuz);
+            var sorular = new BonservisSoruSecici(new Random(tohum)).Sec(Zorluk.Kolay,havuz);
             Assert.NotNull(sorular);
             Assert.DoesNotContain(sorular!, s => s.Sol.Id == "oyuncu-0" || s.Sag.Id == "oyuncu-0");
         }
@@ -153,7 +190,7 @@ public class BonservisSoruSeciciTests
         // Oyuncular arasında hep 40 milyon fark var: hiçbir ikili eşleşemez
         var havuz = Enumerable.Range(1, 20).Select(i => Oyuncu(i, 40 * i)).ToList();
 
-        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(havuz));
+        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(Zorluk.Kolay,havuz));
     }
 
     [Fact]
@@ -161,13 +198,13 @@ public class BonservisSoruSeciciTests
     {
         var havuz = Enumerable.Range(1, 9).Select(i => Oyuncu(i, 10 + i)).ToList();
 
-        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(havuz));
+        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(Zorluk.Kolay,havuz));
     }
 
     [Fact]
     public void Bos_havuzda_null_doner()
     {
-        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(new List<Aday>()));
+        Assert.Null(new BonservisSoruSecici(new Random(1)).Sec(Zorluk.Kolay,new List<Aday>()));
     }
 
     [Fact]

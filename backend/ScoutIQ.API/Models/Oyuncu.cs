@@ -18,5 +18,13 @@ namespace ScoutIQ.API.Models
         // Transfermarkt'taki fotoğrafın adresi, fotoğrafı olmayan oyuncularda null
         [Column("foto_url")]
         public string? FotoUrl { get; set; }
+
+        // Soru havuzundaki kademe: unlu, bilinen, diger, cevap ya da null (data_miner/kademeler.py)
+        [Column("kademe")]
+        public string? Kademe { get; set; }
+
+        // Elle düzeltme: doluysa kademe yerine bu geçerlidir
+        [Column("kademe_override")]
+        public string? KademeOverride { get; set; }
     }
 }

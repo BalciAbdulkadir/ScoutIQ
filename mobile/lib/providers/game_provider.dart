@@ -63,9 +63,12 @@ class GameState {
   }
 }
 
+// Kesişim oyunu. Her zorluk ayrı bir günlük oyundur: oyunTipi kesisim_kolay, kesisim_orta ya da kesisim_zor.
 class GameNotifier extends Notifier<GameState> {
-  static const _oyunTipi = 'kesisim';
+  final String _oyunTipi;
   static const _puan = 2;
+
+  GameNotifier(this._oyunTipi);
 
   late OyunDeposu _depo;
 
@@ -90,6 +93,7 @@ class GameNotifier extends Notifier<GameState> {
         YaridaBirakildi(:final skor) => state.copyWith(status: 'abandoned', score: skor),
         OyunYok() => state.copyWith(status: 'no_game'),
         OturumYok() => state.copyWith(status: 'error', hataMesaji: oturumYokMesaji),
+        BaskaZorlukOynandi() => state.copyWith(status: 'error', hataMesaji: baskaZorlukMesaji),
       };
       if (state.status == 'playing') await _eksikLogolariTamamla();
     } catch (e) {
@@ -199,6 +203,5 @@ class GameNotifier extends Notifier<GameState> {
   }
 }
 
-final gameProvider = NotifierProvider.autoDispose<GameNotifier, GameState>(() {
-  return GameNotifier();
-});
+// Parametre oyun tipidir: kesisim_kolay, kesisim_orta ya da kesisim_zor
+final gameProvider = NotifierProvider.autoDispose.family<GameNotifier, GameState, String>(GameNotifier.new);

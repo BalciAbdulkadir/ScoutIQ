@@ -7,12 +7,13 @@ using ScoutIQ.API.Models;
 using ScoutIQ.API.Oyunlar;
 using System.Linq;
 using static Supabase.Postgrest.Constants;
-using Supabase.Postgrest.Exceptions;
+using Supabase.Postgrest.Interfaces;
 using Supabase.Postgrest.Models;
-using Supabase.Postgrest.Responses;
 
 namespace ScoutIQ.API.Jobs
 {
+    // Her gece her oyunun üç modunu (kolay, orta, zor) ayrı günlük oyun olarak üretir: kesisim_kolay, bonservis_orta,
+    // izgara_zor ... Kullanıcı her oyunda günde bunlardan yalnızca birini oynar (018_zorluk_modlari.sql).
     public class DailyQuestionJob : IInvocable
     {
         // Oyun günleri Türkiye saatine göre başlar ve biter
@@ -32,10 +33,21 @@ namespace ScoutIQ.API.Jobs
             DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
             Console.WriteLine($"[{DateTime.Now}] CRON TETİKLENDİ: {bugun:yyyy-MM-dd} için Hub oyunları hazırlanıyor...");
 
+            Dictionary<string, Kademe> kademeler;
+            try
+            {
+                kademeler = await KademeleriOku();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Oyuncu kademeleri okunamadı, oyun üretilmedi: {ex.Message}");
+                return;
+            }
+
             // Oyunlar ayrı ayrı denenir: birinde hata olursa diğeri yine üretilir
             try
             {
-                await UretKesisimOyunlari(bugun);
+                await UretKesisimOyunlari(bugun, kademeler);
             }
             catch (Exception ex)
             {
@@ -44,7 +56,7 @@ namespace ScoutIQ.API.Jobs
 
             try
             {
-                await UretBonservisOyunlari(bugun);
+                await UretBonservisOyunlari(bugun, kademeler);
             }
             catch (Exception ex)
             {
@@ -53,7 +65,7 @@ namespace ScoutIQ.API.Jobs
 
             try
             {
-                await UretIzgaraOyunlari(bugun);
+                await UretIzgaraOyunlari(bugun, kademeler);
             }
             catch (Exception ex)
             {
@@ -61,50 +73,58 @@ namespace ScoutIQ.API.Jobs
             }
         }
 
-        // Her zorluk ayrı bir oyundur: izgara_kolay, izgara_orta, izgara_zor
-        public static string IzgaraOyunTipi(IzgaraSoruSecici.Zorluk zorluk) => $"izgara_{zorluk.ToString().ToLowerInvariant()}";
-
-        private async Task UretIzgaraOyunlari(DateTime tarih)
+        // Soru havuzundaki oyuncuların kademeleri: oyuncu id -> kademe. Elle düzeltme (kademe_override) doluysa o geçerlidir.
+        // Elle düzeltmeler havuz dışındaki oyuncuları da havuza alabildiği için bütün oyuncular okunur.
+        private async Task<Dictionary<string, Kademe>> KademeleriOku()
         {
-            var eksikler = new List<IzgaraSoruSecici.Zorluk>();
-            foreach (var zorluk in Enum.GetValues<IzgaraSoruSecici.Zorluk>())
+            var kademeler = new Dictionary<string, Kademe>();
+            foreach (var o in await HepsiniOku<Oyuncu>("id, kademe, kademe_override", o => o.Id))
             {
-                if (await OyunVarMi(IzgaraOyunTipi(zorluk), tarih))
-                    Console.WriteLine($"Izgara ({zorluk}): {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
-                else
-                    eksikler.Add(zorluk);
+                var kademe = ZorlukDagilimi.Coz(o.Kademe, o.KademeOverride);
+                if (kademe != null) kademeler[o.Id] = kademe.Value;
             }
+
+            var sayilar = kademeler.Values.GroupBy(k => k).ToDictionary(g => g.Key, g => g.Count());
+            Console.WriteLine($"Kademeler: {sayilar.GetValueOrDefault(Kademe.Unlu)} ünlü, {sayilar.GetValueOrDefault(Kademe.Bilinen)} bilinen, " +
+                              $"{sayilar.GetValueOrDefault(Kademe.Diger)} diğer oyuncu.");
+            if (kademeler.Count == 0)
+            {
+                throw new InvalidOperationException("Hiçbir oyuncunun kademesi yok (data_miner/kademeler.py çalıştırılmamış).");
+            }
+            return kademeler;
+        }
+
+        // ---------------- Izgara ----------------
+
+        private async Task UretIzgaraOyunlari(DateTime tarih, Dictionary<string, Kademe> kademeler)
+        {
+            var eksikler = await EksikModlar("izgara", tarih);
             if (eksikler.Count == 0) return;
 
             var veri = await IzgaraVerisiniOku();
             foreach (var zorluk in eksikler)
             {
-                var izgara = new IzgaraSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, veri.MilliKariyer);
+                var izgara = new IzgaraSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, veri.MilliKariyer, kademeler);
                 if (izgara == null)
                 {
                     Console.WriteLine($"Uyarı: Izgara ({zorluk}) için kurallara uyan tahta kurulamadı.");
                     continue;
                 }
 
-                await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
-                {
-                    OyunTipi = IzgaraOyunTipi(zorluk),
-                    Tarih = tarih,
-                    SoruVerisi = IzgaraSoruVerisi(izgara)
-                });
-                Console.WriteLine($"Başarılı: Izgara ({zorluk}) için {tarih:yyyy-MM-dd} tarihli tahta eklendi.");
+                await OyunEkle("izgara", zorluk, tarih, IzgaraSoruVerisi(izgara));
                 IzgarayiYaz(izgara);
             }
         }
 
-        // Veritabanına yazmadan her zorluktan bir tahta seçip ekrana basar:
+        // Veritabanına yazmadan her moddan bir tahta seçip ekrana basar:
         // dotnet run -- --izgara-onizleme
         public async Task IzgaraOnizleme()
         {
+            var kademeler = await KademeleriOku();
             var veri = await IzgaraVerisiniOku(ayrintili: true);
-            foreach (var zorluk in Enum.GetValues<IzgaraSoruSecici.Zorluk>())
+            foreach (var zorluk in Enum.GetValues<Zorluk>())
             {
-                var izgara = new IzgaraSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, veri.MilliKariyer);
+                var izgara = new IzgaraSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, veri.MilliKariyer, kademeler);
                 Console.WriteLine($"\nIzgara ({zorluk}) önizleme (veritabanına yazılmadı):");
                 if (izgara == null)
                     Console.WriteLine("   Kurallara uyan tahta kurulamadı.");
@@ -117,7 +137,7 @@ namespace ScoutIQ.API.Jobs
 
         private async Task<IzgaraVerisi> IzgaraVerisiniOku(bool ayrintili = false)
         {
-            var kulupler = (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url").Get()).Models;
+            var kulupler = await KulupleriOku();
             KulupListesiniKontrolEt(IzgaraSoruSecici.Kulupler, "Izgara", kulupler, ayrintili);
 
             var kulupIdleri = KesisimSoruSecici.ListedekiKulupIdleri(IzgaraSoruSecici.Kulupler, kulupler);
@@ -145,135 +165,87 @@ namespace ScoutIQ.API.Jobs
             {
                 satirlar = izgara.Satirlar.Select(Baslik).ToList(),
                 sutunlar = izgara.Sutunlar.Select(Baslik).ToList(),
-                cevap_sayilari = izgara.CevapSayilari
+                cevap_sayilari = izgara.CevapSayilari,
+                hucre_kademeleri = izgara.HucreKademeleri.Select(ZorlukDagilimi.Metin).ToList()
             };
         }
 
         private static void IzgarayiYaz(IzgaraSoruSecici.Izgara izgara)
         {
-            Console.WriteLine($"   {"",-22}" + string.Join("", izgara.Sutunlar.Select(s => $"{s.Isim,-22}")));
+            Console.WriteLine($"   {"",-22}" + string.Join("", izgara.Sutunlar.Select(s => $"{s.Isim,-26}")));
             for (int s = 0; s < IzgaraSoruSecici.Boyut; s++)
             {
-                var sayilar = Enumerable.Range(0, IzgaraSoruSecici.Boyut)
-                    .Select(t => $"{izgara.CevapSayilari[s * IzgaraSoruSecici.Boyut + t] + " cevap",-22}");
-                Console.WriteLine($"   {izgara.Satirlar[s].Isim,-22}" + string.Join("", sayilar));
-            }
-        }
-
-        // Sayfalı okumada bir sayfayı getirir. Satır sayısı sayfa boyutunun tam katıysa son istek boş sayfaya düşer;
-        // Supabase (PostgREST) bunu boş liste yerine PGRST103 "Requested range not satisfiable" hatasıyla bildirir.
-        private static async Task<List<T>> SayfayiGetir<T>(Task<ModeledResponse<T>> istek) where T : BaseModel, new()
-        {
-            try
-            {
-                return (await istek).Models;
-            }
-            catch (PostgrestException ex) when (ex.Message.Contains("PGRST103"))
-            {
-                return new List<T>();
-            }
-        }
-
-        private async Task<List<MilliTakimKariyeri>> TumMilliTakimKariyeri()
-        {
-            var tumu = new List<MilliTakimKariyeri>();
-
-            for (int bas = 0; ; bas += SayfaBoyutu)
-            {
-                var sayfa = await SayfayiGetir(_supabaseClient.From<MilliTakimKariyeri>()
-                    .Select("oyuncu_id, milli_takim_tm_id, milli_takim_isim")
-                    .Order("oyuncu_id", Ordering.Ascending)
-                    .Order("milli_takim_tm_id", Ordering.Ascending)
-                    .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get());
-
-                tumu.AddRange(sayfa);
-                if (sayfa.Count < SayfaBoyutu) break;
-            }
-
-            return tumu;
-        }
-
-        private async Task<bool> OyunVarMi(string oyunTipi, DateTime tarih)
-        {
-            var response = await _supabaseClient.From<GunlukOyun>()
-                .Select("id")
-                .Filter("oyun_tipi", Operator.Equals, oyunTipi)
-                .Filter("tarih", Operator.Equals, tarih.ToString("yyyy-MM-dd"))
-                .Get();
-
-            return response.Models.Count > 0;
-        }
-
-        private async Task UretKesisimOyunlari(DateTime tarih)
-        {
-            if (await OyunVarMi("kesisim", tarih))
-            {
-                Console.WriteLine($"Kesişim: {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
-                return;
-            }
-
-            var sorular = await KesisimSorulariniSec();
-            if (sorular == null) return;
-
-            var yeniOyun = new GunlukOyun
-            {
-                OyunTipi = "kesisim",
-                Tarih = tarih,
-                SoruVerisi = sorular.Select(s => new
+                var hucreler = Enumerable.Range(0, IzgaraSoruSecici.Boyut).Select(t =>
                 {
-                    kulup_a = s.Cift.KulupA.Isim,
-                    kulup_b = s.Cift.KulupB.Isim,
-                    kulup_a_id = s.Cift.KulupA.Id,
-                    kulup_b_id = s.Cift.KulupB.Id,
-                    kulup_a_logo = s.Cift.KulupA.LogoUrl,
-                    kulup_b_logo = s.Cift.KulupB.LogoUrl,
-                    zorluk = s.Zorluk.ToString().ToLowerInvariant()
-                }).ToList()
-            };
-
-            await _supabaseClient.From<GunlukOyun>().Insert(yeniOyun);
-            Console.WriteLine($"Başarılı: Kesişim için {tarih:yyyy-MM-dd} tarihli 5 soruluk set eklendi.");
-            foreach (var soru in sorular)
-            {
-                Console.WriteLine($"   [{soru.Zorluk}] {soru.Cift.KulupA.Isim} x {soru.Cift.KulupB.Isim} ({soru.Cift.OrtakOyuncuSayisi} ortak oyuncu)");
+                    int i = s * IzgaraSoruSecici.Boyut + t;
+                    return $"{$"{izgara.CevapSayilari[i]} cevap, {ZorlukDagilimi.Metin(izgara.HucreKademeleri[i])}",-26}";
+                });
+                Console.WriteLine($"   {izgara.Satirlar[s].Isim,-22}" + string.Join("", hucreler));
             }
         }
 
-        // Veritabanına yazmadan bir soru seti seçip ekrana basar. Zorluk eşiklerini ayarlarken kullanılır:
+        // ---------------- Kesişim ----------------
+
+        private async Task UretKesisimOyunlari(DateTime tarih, Dictionary<string, Kademe> kademeler)
+        {
+            var eksikler = await EksikModlar("kesisim", tarih);
+            if (eksikler.Count == 0) return;
+
+            var veri = await KesisimVerisiniOku();
+            foreach (var zorluk in eksikler)
+            {
+                var sorular = KesisimSorulariniSec(zorluk, veri, kademeler);
+                if (sorular == null) continue;
+
+                await OyunEkle("kesisim", zorluk, tarih, sorular.Select(s => new
+                {
+                    kulup_a = s.KulupA.Isim,
+                    kulup_b = s.KulupB.Isim,
+                    kulup_a_id = s.KulupA.Id,
+                    kulup_b_id = s.KulupB.Id,
+                    kulup_a_logo = s.KulupA.LogoUrl,
+                    kulup_b_logo = s.KulupB.LogoUrl,
+                    kademe = ZorlukDagilimi.Metin(s.Kademe),
+                    // Uygulamadaki soru etiketi: ünlü soru kolay, bilinen orta, diğer zor görünür
+                    zorluk = s.Kademe switch { Kademe.Unlu => "kolay", Kademe.Bilinen => "orta", _ => "zor" }
+                }).ToList());
+                KesisimSorulariniYaz(sorular);
+            }
+        }
+
+        // Veritabanına yazmadan her moddan bir soru seti seçip ekrana basar:
         // dotnet run -- --kesisim-onizleme
         public async Task KesisimOnizleme()
         {
-            var sorular = await KesisimSorulariniSec(ayrintili: true);
-            if (sorular == null) return;
-
-            Console.WriteLine("Önizleme (veritabanına yazılmadı):");
-            for (int i = 0; i < sorular.Count; i++)
+            var kademeler = await KademeleriOku();
+            var veri = await KesisimVerisiniOku(ayrintili: true);
+            foreach (var zorluk in Enum.GetValues<Zorluk>())
             {
-                var soru = sorular[i];
-                Console.WriteLine($"   {i + 1}. [{soru.Zorluk}] {soru.Cift.KulupA.Isim} x {soru.Cift.KulupB.Isim} ({soru.Cift.OrtakOyuncuSayisi} ortak oyuncu)");
+                Console.WriteLine($"\nKesişim ({zorluk}) önizleme (veritabanına yazılmadı):");
+                var sorular = KesisimSorulariniSec(zorluk, veri, kademeler);
+                if (sorular != null) KesisimSorulariniYaz(sorular);
             }
         }
 
-        // Kulüpleri ve kariyer geçmişini veritabanından çeker, seçimi KesisimSoruSecici'ye bırakır
-        private async Task<List<KesisimSoruSecici.KesisimSorusu>?> KesisimSorulariniSec(bool ayrintili = false)
+        private record KesisimVerisi(List<Kulup> Kulupler, List<KariyerGecmisi> Kariyer);
+
+        private async Task<KesisimVerisi> KesisimVerisiniOku(bool ayrintili = false)
         {
-            var kuluplerResponse = await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url").Get();
-            var kulupler = kuluplerResponse.Models;
-
-            if (kulupler.Count < 2)
-            {
-                Console.WriteLine("Uyarı: Kesişim için veritabanında yeterli kulüp yok.");
-                return null;
-            }
-
+            var kulupler = await KulupleriOku();
             KulupListesiniKontrolEt(KesisimSoruSecici.BuyukKulupler, "büyük", kulupler, ayrintili);
             KulupListesiniKontrolEt(KesisimSoruSecici.BasAltiKulupler, "baş altı", kulupler, ayrintili);
 
-            var sonuc = new KesisimSoruSecici().Sec(kulupler, await TumKariyerGecmisi());
+            var kariyer = await KulupKariyerleri(KesisimSoruSecici.ListedekiKulupIdleri(KesisimSoruSecici.Kulupler, kulupler));
+            return new KesisimVerisi(kulupler, kariyer);
+        }
+
+        private static List<KesisimSoruSecici.KesisimSorusu>? KesisimSorulariniSec(
+            Zorluk zorluk, KesisimVerisi veri, Dictionary<string, Kademe> kademeler)
+        {
+            var sonuc = new KesisimSoruSecici().Sec(zorluk, veri.Kulupler, veri.Kariyer, kademeler);
 
             var havuz = sonuc.HavuzBoyutlari;
-            Console.WriteLine($"Kesişim havuzları: {havuz[KesisimSoruSecici.Zorluk.Kolay]} kolay, {havuz[KesisimSoruSecici.Zorluk.Orta]} orta-zor, {havuz[KesisimSoruSecici.Zorluk.Zor]} zor çift.");
+            Console.WriteLine($"Kesişim ({zorluk}) havuzları: {havuz[Kademe.Unlu]} ünlü, {havuz[Kademe.Bilinen]} bilinen, {havuz[Kademe.Diger]} diğer çift.");
             foreach (var uyari in sonuc.Uyarilar)
             {
                 Console.WriteLine($"Uyarı: {uyari}");
@@ -282,23 +254,36 @@ namespace ScoutIQ.API.Jobs
             return sonuc.Sorular;
         }
 
-        private async Task UretBonservisOyunlari(DateTime tarih)
+        private static void KesisimSorulariniYaz(List<KesisimSoruSecici.KesisimSorusu> sorular)
         {
-            if (await OyunVarMi("bonservis", tarih))
+            for (int i = 0; i < sorular.Count; i++)
             {
-                Console.WriteLine($"Bonservis: {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
-                return;
+                var s = sorular[i];
+                Console.WriteLine($"   {i + 1}. [{ZorlukDagilimi.Metin(s.Kademe)}] {s.KulupA.Isim} x {s.KulupB.Isim} ({s.OrtakOyuncuSayisi} ortak oyuncu)");
             }
+        }
 
-            var sorular = await BonservisSorulariniSec();
-            if (sorular == null) return;
+        // ---------------- Bonservis ----------------
 
-            // Toplam bonservisler de kaydedilir: cevaptan sonra ekranda gösterilir
-            var yeniOyun = new GunlukOyun
+        private async Task UretBonservisOyunlari(DateTime tarih, Dictionary<string, Kademe> kademeler)
+        {
+            var eksikler = await EksikModlar("bonservis", tarih);
+            if (eksikler.Count == 0) return;
+
+            var adaylar = await BonservisAdaylari(kademeler);
+            if (adaylar == null) return;
+
+            foreach (var zorluk in eksikler)
             {
-                OyunTipi = "bonservis",
-                Tarih = tarih,
-                SoruVerisi = sorular.Select(s => new
+                var sorular = new BonservisSoruSecici().Sec(zorluk, adaylar);
+                if (sorular == null)
+                {
+                    Console.WriteLine($"Uyarı: Bonservis ({zorluk}) için kurallara uyan 5 soruluk set kurulamadı.");
+                    continue;
+                }
+
+                // Toplam bonservisler de kaydedilir: cevaptan sonra ekranda gösterilir
+                await OyunEkle("bonservis", zorluk, tarih, sorular.Select(s => new
                 {
                     oyuncu_a = s.Sol.Isim,
                     oyuncu_b = s.Sag.Isim,
@@ -307,42 +292,50 @@ namespace ScoutIQ.API.Jobs
                     oyuncu_a_bonservis = s.Sol.ToplamBonservis,
                     oyuncu_b_bonservis = s.Sag.ToplamBonservis,
                     oyuncu_a_foto = s.Sol.FotoUrl,
-                    oyuncu_b_foto = s.Sag.FotoUrl
-                }).ToList()
-            };
-
-            await _supabaseClient.From<GunlukOyun>().Insert(yeniOyun);
-            Console.WriteLine($"Başarılı: Bonservis için {tarih:yyyy-MM-dd} tarihli 5 soruluk set eklendi.");
-            BonservisSorulariniYaz(sorular);
+                    oyuncu_b_foto = s.Sag.FotoUrl,
+                    oyuncu_a_kademe = ZorlukDagilimi.Metin(s.Sol.Kademe),
+                    oyuncu_b_kademe = ZorlukDagilimi.Metin(s.Sag.Kademe)
+                }).ToList());
+                BonservisSorulariniYaz(sorular);
+            }
         }
 
-        // Veritabanına yazmadan bir Bonservis soru seti seçip ekrana basar:
+        // Veritabanına yazmadan her moddan bir Bonservis soru seti seçip ekrana basar:
         // dotnet run -- --bonservis-onizleme
         public async Task BonservisOnizleme()
         {
-            var sorular = await BonservisSorulariniSec(ayrintili: true);
-            if (sorular == null) return;
+            var kademeler = await KademeleriOku();
+            var adaylar = await BonservisAdaylari(kademeler, ayrintili: true);
+            if (adaylar == null) return;
 
-            Console.WriteLine("Önizleme (veritabanına yazılmadı):");
-            BonservisSorulariniYaz(sorular);
+            foreach (var zorluk in Enum.GetValues<Zorluk>())
+            {
+                Console.WriteLine($"\nBonservis ({zorluk}) önizleme (veritabanına yazılmadı):");
+                var sorular = new BonservisSoruSecici().Sec(zorluk, adaylar);
+                if (sorular == null)
+                    Console.WriteLine("   Kurallara uyan 5 soruluk set kurulamadı.");
+                else
+                    BonservisSorulariniYaz(sorular);
+            }
         }
 
         private static void BonservisSorulariniYaz(List<BonservisSoruSecici.BonservisSorusu> sorular)
         {
+            string Oyuncu(BonservisSoruSecici.Aday a) => $"{a.Isim} ({Milyon(a.ToplamBonservis)}, {ZorlukDagilimi.Metin(a.Kademe)})";
+
             for (int i = 0; i < sorular.Count; i++)
             {
                 var s = sorular[i];
-                Console.WriteLine($"   {i + 1}. {s.Sol.Isim} ({Milyon(s.Sol.ToplamBonservis)}) x {s.Sag.Isim} ({Milyon(s.Sag.ToplamBonservis)}) -> doğru: {s.Dogru.Isim}");
+                Console.WriteLine($"   {i + 1}. {Oyuncu(s.Sol)} x {Oyuncu(s.Sag)} -> doğru: {s.Dogru.Isim}");
             }
         }
 
         private static string Milyon(long euro) => $"{euro / 1_000_000.0:0.#} M€";
 
-        // Listedeki kulüplerde güncel sezonda oynayan, toplam bonservisi yeterli oyuncuları çeker,
-        // seçimi BonservisSoruSecici'ye bırakır
-        private async Task<List<BonservisSoruSecici.BonservisSorusu>?> BonservisSorulariniSec(bool ayrintili = false)
+        // Listedeki kulüplerde güncel sezonda oynayan, toplam bonservisi yeterli ve soru havuzunda olan oyuncular
+        private async Task<List<BonservisSoruSecici.Aday>?> BonservisAdaylari(Dictionary<string, Kademe> kademeler, bool ayrintili = false)
         {
-            var kulupler = (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id").Get()).Models;
+            var kulupler = await KulupleriOku();
             KulupListesiniKontrolEt(BonservisSoruSecici.Kulupler, "Bonservis", kulupler, ayrintili);
 
             var kulupIdleri = KesisimSoruSecici.ListedekiKulupIdleri(BonservisSoruSecici.Kulupler, kulupler);
@@ -358,85 +351,96 @@ namespace ScoutIQ.API.Jobs
             var guncelOyuncular = kariyer.Where(k => k.BitisYili == guncelSezon).Select(k => k.OyuncuId).ToHashSet();
 
             var adaylar = (await PahaliOyuncular())
-                .Where(o => guncelOyuncular.Contains(o.Id))
-                .Select(o => new BonservisSoruSecici.Aday(o.Id, o.Isim, o.ToplamBonservis, o.FotoUrl))
+                .Where(o => guncelOyuncular.Contains(o.Id) && kademeler.ContainsKey(o.Id))
+                .Select(o => new BonservisSoruSecici.Aday(o.Id, o.Isim, o.ToplamBonservis, kademeler[o.Id], o.FotoUrl))
                 .ToList();
 
-            Console.WriteLine($"Bonservis havuzu: {guncelSezon}/{guncelSezon + 1} sezonunda {guncelOyuncular.Count} oyuncu, " +
-                              $"toplam bonservisi {Milyon(BonservisSoruSecici.MinToplamBonservis)} üstünde olan {adaylar.Count} oyuncu.");
-
-            var sorular = new BonservisSoruSecici().Sec(adaylar);
-            if (sorular == null)
-            {
-                Console.WriteLine("Uyarı: Bonservis için kurallara uyan 5 soruluk zincir kurulamadı.");
-            }
-            return sorular;
+            var sayilar = adaylar.GroupBy(a => a.Kademe).ToDictionary(g => g.Key, g => g.Count());
+            Console.WriteLine($"Bonservis havuzu: {guncelSezon}/{guncelSezon + 1} sezonunda {guncelOyuncular.Count} oyuncu; toplam bonservisi " +
+                              $"{Milyon(BonservisSoruSecici.MinToplamBonservis)} üstünde olan {sayilar.GetValueOrDefault(Kademe.Unlu)} ünlü, " +
+                              $"{sayilar.GetValueOrDefault(Kademe.Bilinen)} bilinen, {sayilar.GetValueOrDefault(Kademe.Diger)} diğer oyuncu.");
+            return adaylar;
         }
 
-        // Verilen kulüplerin kariyer kayıtları (oyuncu, kulüp, son sezon)
-        private async Task<List<KariyerGecmisi>> KulupKariyerleri(HashSet<string> kulupIdleri)
+        // ---------------- Ortak ----------------
+
+        // Bugün için henüz üretilmemiş modlar
+        private async Task<List<Zorluk>> EksikModlar(string oyun, DateTime tarih)
         {
-            var tumu = new List<KariyerGecmisi>();
-            var filtre = kulupIdleri.Cast<object>().ToList();
-
-            for (int bas = 0; ; bas += SayfaBoyutu)
+            var eksikler = new List<Zorluk>();
+            foreach (var zorluk in Enum.GetValues<Zorluk>())
             {
-                var sayfa = await SayfayiGetir(_supabaseClient.From<KariyerGecmisi>()
-                    .Select("oyuncu_id, kulup_id, bitis_yili")
-                    .Filter("kulup_id", Operator.In, filtre)
-                    .Order("oyuncu_id", Ordering.Ascending)
-                    .Order("kulup_id", Ordering.Ascending)
-                    .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get());
-
-                tumu.AddRange(sayfa);
-                if (sayfa.Count < SayfaBoyutu) break;
+                if (await OyunVarMi(ZorlukDagilimi.OyunTipi(oyun, zorluk), tarih))
+                    Console.WriteLine($"{oyun} ({zorluk}): {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
+                else
+                    eksikler.Add(zorluk);
             }
+            return eksikler;
+        }
 
-            return tumu;
+        private async Task OyunEkle(string oyun, Zorluk zorluk, DateTime tarih, object soruVerisi)
+        {
+            await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+            {
+                OyunTipi = ZorlukDagilimi.OyunTipi(oyun, zorluk),
+                Tarih = tarih,
+                SoruVerisi = soruVerisi
+            });
+            Console.WriteLine($"Başarılı: {ZorlukDagilimi.OyunTipi(oyun, zorluk)} için {tarih:yyyy-MM-dd} tarihli oyun eklendi.");
+        }
+
+        private async Task<bool> OyunVarMi(string oyunTipi, DateTime tarih)
+        {
+            var response = await _supabaseClient.From<GunlukOyun>()
+                .Select("id")
+                .Filter("oyun_tipi", Operator.Equals, oyunTipi)
+                .Filter("tarih", Operator.Equals, tarih.ToString("yyyy-MM-dd"))
+                .Get();
+
+            return response.Models.Count > 0;
+        }
+
+        private async Task<List<Kulup>> KulupleriOku() =>
+            (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url").Get()).Models;
+
+        // Tablonun filtreye uyan bütün satırlarını okur. Supabase tek istekte en fazla 1000 satır döndürdüğü için satırlar
+        // id sırasıyla, her istekte son okunan id'den sonrası istenerek parça parça okunur. Atlamalı (offset) sayfalama
+        // kullanılmaz: PostgREST son sayfada toplam satır sayısını tahminle hesaplayıp gerçekte var olan satırları
+        // "yok" sayabiliyor (PGRST103), bu yüzden son sayfadaki kayıtlar kayboluyordu.
+        private async Task<List<T>> HepsiniOku<T>(string kolonlar, Func<T, string> idSec,
+            Func<IPostgrestTable<T>, IPostgrestTable<T>>? filtre = null) where T : BaseModel, new()
+        {
+            var tumu = new List<T>();
+            string? sonId = null;
+
+            while (true)
+            {
+                IPostgrestTable<T> sorgu = _supabaseClient.From<T>().Select(kolonlar);
+                if (filtre != null) sorgu = filtre(sorgu);
+                if (sonId != null) sorgu = sorgu.Filter("id", Operator.GreaterThan, sonId);
+
+                var sayfa = (await sorgu.Order("id", Ordering.Ascending).Limit(SayfaBoyutu).Get()).Models;
+                tumu.AddRange(sayfa);
+                if (sayfa.Count < SayfaBoyutu) return tumu;
+                sonId = idSec(sayfa[^1]);
+            }
+        }
+
+        private Task<List<MilliTakimKariyeri>> TumMilliTakimKariyeri() =>
+            HepsiniOku<MilliTakimKariyeri>("id, oyuncu_id, milli_takim_tm_id, milli_takim_isim", m => m.Id);
+
+        // Verilen kulüplerin kariyer kayıtları (oyuncu, kulüp, son sezon, maç sayısı)
+        private Task<List<KariyerGecmisi>> KulupKariyerleri(HashSet<string> kulupIdleri)
+        {
+            var idler = kulupIdleri.Cast<object>().ToList();
+            return HepsiniOku<KariyerGecmisi>("id, oyuncu_id, kulup_id, bitis_yili, mac_sayisi", k => k.Id,
+                s => s.Filter("kulup_id", Operator.In, idler));
         }
 
         // Toplam bonservisi alt sınırın üzerindeki tüm oyuncular
-        private async Task<List<Oyuncu>> PahaliOyuncular()
-        {
-            var tumu = new List<Oyuncu>();
-
-            for (int bas = 0; ; bas += SayfaBoyutu)
-            {
-                var sayfa = await SayfayiGetir(_supabaseClient.From<Oyuncu>()
-                    .Select("id, isim, toplam_bonservis, foto_url")
-                    .Filter("toplam_bonservis", Operator.GreaterThan, BonservisSoruSecici.MinToplamBonservis.ToString())
-                    .Order("id", Ordering.Ascending)
-                    .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get());
-
-                tumu.AddRange(sayfa);
-                if (sayfa.Count < SayfaBoyutu) break;
-            }
-
-            return tumu;
-        }
-
-        private async Task<List<KariyerGecmisi>> TumKariyerGecmisi()
-        {
-            var tumu = new List<KariyerGecmisi>();
-
-            // Sayfalar arasında satır kaymasın diye benzersiz (oyuncu_id, kulup_id) sırasıyla okunur
-            for (int bas = 0; ; bas += SayfaBoyutu)
-            {
-                var sayfa = await SayfayiGetir(_supabaseClient.From<KariyerGecmisi>()
-                    .Select("oyuncu_id, kulup_id")
-                    .Order("oyuncu_id", Ordering.Ascending)
-                    .Order("kulup_id", Ordering.Ascending)
-                    .Range(bas, bas + SayfaBoyutu - 1)
-                    .Get());
-
-                tumu.AddRange(sayfa);
-                if (sayfa.Count < SayfaBoyutu) break;
-            }
-
-            return tumu;
-        }
+        private Task<List<Oyuncu>> PahaliOyuncular() =>
+            HepsiniOku<Oyuncu>("id, isim, toplam_bonservis, foto_url", o => o.Id,
+                s => s.Filter("toplam_bonservis", Operator.GreaterThan, BonservisSoruSecici.MinToplamBonservis.ToString()));
 
         // Listedeki kulüplerin veritabanında olup olmadığını kontrol eder; ayrıntılı modda eşleşmeleri listeler
         private static void KulupListesiniKontrolEt(IReadOnlyDictionary<string, string> liste, string listeAdi, List<Kulup> kulupler, bool ayrintili)
