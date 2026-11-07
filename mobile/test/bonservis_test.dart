@@ -211,11 +211,43 @@ void main() {
       expect(durum(c).skor, 3);
     });
 
-    test('yarıda bırakılan oyun açılmaz', () async {
-      final (c, depo) = await oyunuBaslat((d) => d.kayit = {'skor': 2, 'durum': 'basladi'});
+    test('yarıda bırakılan oyun kapanmaz, kaldığı sorudan skoruyla devam eder', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true},
+          {'dogru': false},
+        ];
+      });
 
-      expect(durum(c).durum, BonservisDurumu.yaridaBirakildi);
-      expect(depo.yarimKayitKapatildi, isTrue);
+      expect(durum(c).durum, BonservisDurumu.oynaniyor);
+      expect(durum(c).soruIndex, 2);
+      expect(durum(c).skor, 2);
+      expect(durum(c).sonuclar, [true, false]);
+      expect(durum(c).soru!.referans.isim, 'Barella');
+
+      await notifier(c).tahminEt(dahaFazla: dogruTahminler[2]);
+      expect(depo.ilerleme, [
+        {'dogru': true},
+        {'dogru': false},
+        {'dogru': true},
+      ]);
+      expect(depo.kayit, {'skor': 4, 'durum': 'basladi'});
+    });
+
+    test('yarım kalan süreli oyunda süre dolduysa oyun o anki skorla kapanır', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true},
+        ];
+        d.oyunSureToplam = 30;
+        d.oyunSureKalan = 0;
+      });
+
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
     });
   });
 

@@ -133,20 +133,45 @@ void main() {
       expect(depo.kayitAcSayisi, 0);
     });
 
-    test('yarıda bırakılan oyun tekrar açılmaz ve kaydı kapatılır', () async {
-      final (c, depo) = await oyunuBaslat((d) => d.kayit = {'skor': 4, 'durum': 'basladi'});
+    test('yarıda bırakılan oyun kapanmaz, kaldığı sorudan skoruyla devam eder', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true, 'cevap': 'Arda Güler'},
+          {'dogru': false, 'cevap': 'Mesut Özil'},
+        ];
+      });
 
-      expect(durum(c).status, 'abandoned');
-      expect(durum(c).score, 4);
-      expect(depo.yarimKayitKapatildi, isTrue);
-      expect(depo.kayit!['durum'], 'tamamlandi');
+      expect(durum(c).status, 'playing');
+      expect(durum(c).currentIndex, 2);
+      expect(durum(c).score, 2);
+      expect(durum(c).sonuclar, [true, false]);
+      expect(durum(c).cevaplar, ['Arda Güler', 'Mesut Özil']);
+      expect(depo.kayit!['durum'], 'basladi');
       expect(depo.kayitAcSayisi, 0);
     });
 
-    test('oyun aynı anda başka cihazda başlatıldıysa oyun kilitlenir', () async {
+    test('devam eden oyunda ilerleme önceki cevaplarla birlikte yazılır', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true, 'cevap': 'Arda Güler'},
+        ];
+      });
+
+      await notifier(c).makeGuess(yanlisOyuncu);
+
+      expect(depo.ilerleme, [
+        {'dogru': true, 'cevap': 'Arda Güler'},
+        {'dogru': false, 'cevap': 'Mesut Özil'},
+      ]);
+      expect(durum(c).currentIndex, 2);
+    });
+
+    test('oyun aynı anda başka cihazda başlatıldıysa o kayıtla devam edilir', () async {
       final (c, _) = await oyunuBaslat((d) => d.kayitAcCakisir = true);
 
-      expect(durum(c).status, 'abandoned');
+      expect(durum(c).status, 'playing');
       expect(durum(c).score, 4);
     });
   });
@@ -313,12 +338,53 @@ void main() {
       expect(durum(c).bitisZamani, isNull);
     });
 
-    test('süre seçildiyse oyun başlarken sayaç kurulur', () async {
+    test('süre seçildiyse sunucuda başlatılır ve sayaç kurulur', () async {
       final once = DateTime.now();
-      final (c, _) = await oyunuBaslat(null, 30);
+      final (c, depo) = await oyunuBaslat(null, 30);
 
+      expect(depo.oyunSureIstekleri, [30]);
       final kalan = durum(c).bitisZamani!.difference(once).inSeconds;
       expect(kalan, inInclusiveRange(29, 30));
+    });
+
+    test('yarım kalan süreli oyun sunucudaki kalan süreyle açılır, süre yeniden başlatılmaz', () async {
+      final once = DateTime.now();
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true, 'cevap': 'Arda Güler'},
+        ];
+        d.oyunSureToplam = 60;
+        d.oyunSureKalan = 25;
+      });
+
+      expect(depo.oyunSureIstekleri, [null]);
+      expect(durum(c).status, 'playing');
+      expect(durum(c).currentIndex, 1);
+      expect(durum(c).bitisZamani!.difference(once).inSeconds, inInclusiveRange(24, 25));
+    });
+
+    test('oyun kapalıyken süre dolduysa oyun o anki skorla kapanır ve sonuç gösterilir', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true, 'cevap': 'Arda Güler'},
+        ];
+        d.oyunSureToplam = 30;
+        d.oyunSureKalan = 0;
+      });
+
+      expect(durum(c).status, 'completed');
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).score, 2);
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
+    });
+
+    test('süre sunucuda başlatılamazsa yeni oyun seçilen süreyle cihazda sayılır', () async {
+      final (c, _) = await oyunuBaslat((d) => d.oyunSureHataVerir = true, 60);
+
+      expect(durum(c).status, 'playing');
+      expect(durum(c).bitisZamani, isNotNull);
     });
 
     test('süre dolunca oyun o anki skorla biter, kayıt kilitlenir ve cevaplanmayanların doğru cevabı gelir', () async {

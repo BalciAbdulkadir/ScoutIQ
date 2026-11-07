@@ -4,7 +4,7 @@ import '../services/gunluk_oyun.dart';
 import '../services/oyun_deposu.dart';
 
 class GameState {
-  final String status; // 'loading', 'playing', 'completed', 'already_played', 'abandoned', 'no_game', 'error'
+  final String status; // 'loading', 'playing', 'completed', 'already_played', 'no_game', 'error'
   final List<dynamic> questions;
   final int currentIndex;
   final int score;
@@ -72,12 +72,12 @@ class GameState {
 }
 
 // Kesişim oyunu. Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
-// Oyundan çıkılınca oyun zaten bitmiş sayıldığı için süre cihazda tutulur, sunucuya yazılmaz.
+// Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 class GameNotifier extends Notifier<GameState> {
   static const _oyunTipi = 'kesisim';
   static const _puan = 2;
 
-  final int? sure; // Seçilen süre, saniye; null: süresiz
+  final int? sure; // Yeni oyunda seçilen süre, saniye; null: süresiz. Yarım kalan oyunda sunucudaki süre geçerlidir.
 
   GameNotifier(this.sure);
 
@@ -94,23 +94,36 @@ class GameNotifier extends Notifier<GameState> {
 
   Future<void> _initGame() async {
     try {
-      final acilis = await gunlukOyunuAc(_depo, _oyunTipi);
+      final acilis = await gunlukOyunuAc(_depo, _oyunTipi, sure: sure);
       if (!ref.mounted) return;
 
       state = switch (acilis) {
-        Oynanabilir(:final oyunId, :final sorular, :final tarih) => state.copyWith(
+        Oynanabilir(:final oyunId, :final sorular, :final tarih, :final skor, :final ilerleme, :final kalanSaniye) =>
+          state.copyWith(
             status: 'playing',
             questions: sorular,
             gameId: oyunId,
             tarih: tarih,
-            bitisZamani: sure == null ? null : DateTime.now().add(Duration(seconds: sure!)),
+            // Yarım kalan oyun kaldığı sorudan devam eder
+            currentIndex: ilerleme.length.clamp(0, sorular.length - 1),
+            score: skor,
+            sonuclar: [for (final c in ilerleme) c['dogru'] == true],
+            cevaplar: [for (final c in ilerleme) c['cevap'] as String? ?? '—'],
+            bitisZamani: kalanSaniye == null ? null : DateTime.now().add(Duration(seconds: kalanSaniye)),
           ),
         ZatenOynandi(:final skor) => state.copyWith(status: 'already_played', score: skor),
-        YaridaBirakildi(:final skor) => state.copyWith(status: 'abandoned', score: skor),
         OyunYok() => state.copyWith(status: 'no_game'),
         OturumYok() => state.copyWith(status: 'error', hataMesaji: oturumYokMesaji),
       };
-      if (state.status == 'playing') await _eksikLogolariTamamla();
+      if (acilis is Oynanabilir) {
+        // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
+        final sureDoldu = acilis.kalanSaniye != null && acilis.kalanSaniye! <= 0;
+        if (sureDoldu || state.sonuclar.length >= state.questions.length) {
+          await _kapat(sureDoldu: sureDoldu);
+          return;
+        }
+        await _eksikLogolariTamamla();
+      }
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(status: 'error', hataMesaji: yuklemeHataMesaji);
@@ -176,6 +189,7 @@ class GameNotifier extends Notifier<GameState> {
         tarih: state.tarih!,
         skor: newScore,
         bitti: bitti,
+        ilerleme: _ilerleme([...state.sonuclar, isCorrect], [...state.cevaplar, oyuncu.isim]),
       );
       if (!ref.mounted) return null;
 
@@ -210,19 +224,36 @@ class GameNotifier extends Notifier<GameState> {
   // Cevap gönderilirken çağrılırsa yok sayılır; sayaç sıfırda kaldıkça tekrar çağırır.
   Future<void> sureDoldu() async {
     if (state.status != 'playing' || state.gonderiliyor) return;
+    await _kapat(sureDoldu: true);
+  }
+
+  // Sunucuya yazılan ilerleme: cevaplanan her soru için doğru mu ve seçilen oyuncu
+  static List<Map<String, dynamic>> _ilerleme(List<bool> sonuclar, List<String> cevaplar) => [
+        for (var i = 0; i < sonuclar.length; i++) {'dogru': sonuclar[i], 'cevap': cevaplar[i]},
+      ];
+
+  // Kaydı o anki skorla kilitler ve bitiş ekranını açar
+  Future<void> _kapat({required bool sureDoldu}) async {
     final userId = _depo.kullaniciId;
     state = state.copyWith(gonderiliyor: true);
 
     if (userId != null) {
       try {
-        await _depo.skorYaz(kullaniciId: userId, oyunTipi: _oyunTipi, tarih: state.tarih!, skor: state.score, bitti: true);
+        await _depo.skorYaz(
+          kullaniciId: userId,
+          oyunTipi: _oyunTipi,
+          tarih: state.tarih!,
+          skor: state.score,
+          bitti: true,
+          ilerleme: _ilerleme(state.sonuclar, state.cevaplar),
+        );
       } catch (_) {
-        // Kayıt kapatılamazsa açık kalır; oyun tekrar açılınca yarıda bırakılmış sayılır, skor aynı kalır
+        // Kayıt kapatılamazsa açık kalır; süre sunucuda da dolduğu için skor sonradan değiştirilemez
       }
     }
     if (!ref.mounted) return;
 
-    state = state.copyWith(status: 'completed', sureDoldu: true);
+    state = state.copyWith(status: 'completed', sureDoldu: sureDoldu);
     await _ornekCevaplariYukle();
   }
 

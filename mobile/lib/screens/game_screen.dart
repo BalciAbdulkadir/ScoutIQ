@@ -57,12 +57,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           baslik: 'Bugünkü oyununu oynadın',
           aciklama: 'Skorun: ${state.score}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
         );
-      case 'abandoned':
-        return OyunMesajKarti(
-          ikon: Icons.lock_outline_rounded,
-          baslik: 'Bugünkü hakkını kullandın',
-          aciklama: 'Oyundan çıktığın için oyun tamamlanmış sayıldı.\nSkorun: ${state.score}/$_maksimumSkor',
-        );
       case 'completed':
         return _bitis(state);
       default:

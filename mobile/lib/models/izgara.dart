@@ -7,16 +7,16 @@ const izgaraBoyutu = 3;
 // yarım kalan tahtanın süresi sunucudan okunur.
 typedef IzgaraAcilisi = ({IzgaraZorlugu zorluk, int? sure});
 
-// Süreli tahtanın sunucudaki durumu
-class IzgaraSuresi {
+// Süreli oyunun (Izgara, Kesişim, Bonservis) sunucudaki süre durumu
+class OyunSuresiDurumu {
   final int toplam; // Seçilen süre (saniye)
   final int kalan; // Sunucuya göre kalan süre (saniye)
 
-  const IzgaraSuresi({required this.toplam, required this.kalan});
+  const OyunSuresiDurumu({required this.toplam, required this.kalan});
 
-  static IzgaraSuresi? oku(Object? json) {
+  static OyunSuresiDurumu? oku(Object? json) {
     if (json is! Map<String, dynamic>) return null;
-    return IzgaraSuresi(toplam: (json['sure'] as num).toInt(), kalan: (json['kalan'] as num).toInt());
+    return OyunSuresiDurumu(toplam: (json['sure'] as num).toInt(), kalan: (json['kalan'] as num).toInt());
   }
 }
 

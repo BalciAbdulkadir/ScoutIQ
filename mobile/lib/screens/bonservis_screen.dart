@@ -92,12 +92,6 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           baslik: 'Bugünkü oyununu oynadın',
           aciklama: 'Skorun: ${durum.skor}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
         );
-      case BonservisDurumu.yaridaBirakildi:
-        return OyunMesajKarti(
-          ikon: Icons.lock_outline_rounded,
-          baslik: 'Bugünkü hakkını kullandın',
-          aciklama: 'Oyundan çıktığın için oyun tamamlanmış sayıldı.\nSkorun: ${durum.skor}/$_maksimumSkor',
-        );
       case BonservisDurumu.bitti:
         return _bitis(durum);
       case BonservisDurumu.oynaniyor:

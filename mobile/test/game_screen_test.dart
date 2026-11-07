@@ -175,11 +175,18 @@ void main() {
     expect(find.byType(TextField), findsNothing);
   });
 
-  testWidgets('yarıda bırakılan oyun açılmaz', (tester) async {
-    await ekraniAc(tester, (d) => d.kayit = {'skor': 2, 'durum': 'basladi'});
+  testWidgets('yarıda bırakılan oyun kaldığı sorudan devam eder', (tester) async {
+    await ekraniAc(tester, (d) {
+      d.kayit = {'skor': 2, 'durum': 'basladi'};
+      d.ilerleme = [
+        {'dogru': true, 'cevap': 'Arda Güler'},
+      ];
+    });
 
-    expect(find.text('Bugünkü hakkını kullandın'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Soru 2/5'), findsOneWidget);
+    expect(find.text('2 puan'), findsOneWidget);
+    expect(find.text('Kulüp A1'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
   });
 
   testWidgets('süreli oyunda sayaç görünür, süresizde görünmez', (tester) async {

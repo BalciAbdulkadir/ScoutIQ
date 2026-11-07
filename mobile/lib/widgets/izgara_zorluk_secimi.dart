@@ -199,7 +199,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
         const SizedBox(height: 14),
         Text(
           zorlukAdi == null
-              ? 'Süre bütün sorular içindir. Başladığında ${widget.oyunAdi} bugünlük kapanır, oyundan çıkarsan oyun bitmiş sayılır.'
+              ? 'Süre bütün sorular içindir ve oyundan çıksan da işler. Süre bitmediyse kaldığın yerden devam edersin.'
               : 'Başladığında ${widget.oyunAdi} bugünlük kapanır, başka zorluk ya da süre seçilemez.',
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
         ),

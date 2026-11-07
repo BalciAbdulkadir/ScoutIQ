@@ -11,12 +11,14 @@ import 'package:mobile/screens/izgara_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
 
+import 'bonservis_test.dart' show sorular;
 import 'izgara_test.dart' show ornekTahta;
 import 'yardimcilar/sahte_oyun_deposu.dart';
 
 Future<void> anaMenuyuAc(
   WidgetTester tester, {
   Map<String, int> oynananlar = const {},
+  Set<String> yarimOyunlar = const {},
   BugunkuIzgara? bugunkuIzgara,
   List<Override> ekOverridelar = const [],
 }) async {
@@ -28,6 +30,7 @@ Future<void> anaMenuyuAc(
     overrides: [
       kullaniciProvider.overrideWithValue(const KullaniciBilgisi(ad: 'Celal Test', eposta: 'test@ornek.com')),
       bugunOynananlarProvider.overrideWith((ref) async => oynananlar),
+      yarimOyunlarProvider.overrideWith((ref) async => yarimOyunlar),
       bugunkuIzgaraProvider.overrideWith((ref) async => bugunkuIzgara),
       ...ekOverridelar,
     ],
@@ -160,6 +163,28 @@ void main() {
 
     expect(find.text('SÜRE SEÇ'), findsNothing);
     expect(find.text('Bugünkü oyununu oynadın'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('yarım kalan Bonservis\'te "Devam et" yazar, süre sorulmadan kaldığı yerden açılır', (tester) async {
+    final depo = SahteOyunDeposu()
+      ..oyun = {'id': 'oyun-b', 'soru_verisi': sorular}
+      ..kayit = {'skor': 2, 'durum': 'basladi'}
+      ..ilerleme = [
+        {'dogru': true},
+      ]
+      ..oyunSureToplam = 60
+      ..oyunSureKalan = 40;
+    await anaMenuyuAc(tester, yarimOyunlar: {'bonservis'}, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    expect(find.text('Devam et'), findsOneWidget);
+
+    await tester.tap(find.text('BONSERVİS'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SÜRE SEÇ'), findsNothing);
+    expect(find.text('Soru 2/5'), findsOneWidget);
+    expect(find.text('0:40'), findsOneWidget);
     await ekraniKapat(tester);
   });
 
