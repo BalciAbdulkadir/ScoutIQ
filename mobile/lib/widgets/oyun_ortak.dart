@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
@@ -12,6 +14,7 @@ class OyunIlerlemesi extends StatelessWidget {
   final List<bool> sonuclar;
   final Color renk;
   final String sagMetin; // ör. "4 puan"
+  final Widget? sayac; // Süreli oyunda ortada geri sayım
 
   const OyunIlerlemesi({
     super.key,
@@ -20,6 +23,7 @@ class OyunIlerlemesi extends StatelessWidget {
     required this.sonuclar,
     required this.renk,
     required this.sagMetin,
+    this.sayac,
   });
 
   @override
@@ -52,11 +56,16 @@ class OyunIlerlemesi extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Soru ${mevcutSoru + 1}/$soruSayisi',
-              style: Yazi.tebesir(16, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400),
+            Expanded(
+              child: Text(
+                'Soru ${mevcutSoru + 1}/$soruSayisi',
+                style: Yazi.tebesir(16, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400),
+              ),
             ),
-            Text(sagMetin, style: Yazi.tebesir(16, renk: Renkler.vurgu)),
+            ?sayac,
+            Expanded(
+              child: Text(sagMetin, textAlign: TextAlign.end, style: Yazi.tebesir(16, renk: Renkler.vurgu)),
+            ),
           ],
         ),
       ],
@@ -254,6 +263,61 @@ class OzetSatiri extends StatelessWidget {
           if (sag != null) ...[const SizedBox(width: 12), sag!],
         ],
       ),
+    );
+  }
+}
+
+// Geri sayım: süreli oyunlarda (Izgara, Kesişim, Bonservis) gösterilir. Sayaç sadece gösterir ve sıfıra inince
+// haber verir. Cevap gönderilirken süre dolarsa bildirim reddedilir, sayaç sıfırda kaldıkça tekrar denenir.
+class SureSayaci extends StatefulWidget {
+  final DateTime bitisZamani;
+  final VoidCallback onBitti;
+
+  const SureSayaci({super.key, required this.bitisZamani, required this.onBitti});
+
+  @override
+  State<SureSayaci> createState() => _SureSayaciState();
+}
+
+class _SureSayaciState extends State<SureSayaci> {
+  Timer? _zamanlayici;
+  late int _kalan = _hesapla();
+
+  int _hesapla() {
+    final ms = widget.bitisZamani.difference(DateTime.now()).inMilliseconds;
+    return ms <= 0 ? 0 : (ms / 1000).ceil();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _zamanlayici = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      final kalan = _hesapla();
+      if (kalan != _kalan) setState(() => _kalan = kalan);
+      if (kalan == 0) widget.onBitti();
+    });
+  }
+
+  @override
+  void dispose() {
+    _zamanlayici?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final azKaldi = _kalan <= 10;
+    final metin = '${_kalan ~/ 60}:${(_kalan % 60).toString().padLeft(2, '0')}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.timer_outlined, size: 16, color: azKaldi ? Renkler.hata : Renkler.metinIkincil),
+        const SizedBox(width: 4),
+        Text(
+          metin,
+          style: Yazi.baslik(20, renk: azKaldi ? Renkler.hata : Renkler.metin).copyWith(fontFeatures: Yazi.sabitRakam),
+        ),
+      ],
     );
   }
 }

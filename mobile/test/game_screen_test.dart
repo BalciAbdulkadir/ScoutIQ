@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/widgets/kulup_logosu.dart';
+import 'package:mobile/widgets/oyun_ortak.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
@@ -11,13 +12,13 @@ import 'yardimcilar/sahte_oyun_deposu.dart';
 // Arama, yazmanın bitmesini bu kadar bekler (game_screen.dart'taki zamanlayıcı)
 const aramaBeklemesi = Duration(milliseconds: 300);
 
-Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDeposu)? ayarla]) async {
+Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
   final depo = SahteOyunDeposu();
   ayarla?.call(depo);
 
   await tester.pumpWidget(ProviderScope(
     overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-    child: const MaterialApp(home: GameScreen()),
+    child: MaterialApp(home: GameScreen(sure: sure)),
   ));
   await tester.pumpAndSettle();
   return depo;
@@ -174,10 +175,27 @@ void main() {
     expect(find.byType(TextField), findsNothing);
   });
 
-  testWidgets('yarıda bırakılan oyun açılmaz', (tester) async {
-    await ekraniAc(tester, (d) => d.kayit = {'skor': 2, 'durum': 'basladi'});
+  testWidgets('yarıda bırakılan oyun kaldığı sorudan devam eder', (tester) async {
+    await ekraniAc(tester, (d) {
+      d.kayit = {'skor': 2, 'durum': 'basladi'};
+      d.ilerleme = [
+        {'dogru': true, 'cevap': 'Arda Güler'},
+      ];
+    });
 
-    expect(find.text('Bugünkü hakkını kullandın'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Soru 2/5'), findsOneWidget);
+    expect(find.text('2 puan'), findsOneWidget);
+    expect(find.text('Kulüp A1'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('süreli oyunda sayaç görünür, süresizde görünmez', (tester) async {
+    await ekraniAc(tester, null, 30);
+    expect(find.byType(SureSayaci), findsOneWidget);
+    expect(find.text('0:30'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await ekraniAc(tester);
+    expect(find.byType(SureSayaci), findsNothing);
   });
 }

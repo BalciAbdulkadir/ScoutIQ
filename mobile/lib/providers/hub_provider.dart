@@ -59,11 +59,27 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
 
   return {
     for (final kayit in kayitlar)
-      // Yarıda bırakılan Izgara tahtası kaldığı yerden devam eder, bitmiş sayılmaz.
-      // Diğer oyunlarda başlanmış oyun tekrar açılamadığı için oynanmış sayılır.
-      if (!(izgaraTipiMi(kayit['oyun_tipi'] as String) && kayit['durum'] == 'basladi'))
-        kayit['oyun_tipi'] as String: (kayit['skor'] as num?)?.toInt() ?? 0,
+      // Yarıda bırakılan oyun kaldığı yerden devam eder, bitmiş sayılmaz
+      if (kayit['durum'] != 'basladi') kayit['oyun_tipi'] as String: (kayit['skor'] as num?)?.toInt() ?? 0,
   };
+});
+
+// Bugün başlanıp bitmemiş Kesişim ve Bonservis oyunları (oyun_tipi). Hub'da "Devam et" yazar,
+// dokununca süre sorulmadan oyun kaldığı yerden açılır. Izgara'nınki bugunkuIzgaraProvider'dadır.
+final yarimOyunlarProvider = FutureProvider.autoDispose<Set<String>>((ref) async {
+  final supabase = Supabase.instance.client;
+  final userId = supabase.auth.currentUser?.id;
+  if (userId == null) return {};
+
+  final kayitlar = await supabase
+      .from('kullanici_oyun_gecmisi')
+      .select('oyun_tipi')
+      .eq('kullanici_id', userId)
+      .eq('tarih', bugununTarihi())
+      .eq('durum', 'basladi')
+      .inFilter('oyun_tipi', ['kesisim', 'bonservis']);
+
+  return {for (final kayit in kayitlar) kayit['oyun_tipi'] as String};
 });
 
 bool izgaraTipiMi(String oyunTipi) => oyunTipi.startsWith('izgara_');

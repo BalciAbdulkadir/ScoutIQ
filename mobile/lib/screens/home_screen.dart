@@ -25,17 +25,42 @@ class HomeScreen extends ConsumerWidget {
       return;
     }
 
-    final Widget? oyunEkrani = switch (mod.tip) {
-      'kesisim' => const GameScreen(),
-      'bonservis' => const BonservisScreen(),
+    final Widget Function(int? sure)? oyunEkrani = switch (mod.tip) {
+      'kesisim' => (sure) => GameScreen(sure: sure),
+      'bonservis' => (sure) => BonservisScreen(sure: sure),
       _ => null,
     };
 
     if (oyunEkrani != null) {
-      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani));
+      // Bugün başlanmadıysa önce süre seçilir. Yarım kalan oyun sunucudaki kalan süresiyle kaldığı yerden,
+      // bitmiş oyun sonucuyla doğrudan açılır.
+      var sure = OyunSuresi.suresiz;
+      bool baslandi;
+      try {
+        final oynananlar = await ref.read(bugunOynananlarProvider.future);
+        final yarimlar = await ref.read(yarimOyunlarProvider.future);
+        baslandi = oynananlar.containsKey(mod.tip) || yarimlar.contains(mod.tip);
+      } catch (_) {
+        baslandi = false; // Bilinmiyorsa seçim gösterilir; başlanmış oyunda sunucudaki süre geçerli olur
+      }
+      if (!context.mounted) return;
+
+      if (!baslandi) {
+        final secim = await showModalBottomSheet<ZorlukSureSecimi>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) => ZorlukSureSecimSayfasi(oyunAdi: mod.baslik, cizim: mod.cizim!),
+        );
+        if (secim == null || !context.mounted) return;
+        sure = secim.sure;
+      }
+
+      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani(sure.saniye)));
       // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
       if (!context.mounted) return;
       ref.invalidate(bugunOynananlarProvider);
+      ref.invalidate(yarimOyunlarProvider);
       return;
     }
 
@@ -50,6 +75,7 @@ class HomeScreen extends ConsumerWidget {
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
     final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
+    final yarimOyunlar = ref.watch(yarimOyunlarProvider).value ?? const <String>{};
 
     // Oynanabilenler önce, yakındakiler en sonda; hepsi tek bir ızgarada, kategorisiz
     final modlar = [
@@ -62,7 +88,8 @@ class HomeScreen extends ConsumerWidget {
     final tamamlanan = aktifModlar.where((m) => m.oyunTipleri.any(skorlar.containsKey)).length;
 
     final kutucuklar = [
-      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, mod.tip == 'izgara' ? bugunkuIzgara : null),
+      for (final mod in modlar)
+        _kutucuk(context, ref, mod, skorlar, mod.tip == 'izgara' ? bugunkuIzgara : null, yarimOyunlar.contains(mod.tip)),
     ];
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
@@ -76,6 +103,7 @@ class HomeScreen extends ConsumerWidget {
               backgroundColor: Renkler.yuzey,
               onRefresh: () {
                 ref.invalidate(bugunkuIzgaraProvider);
+                ref.invalidate(yarimOyunlarProvider);
                 return ref.refresh(bugunOynananlarProvider.future);
               },
               child: ListView(
@@ -127,6 +155,7 @@ class HomeScreen extends ConsumerWidget {
     OyunModu mod,
     Map<String, int> skorlar,
     BugunkuIzgara? bugunku,
+    bool yarim,
   ) {
     if (mod.zorluklu) {
       // Zorluklu oyunda günde tek zorluk oynanır: bugün başlanan tahta (yarım ya da bitmiş) kutucukta gösterilir
@@ -143,6 +172,7 @@ class HomeScreen extends ConsumerWidget {
     return OyunKarti(
       mod: mod,
       bugunkuSkor: skorlar[mod.tip],
+      devamEdiyor: yarim,
       onTap: () => _modaTiklandi(context, ref, mod),
     );
   }
