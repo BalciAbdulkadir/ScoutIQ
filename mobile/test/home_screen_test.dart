@@ -11,6 +11,7 @@ import 'package:mobile/screens/izgara_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
 
+import 'bonservis_test.dart' show sorular;
 import 'izgara_test.dart' show ornekTahta;
 import 'yardimcilar/sahte_oyun_deposu.dart';
 
@@ -73,22 +74,30 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('Kesişim\'e dokununca süre sorulmadan zorluk seçilir ve o zorluğun oyunu açılır', (tester) async {
+  testWidgets('Kesişim\'e dokununca önce zorluk, sonra süre seçilir ve o zorluğun oyunu o süreyle açılır', (tester) async {
     final depo = SahteOyunDeposu();
     await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
 
     await tester.tap(find.text('KESİŞİM'));
     await tester.pumpAndSettle();
 
-    expect(find.text('ZORLUK SEÇ'), findsOneWidget);
+    expect(find.text('1 · ZORLUK SEÇ'), findsOneWidget);
     expect(find.text('Sadece ünlü oyuncular'), findsOneWidget);
 
     await tester.tap(find.text('ORTA'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 · SÜRE SEÇ'), findsNothing);
-    expect(tester.widget<GameScreen>(find.byType(GameScreen)).oyunTipi, 'kesisim_orta');
+    expect(find.text('2 · SÜRE SEÇ'), findsOneWidget);
+    await tester.tap(find.text('30'));
+    await tester.pump();
+    await tester.tap(find.text('ORTA · 30 SN BAŞLA'));
+    await tester.pumpAndSettle();
+
+    final ekran = tester.widget<GameScreen>(find.byType(GameScreen));
+    expect(ekran.oyunTipi, 'kesisim_orta');
+    expect(ekran.sure, 30);
     expect(depo.istenenOyunTipleri, ['kesisim_orta']);
+    expect(find.text('0:30'), findsOneWidget);
     await ekraniKapat(tester);
   });
 
@@ -156,6 +165,69 @@ void main() {
     // Süre sunucuda başlatıldı
     expect(depo.sureBaslatmaIstekleri, [60]);
     expect(find.text('1:00'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('Bonservis süresiz seçilince sayaçsız açılır', (tester) async {
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
+
+    await tester.tap(find.text('BONSERVİS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('KOLAY'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('∞'));
+    await tester.pump();
+    await tester.tap(find.text('KOLAY · SÜRESİZ BAŞLA'));
+    await tester.pumpAndSettle();
+
+    final ekran = tester.widget<BonservisScreen>(find.byType(BonservisScreen));
+    expect(ekran.oyunTipi, 'bonservis_kolay');
+    expect(ekran.sure, isNull);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets("bugün oynanmış Kesişim'e dokununca seçim sorulmadan sonuç açılır", (tester) async {
+    final depo = SahteOyunDeposu()..kayit = {'skor': 6, 'durum': 'tamamlandi'};
+    await anaMenuyuAc(
+      tester,
+      oynananlar: {'kesisim_kolay': 6},
+      bugunkuModlar: {'kesisim': (zorluk: 0, bitti: true)},
+      ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)],
+    );
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
+    expect(find.text('Bugünkü oyununu oynadın'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('yarım kalan Bonservis\'te "Devam et" yazar, süre sorulmadan kaldığı yerden açılır', (tester) async {
+    final depo = SahteOyunDeposu()
+      ..oyun = {'id': 'oyun-b', 'soru_verisi': sorular}
+      ..kayit = {'skor': 2, 'durum': 'basladi'}
+      ..ilerleme = [
+        {'dogru': true},
+      ]
+      ..oyunSureToplam = 60
+      ..oyunSureKalan = 40;
+    await anaMenuyuAc(
+      tester,
+      bugunkuModlar: {'bonservis': (zorluk: 1, bitti: false)},
+      ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)],
+    );
+
+    expect(find.text('Devam et'), findsOneWidget);
+    expect(find.text('ORTA'), findsOneWidget);
+
+    await tester.tap(find.text('BONSERVİS'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
+    expect(tester.widget<BonservisScreen>(find.byType(BonservisScreen)).oyunTipi, 'bonservis_orta');
+    expect(find.text('Soru 2/5'), findsOneWidget);
+    expect(find.text('0:40'), findsOneWidget);
     await ekraniKapat(tester);
   });
 

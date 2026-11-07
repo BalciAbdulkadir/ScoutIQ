@@ -15,6 +15,14 @@ class SahteOyunDeposu implements OyunDeposu {
 
   // Kullanıcının o günkü kaydı: {'skor': int, 'durum': String}
   Map<String, dynamic>? kayit;
+  // Kayıttaki ilerleme (cevaplanan sorular). oyunKaydi kayda ekleyerek döndürür.
+  List<Map<String, dynamic>> ilerleme = [];
+
+  // Kesişim/Bonservis süresi: başlatılan toplam süre ve sunucuya göre kalan süre (saniye). null: süresiz.
+  int? oyunSureToplam;
+  int? oyunSureKalan;
+  final List<int?> oyunSureIstekleri = [];
+  bool oyunSureHataVerir = false;
 
   // kayitAc çağrıldığında başka bir cihazın kaydı atmış gibi davranılsın mı
   bool kayitAcCakisir = false;
@@ -80,7 +88,6 @@ class SahteOyunDeposu implements OyunDeposu {
   int cevapKontrolSayisi = 0;
   final List<String> arananlar = [];
   final List<({int skor, bool bitti})> yazilanSkorlar = [];
-  bool yarimKayitKapatildi = false;
   final List<String> istenenOyunTipleri = []; // gununOyunu ile istenen oyun tipleri
   final List<String> acilanKayitTipleri = []; // kayitAc ile açılan oyun tipleri
 
@@ -91,12 +98,20 @@ class SahteOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<Map<String, dynamic>?> oyunKaydi(String kullaniciId, String oyunTipi, String tarih) async => kayit;
+  Future<Map<String, dynamic>?> oyunKaydi(String kullaniciId, String oyunTipi, String tarih) async =>
+      kayit == null ? null : {...kayit!, 'ilerleme': ilerleme};
 
   @override
-  Future<void> yarimKaydiKapat(String kullaniciId, String oyunTipi, String tarih) async {
-    yarimKayitKapatildi = true;
-    if (kayit?['durum'] == 'basladi') kayit = {...kayit!, 'durum': 'tamamlandi'};
+  Future<OyunSuresiDurumu?> oyunSureyiBaslat(String oyunTipi, String tarih, {int? sure}) async {
+    oyunSureIstekleri.add(sure);
+    if (oyunSureHataVerir) throw Exception('bağlantı yok');
+    // Gerçek sunucu gibi: süre sadece açık ve süresi olmayan kayda bir kez verilir
+    if (sure != null && kayit?['durum'] == 'basladi' && oyunSureToplam == null) {
+      oyunSureToplam = sure;
+      oyunSureKalan = sure;
+    }
+    final toplam = oyunSureToplam;
+    return toplam == null ? null : OyunSuresiDurumu(toplam: toplam, kalan: oyunSureKalan ?? toplam);
   }
 
   @override
@@ -142,12 +157,20 @@ class SahteOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti}) async {
+  Future<bool> skorYaz({
+    required String kullaniciId,
+    required String oyunTipi,
+    required String tarih,
+    required int skor,
+    required bool bitti,
+    List<Map<String, dynamic>>? ilerleme,
+  }) async {
     if (skorYazBekletici != null) await skorYazBekletici!.future;
     if (skorYazHataVerir) throw Exception('bağlantı yok');
     if (kayit?['durum'] != 'basladi') return false;
     yazilanSkorlar.add((skor: skor, bitti: bitti));
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
+    if (ilerleme != null) this.ilerleme = ilerleme;
     return true;
   }
 
@@ -186,7 +209,7 @@ class SahteOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
+  Future<OyunSuresiDurumu?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
     sureBaslatmaIstekleri.add(sure);
     if (izgaraSureHataVerir) throw Exception('fonksiyon yok');
     // Süre bir kez başlatılır, sonradan değiştirilemez
@@ -195,7 +218,7 @@ class SahteOyunDeposu implements OyunDeposu {
       izgaraSureKalan = sure;
     }
     if (izgaraSureToplam == null) return null;
-    return IzgaraSuresi(toplam: izgaraSureToplam!, kalan: izgaraSureKalan!);
+    return OyunSuresiDurumu(toplam: izgaraSureToplam!, kalan: izgaraSureKalan!);
   }
 
   @override

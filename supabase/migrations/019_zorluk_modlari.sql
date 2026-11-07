@@ -1,6 +1,6 @@
--- 018: Her oyunda kolay, orta ve zor mod
+-- 019: Her oyunda kolay, orta ve zor mod
 -- Supabase SQL Editor'da tek seferde çalıştırılır. Hata olursa hiçbir değişiklik uygulanmaz.
--- 017_oyuncu_havuzu.sql'den sonra çalıştırılmalıdır (oyuncular.bilinirlik kullanılır).
+-- 017_oyuncu_havuzu.sql (oyuncular.bilinirlik) ve 018_oyun_devam.sql'den (oyun_sureyi_baslat) sonra çalıştırılmalıdır.
 --
 -- Kurallar:
 --   - Kesişim ve Bonservis de Izgara gibi üç ayrı günlük oyundur: kesisim_kolay, kesisim_orta, kesisim_zor,
@@ -157,5 +157,61 @@ revoke execute on function public.oyun_gunde_bir() from public, anon, authentica
 create trigger oyun_gunde_bir
     before insert on public.kullanici_oyun_gecmisi
     for each row execute function public.oyun_gunde_bir();
+
+-- 5) Kesişim ve Bonservis süresi: 018'deki fonksiyonun aynısı, tek farkı modlu oyun tiplerini de kabul etmesi
+create or replace function public.oyun_sureyi_baslat(p_oyun_tipi text, p_tarih date, p_sure integer default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_kullanici uuid := (select auth.uid());
+    v_sure integer;
+    v_bitis timestamptz;
+begin
+    if v_kullanici is null then
+        raise exception 'Giriş yapılmamış';
+    end if;
+
+    if p_oyun_tipi not in ('kesisim', 'bonservis',
+                           'kesisim_kolay', 'kesisim_orta', 'kesisim_zor',
+                           'bonservis_kolay', 'bonservis_orta', 'bonservis_zor') then
+        raise exception 'Geçersiz oyun';
+    end if;
+
+    if p_sure is not null then
+        if p_sure not in (30, 60, 90) then
+            raise exception 'Geçersiz süre';
+        end if;
+
+        -- Sadece açık (basladi) ve henüz süresi olmayan kayda süre verilir
+        update public.kullanici_oyun_gecmisi
+        set sure_saniye = p_sure, sure_baslangic = now()
+        where kullanici_id = v_kullanici
+          and oyun_tipi = p_oyun_tipi
+          and tarih = p_tarih
+          and durum = 'basladi'
+          and sure_saniye is null;
+    end if;
+
+    select g.sure_saniye, g.sure_baslangic + make_interval(secs => g.sure_saniye) into v_sure, v_bitis
+    from public.kullanici_oyun_gecmisi g
+    where g.kullanici_id = v_kullanici
+      and g.oyun_tipi = p_oyun_tipi
+      and g.tarih = p_tarih;
+
+    if v_bitis is null then
+        return null;
+    end if;
+
+    return jsonb_build_object(
+        'sure', v_sure,
+        'kalan', greatest(0, ceil(extract(epoch from (v_bitis - now())))::integer));
+end;
+$$;
+
+revoke execute on function public.oyun_sureyi_baslat(text, date, integer) from public, anon;
+grant execute on function public.oyun_sureyi_baslat(text, date, integer) to authenticated;
 
 commit;

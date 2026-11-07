@@ -19,9 +19,9 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
     // Her oyunda önce zorluk seçilir (bugün bir zorluk açıldıysa o açılır). Izgara'da zorluktan sonra süre de seçilir.
-    final Widget Function(String oyunTipi)? ekran = switch (mod.tip) {
-      'kesisim' => (oyunTipi) => GameScreen(oyunTipi: oyunTipi),
-      'bonservis' => (oyunTipi) => BonservisScreen(oyunTipi: oyunTipi),
+    final Widget Function(String oyunTipi, int? sure)? ekran = switch (mod.tip) {
+      'kesisim' => (oyunTipi, sure) => GameScreen(oyunTipi: oyunTipi, sure: sure),
+      'bonservis' => (oyunTipi, sure) => BonservisScreen(oyunTipi: oyunTipi, sure: sure),
       _ => null,
     };
     if (mod.tip == 'izgara') return izgaraAc(context, ref);
@@ -39,6 +39,14 @@ class HomeScreen extends ConsumerWidget {
     final kullanici = ref.watch(kullaniciProvider);
     final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
 
+    // Zorluklu oyunun bugün açılmış zorluğu (yarım ya da bitmiş)
+    BugunkuMod? bugunku(OyunModu mod) {
+      if (mod.tip == 'izgara') {
+        return bugunkuIzgara == null ? null : (zorluk: bugunkuIzgara.zorluk.index, bitti: bugunkuIzgara.bitti);
+      }
+      return mod.zorluklu ? ref.watch(bugunkuModProvider(mod.tip!)).value : null;
+    }
+
     // Oynanabilenler önce, yakındakiler en sonda; hepsi tek bir ızgarada, kategorisiz
     final modlar = [
       ...oyunModlari.where((m) => m.durum != OyunDurumu.yakinda),
@@ -50,7 +58,7 @@ class HomeScreen extends ConsumerWidget {
     final tamamlanan = aktifModlar.where((m) => m.oyunTipleri.any(skorlar.containsKey)).length;
 
     final kutucuklar = [
-      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, mod.tip == 'izgara' ? bugunkuIzgara : null),
+      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, bugunku(mod)),
     ];
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
@@ -115,18 +123,18 @@ class HomeScreen extends ConsumerWidget {
     WidgetRef ref,
     OyunModu mod,
     Map<String, int> skorlar,
-    BugunkuIzgara? bugunku,
+    BugunkuMod? bugunku,
   ) {
     if (mod.zorluklu) {
-      // Zorluklu oyunda günde tek zorluk oynanır: bugün oynanan zorluk kutucukta gösterilir.
-      // Sadece Izgara yarıda bırakılıp devam ettirilebilir (bugunku sadece Izgara için gelir).
+      // Zorluklu oyunda günde tek zorluk oynanır: bugün açılan zorluk kutucukta gösterilir.
+      // Yarım kalan oyunda "Devam et", bitmiş oyunda o zorluğun skoru yazar.
       final altTipler = mod.altTipler!;
       final devamEdiyor = bugunku != null && !bugunku.bitti;
       final oynanan = devamEdiyor ? -1 : altTipler.indexWhere(skorlar.containsKey);
       return OyunKarti(
         mod: mod,
         bugunkuSkor: oynanan >= 0 ? skorlar[altTipler[oynanan]] : null,
-        oynananZorluk: oynanan >= 0 ? zorlukAdlari[oynanan] : bugunku?.zorluk.ad,
+        oynananZorluk: oynanan >= 0 ? zorlukAdlari[oynanan] : (bugunku != null ? zorlukAdlari[bugunku.zorluk] : null),
         devamEdiyor: devamEdiyor,
         onTap: () => _modaTiklandi(context, ref, mod),
       );

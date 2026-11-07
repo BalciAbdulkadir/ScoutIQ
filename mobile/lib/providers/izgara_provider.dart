@@ -140,7 +140,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
       var bitti = kayit['durum'] == 'tamamlandi' || tahminler.where((t) => t.hucre != null).length >= izgaraBoyutu * izgaraBoyutu;
 
       // Süre: yeni tahtada seçilen süre başlatılır, yarım kalan tahtada sunucudaki kalan süre okunur
-      IzgaraSuresi? sure;
+      OyunSuresiDurumu? sure;
       if (!bitti) {
         try {
           sure = await _depo.izgaraSureyiBaslat(oyunId, sure: yeniBasladi ? acilis.sure : null);

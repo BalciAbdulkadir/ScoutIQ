@@ -17,8 +17,6 @@ class OyunModu {
   final List<String>? altTipler;
   // Zorluk seçim sayfasında her zorluğun altında yazan açıklama, altTipler ile aynı sırada
   final List<String>? zorlukAciklamalari;
-  // Zorluktan sonra süre de seçilir (sadece Izgara)
-  final bool sureli;
 
   const OyunModu({
     this.tip,
@@ -31,7 +29,6 @@ class OyunModu {
     this.maksimumSkor,
     this.altTipler,
     this.zorlukAciklamalari,
-    this.sureli = false,
   });
 
   // Bu modun veritabanındaki günlük oyun tipleri
@@ -103,7 +100,6 @@ const List<OyunModu> oyunModlari = [
     // Her zorluk ayrı bir tahta; kullanıcı günde bunlardan yalnızca birini seçip oynar
     altTipler: ['izgara_kolay', 'izgara_orta', 'izgara_zor'],
     // Zorluk açıklamaları IzgaraZorlugu'nda
-    sureli: true,
   ),
   OyunModu(
     baslik: 'Bingo',

@@ -6,7 +6,7 @@ import '../models/oyuncu_oneri.dart';
 // Aynı gün aynı oyun için kayıt zaten varsa (örneğin başka bir cihazda başlanmışsa) fırlatılır
 class KayitZatenVar implements Exception {}
 
-// Kullanıcı bu oyunun bugün başka bir zorluğuna başlamış: her oyunda günde tek zorluk oynanır (018_zorluk_modlari.sql)
+// Kullanıcı bu oyunun bugün başka bir zorluğuna başlamış: her oyunda günde tek zorluk oynanır (019_zorluk_modlari.sql)
 class BaskaModOynandi implements Exception {}
 
 // Oyunların veritabanı işlemleri. Oyun mantığı bu arayüz üzerinden çalışır,
@@ -17,11 +17,8 @@ abstract class OyunDeposu {
   // Türkiye saatine göre bugünün tarihi (yyyy-MM-dd), sunucudan
   Future<String> oyunTarihi();
 
-  // Kullanıcının o günkü kaydı: {'skor': int, 'durum': 'basladi' | 'tamamlandi'} ya da null
+  // Kullanıcının o günkü kaydı: {'skor': int, 'durum': 'basladi' | 'tamamlandi', 'ilerleme': List} ya da null
   Future<Map<String, dynamic>?> oyunKaydi(String kullaniciId, String oyunTipi, String tarih);
-
-  // Yarıda bırakılmış ('basladi') kaydı kapatır
-  Future<void> yarimKaydiKapat(String kullaniciId, String oyunTipi, String tarih);
 
   // Günün oyunu: {'id': String, 'soru_verisi': List} ya da null
   Future<Map<String, dynamic>?> gununOyunu(String oyunTipi, String tarih);
@@ -37,9 +34,20 @@ abstract class OyunDeposu {
   // Sunucu sadece oyunu bitirmiş kullanıcıya cevap döndürür.
   Future<Map<int, String>> kesisimOrnekCevaplar(String oyunId);
 
-  // 'basladi' durumundaki kaydın skorunu yazar, bittiyse kilitler.
+  // 'basladi' durumundaki kaydın skorunu ve ilerlemesini (cevaplanan sorular) yazar, bittiyse kilitler.
   // Güncellenecek kayıt yoksa (başka yerden kapatılmışsa) false döner.
-  Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti});
+  Future<bool> skorYaz({
+    required String kullaniciId,
+    required String oyunTipi,
+    required String tarih,
+    required int skor,
+    required bool bitti,
+    List<Map<String, dynamic>>? ilerleme,
+  });
+
+  // Kesişim ve Bonservis: süreyi başlatır (sure doluysa) ve oyunun süre durumunu döndürür; süresiz oyunda null.
+  // Süre zaten başlatılmışsa yeni süre yok sayılır (018_oyun_devam.sql).
+  Future<OyunSuresiDurumu?> oyunSureyiBaslat(String oyunTipi, String tarih, {int? sure});
 
   // Izgara: tahminler ve skor sunucuda tutulur (011_izgara.sql)
 
@@ -54,7 +62,7 @@ abstract class OyunDeposu {
 
   // Süreyi başlatır (sure doluysa) ve tahtanın süre durumunu döndürür; süresiz tahtada null.
   // Süre zaten başlatılmışsa yeni süre yok sayılır.
-  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure});
+  Future<OyunSuresiDurumu?> izgaraSureyiBaslat(String oyunId, {int? sure});
 
   // Bitmiş tahtanın her hücresi için örnek bir doğru cevap: hücre -> oyuncu
   Future<Map<int, IzgaraOyuncusu>> izgaraOrnekCevaplar(String oyunId);
@@ -82,22 +90,11 @@ class SupabaseOyunDeposu implements OyunDeposu {
   Future<Map<String, dynamic>?> oyunKaydi(String kullaniciId, String oyunTipi, String tarih) {
     return _supabase
         .from('kullanici_oyun_gecmisi')
-        .select('skor, durum')
+        .select('skor, durum, ilerleme')
         .eq('kullanici_id', kullaniciId)
         .eq('oyun_tipi', oyunTipi)
         .eq('tarih', tarih)
         .maybeSingle();
-  }
-
-  @override
-  Future<void> yarimKaydiKapat(String kullaniciId, String oyunTipi, String tarih) async {
-    await _supabase
-        .from('kullanici_oyun_gecmisi')
-        .update({'durum': 'tamamlandi'})
-        .eq('kullanici_id', kullaniciId)
-        .eq('oyun_tipi', oyunTipi)
-        .eq('tarih', tarih)
-        .eq('durum', 'basladi');
   }
 
   @override
@@ -158,16 +155,29 @@ class SupabaseOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<bool> skorYaz({required String kullaniciId, required String oyunTipi, required String tarih, required int skor, required bool bitti}) async {
+  Future<bool> skorYaz({
+    required String kullaniciId,
+    required String oyunTipi,
+    required String tarih,
+    required int skor,
+    required bool bitti,
+    List<Map<String, dynamic>>? ilerleme,
+  }) async {
     final guncellenen = await _supabase
         .from('kullanici_oyun_gecmisi')
-        .update({'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'})
+        .update({'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi', 'ilerleme': ?ilerleme})
         .eq('kullanici_id', kullaniciId)
         .eq('oyun_tipi', oyunTipi)
         .eq('tarih', tarih)
         .eq('durum', 'basladi')
         .select('skor');
     return guncellenen.isNotEmpty;
+  }
+
+  @override
+  Future<OyunSuresiDurumu?> oyunSureyiBaslat(String oyunTipi, String tarih, {int? sure}) async {
+    final sonuc = await _supabase.rpc('oyun_sureyi_baslat', params: {'p_oyun_tipi': oyunTipi, 'p_tarih': tarih, 'p_sure': sure});
+    return OyunSuresiDurumu.oku(sonuc);
   }
 
   @override
@@ -188,9 +198,9 @@ class SupabaseOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<IzgaraSuresi?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
+  Future<OyunSuresiDurumu?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
     final sonuc = await _supabase.rpc('izgara_sureyi_baslat', params: {'p_oyun_id': oyunId, 'p_sure': sure});
-    return IzgaraSuresi.oku(sonuc);
+    return OyunSuresiDurumu.oku(sonuc);
   }
 
   @override

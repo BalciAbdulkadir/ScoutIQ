@@ -1,3 +1,4 @@
+import '../models/izgara.dart';
 import '../providers/hub_provider.dart';
 import 'oyun_deposu.dart';
 
@@ -6,27 +7,29 @@ const yuklemeHataMesaji = 'Oyun yüklenemedi. İnternet bağlantını kontrol ed
 const gonderimHataMesaji = 'Cevap gönderilemedi. İnternet bağlantını kontrol edip tekrar dene.';
 const baskaZorlukMesaji = 'Bu oyunu bugün başka bir zorlukta oynadın. Yeni oyunlar gece yarısı açılıyor.';
 
-// Bir günlük oyunu açmaya çalışmanın sonucu. Tüm oyun modları aynı "günde tek atış" kurallarını kullanır.
+// Kesişim ya da Bonservis ekranını açan seçim: zorluğun günlük oyun tipi (ör. kesisim_orta) ve seçilen süre
+// (saniye; null: süresiz). Süre sadece yeni başlanan oyunda kullanılır, yarım kalan oyunun süresi sunucudan okunur.
+typedef GunlukOyunSecimi = ({String oyunTipi, int? sure});
+
+// Bir günlük oyunu (Kesişim ya da Bonservis, herhangi bir zorluğu) açmaya çalışmanın sonucu.
 sealed class OyunAcilisi {}
 
-// Oyun oynanabilir: 'basladi' kaydı açıldı
+// Oyun oynanabilir: yeni başladı ya da yarım kalmıştı ve kaldığı yerden devam ediyor
 class Oynanabilir extends OyunAcilisi {
   final String oyunId;
   final List<dynamic> sorular;
   final String tarih;
-  Oynanabilir(this.oyunId, this.sorular, this.tarih);
+  final int skor; // Yarım kalan oyunda o ana kadarki skor
+  final List<Map<String, dynamic>> ilerleme; // Cevaplanan sorular, sırayla: {'dogru': bool, 'cevap': String?}
+  final int? kalanSaniye; // Süreli oyunda sunucuya göre kalan süre (0: dolmuş); süresizse null
+
+  Oynanabilir(this.oyunId, this.sorular, this.tarih, {this.skor = 0, this.ilerleme = const [], this.kalanSaniye});
 }
 
 // Bugün bitirilmiş
 class ZatenOynandi extends OyunAcilisi {
   final int skor;
   ZatenOynandi(this.skor);
-}
-
-// Bugün başlanıp yarıda bırakılmış: tamamlanmış sayılır ve kaydı kapatılır
-class YaridaBirakildi extends OyunAcilisi {
-  final int skor;
-  YaridaBirakildi(this.skor);
 }
 
 class OyunYok extends OyunAcilisi {}
@@ -46,49 +49,61 @@ Future<String> _oyunTarihi(OyunDeposu depo) async {
   }
 }
 
-// Daha önce atılmış kayda göre oyunu kilitler
-Future<OyunAcilisi> _kayittanKilitle(OyunDeposu depo, Map<String, dynamic> kayit, String userId, String oyunTipi, String tarih) async {
-  final skor = (kayit['skor'] as num?)?.toInt() ?? 0;
+int _skor(Map<String, dynamic> kayit) => (kayit['skor'] as num?)?.toInt() ?? 0;
 
-  if (kayit['durum'] == 'basladi') {
-    // Kaydı kapatıyoruz ki yarım kalan oyunun skoru sonradan değiştirilemesin
-    try {
-      await depo.yarimKaydiKapat(userId, oyunTipi, tarih);
-    } catch (_) {}
-    return YaridaBirakildi(skor);
-  }
+List<Map<String, dynamic>> _ilerleme(Map<String, dynamic> kayit) =>
+    (kayit['ilerleme'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>().toList();
 
-  return ZatenOynandi(skor);
-}
-
-// Günün oyununu açar. Oyun oynanabilirse kaydı 'basladi' olarak atar:
-// oyun yarıda bırakılırsa bu kayıt tekrar oynamayı engeller. Bağlantı hatalarında fırlatır.
-Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi) async {
+// Günün oyununu açar. Kayıt yoksa 'basladi' olarak atar ve seçilen süreyi (sure, saniye) sunucuda başlatır.
+// Oyundan çıkınca oyun bitmez: yarım kalan kayıt varsa oyun kaldığı yerden, sunucudaki kalan süreyle açılır.
+// Bağlantı hatalarında fırlatır.
+Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi, {int? sure}) async {
   final userId = depo.kullaniciId;
   if (userId == null) return OturumYok();
 
   final tarih = await _oyunTarihi(depo);
 
-  // 1. Kullanıcı bugün bu oyuna başlamış ya da bitirmiş mi?
-  final kayit = await depo.oyunKaydi(userId, oyunTipi, tarih);
-  if (kayit != null) return _kayittanKilitle(depo, kayit, userId, oyunTipi, tarih);
+  // 1. Kullanıcı bugün bu oyunu bitirmiş mi?
+  var kayit = await depo.oyunKaydi(userId, oyunTipi, tarih);
+  if (kayit != null && kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit));
 
   // 2. Bugünün oyununu çek
   final oyun = await depo.gununOyunu(oyunTipi, tarih);
   final sorular = oyun?['soru_verisi'] as List<dynamic>?;
   if (oyun == null || sorular == null || sorular.isEmpty) return OyunYok();
 
-  // 3. Kaydı aç
-  try {
-    await depo.kayitAc(kullaniciId: userId, oyunId: oyun['id'], oyunTipi: oyunTipi, tarih: tarih);
-  } on KayitZatenVar {
-    // Oyun aynı anda başka bir cihazda başlatılmış
-    final mevcut = await depo.oyunKaydi(userId, oyunTipi, tarih);
-    if (mevcut != null) return _kayittanKilitle(depo, mevcut, userId, oyunTipi, tarih);
-    rethrow;
-  } on BaskaModOynandi {
-    return BaskaZorlukOynandi();
+  // 3. Kayıt yoksa aç
+  var yeni = false;
+  if (kayit == null) {
+    try {
+      await depo.kayitAc(kullaniciId: userId, oyunId: oyun['id'], oyunTipi: oyunTipi, tarih: tarih);
+      kayit = {'skor': 0, 'durum': 'basladi'};
+      yeni = true;
+    } on KayitZatenVar {
+      // Oyun aynı anda başka bir cihazda başlatılmış: o kayıtla devam ediliyor
+      kayit = await depo.oyunKaydi(userId, oyunTipi, tarih);
+      if (kayit == null) rethrow;
+      if (kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit));
+    } on BaskaModOynandi {
+      return BaskaZorlukOynandi();
+    }
   }
 
-  return Oynanabilir(oyun['id'], sorular, tarih);
+  // 4. Süre: yeni oyunda seçilen süre başlatılır, yarım kalan oyunda sunucudaki kalan süre okunur
+  OyunSuresiDurumu? sureDurumu;
+  try {
+    sureDurumu = await depo.oyunSureyiBaslat(oyunTipi, tarih, sure: yeni ? sure : null);
+  } catch (_) {
+    // Sunucuya sorulamazsa yeni oyun seçilen süreyle cihazda sayılır, yarım kalan oyun süresiz açılır
+    if (yeni && sure != null) sureDurumu = OyunSuresiDurumu(toplam: sure, kalan: sure);
+  }
+
+  return Oynanabilir(
+    oyun['id'],
+    sorular,
+    tarih,
+    skor: _skor(kayit),
+    ilerleme: _ilerleme(kayit),
+    kalanSaniye: sureDurumu?.kalan,
+  );
 }

@@ -60,10 +60,8 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
 
   return {
     for (final kayit in kayitlar)
-      // Yarıda bırakılan Izgara tahtası kaldığı yerden devam eder, bitmiş sayılmaz.
-      // Diğer oyunlarda başlanmış oyun tekrar açılamadığı için oynanmış sayılır.
-      if (!(izgaraTipiMi(kayit['oyun_tipi'] as String) && kayit['durum'] == 'basladi'))
-        kayit['oyun_tipi'] as String: (kayit['skor'] as num?)?.toInt() ?? 0,
+      // Yarıda bırakılan oyun kaldığı yerden devam eder, bitmiş sayılmaz
+      if (kayit['durum'] != 'basladi') kayit['oyun_tipi'] as String: (kayit['skor'] as num?)?.toInt() ?? 0,
   };
 });
 

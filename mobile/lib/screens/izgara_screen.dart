@@ -139,7 +139,7 @@ class IzgaraScreen extends ConsumerWidget {
             skor: state.skor,
             sayac: state.bitisZamani == null
                 ? null
-                : _SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),
+                : SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),
           ),
           const SizedBox(height: 20),
           OyuncuArama(
@@ -223,61 +223,6 @@ class _Ilerleme extends StatelessWidget {
         const Spacer(),
         if (sayac != null) ...[sayac!, const SizedBox(width: 12)],
         Text('$skor/9 kutu', style: Yazi.tebesir(16)),
-      ],
-    );
-  }
-}
-
-// Geri sayım. Süre sunucuda tutulur; sayaç sadece gösterir ve sıfıra inince haber verir.
-// Tahmin gönderilirken süre dolarsa bildirim reddedilir, sayaç sıfırda kaldıkça tekrar denenir.
-class _SureSayaci extends StatefulWidget {
-  final DateTime bitisZamani;
-  final VoidCallback onBitti;
-
-  const _SureSayaci({required this.bitisZamani, required this.onBitti});
-
-  @override
-  State<_SureSayaci> createState() => _SureSayaciState();
-}
-
-class _SureSayaciState extends State<_SureSayaci> {
-  Timer? _zamanlayici;
-  late int _kalan = _hesapla();
-
-  int _hesapla() {
-    final ms = widget.bitisZamani.difference(DateTime.now()).inMilliseconds;
-    return ms <= 0 ? 0 : (ms / 1000).ceil();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _zamanlayici = Timer.periodic(const Duration(milliseconds: 250), (_) {
-      final kalan = _hesapla();
-      if (kalan != _kalan) setState(() => _kalan = kalan);
-      if (kalan == 0) widget.onBitti();
-    });
-  }
-
-  @override
-  void dispose() {
-    _zamanlayici?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final azKaldi = _kalan <= 10;
-    final metin = '${_kalan ~/ 60}:${(_kalan % 60).toString().padLeft(2, '0')}';
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.timer_outlined, size: 16, color: azKaldi ? Renkler.hata : Renkler.metinIkincil),
-        const SizedBox(width: 4),
-        Text(
-          metin,
-          style: Yazi.baslik(20, renk: azKaldi ? Renkler.hata : Renkler.metin).copyWith(fontFeatures: Yazi.sabitRakam),
-        ),
       ],
     );
   }

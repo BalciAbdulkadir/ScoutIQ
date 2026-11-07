@@ -83,12 +83,11 @@ void main() {
     expect(aktifler, ['kesisim', 'bonservis', 'izgara']);
   });
 
-  test('her oyun zorlukludur, her zorluğun ayrı günlük oyunu vardır, sadece Izgara\'da süre seçilir', () {
+  test('her oyun zorlukludur, her zorluğun ayrı günlük oyunu vardır', () {
     expect(izgara.zorluklu, isTrue);
     expect(izgara.oyunTipleri, ['izgara_kolay', 'izgara_orta', 'izgara_zor']);
     expect(kesisim.zorluklu, isTrue);
     expect(bonservis.oyunTipleri, ['bonservis_kolay', 'bonservis_orta', 'bonservis_zor']);
-    expect([kesisim.sureli, bonservis.sureli, izgara.sureli], [false, false, true]);
     expect(kesisim.oyunTipleri, ['kesisim_kolay', 'kesisim_orta', 'kesisim_zor']);
   });
 

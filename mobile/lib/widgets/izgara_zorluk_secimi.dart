@@ -8,15 +8,22 @@ import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import 'tebesir.dart';
 
-// Ana menüde Kesişim ya da Bonservis kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipiyle oyun ekranını kurar.
-// - Bugün bir zorluk açıldıysa sorulmadan o zorluk açılır (oyun ekranı bitmiş oyunun sonucunu gösterir).
-//   Her oyunda günde tek zorluk oynanır, sunucu da buna izin vermez (018_zorluk_modlari.sql).
-// - Yoksa zorluk seçilir ve oyun açılır. Bu oyunlarda süre seçimi yoktur.
+// Ana menüde Kesişim ya da Bonservis kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipi ve süreyle
+// oyun ekranını kurar.
+// - Bugün bir zorluk açıldıysa sorulmadan o zorluk açılır: yarımsa sunucudaki kalan süresiyle kaldığı yerden,
+//   bittiyse sonucuyla. Her oyunda günde tek zorluk oynanır, sunucu da buna izin vermez (019_zorluk_modlari.sql).
+// - Yoksa önce zorluk, sonra süre seçilir ve oyun açılır.
 // Dönünce ana menü tazelenir.
-Future<void> zorlukluOyunuAc(BuildContext context, WidgetRef ref, OyunModu mod, Widget Function(String oyunTipi) ekran) async {
+Future<void> zorlukluOyunuAc(
+  BuildContext context,
+  WidgetRef ref,
+  OyunModu mod,
+  Widget Function(String oyunTipi, int? sure) ekran,
+) async {
   final oyun = mod.tip!;
   final altTipler = mod.altTipler!;
   int? zorluk;
+  OyunSuresi sure = OyunSuresi.suresiz;
 
   try {
     zorluk = (await ref.read(bugunkuModProvider(oyun).future))?.zorluk;
@@ -36,14 +43,15 @@ Future<void> zorlukluOyunuAc(BuildContext context, WidgetRef ref, OyunModu mod, 
         zorluklar: [
           for (var i = 0; i < altTipler.length; i++) (ad: zorlukAdlari[i], aciklama: mod.zorlukAciklamalari?[i] ?? ''),
         ],
-        sureSecilir: false,
       ),
     );
     if (secim == null || !context.mounted) return;
-    zorluk = secim.zorluk;
+    zorluk = secim.zorluk!;
+    sure = secim.sure;
   }
 
-  await Navigator.push(context, MaterialPageRoute(builder: (context) => ekran(altTipler[zorluk!])));
+  final oyunTipi = altTipler[zorluk];
+  await Navigator.push(context, MaterialPageRoute(builder: (context) => ekran(oyunTipi, sure.saniye)));
   if (!context.mounted) return;
   ref.invalidate(bugunOynananlarProvider);
   ref.invalidate(bugunkuModProvider(oyun));
@@ -51,7 +59,7 @@ Future<void> zorlukluOyunuAc(BuildContext context, WidgetRef ref, OyunModu mod, 
 
 // Ana menüde Izgara kutucuğuna dokununca çağrılır.
 // - Bugün bir tahtaya başlandıysa sorulmadan o tahta açılır: yarımsa kaldığı yerden (sunucudaki kalan süresiyle),
-//   bittiyse sonucuyla. Zorluklu oyunlarda günde tek zorluk oynanır, sunucu da buna izin vermez (018).
+//   bittiyse sonucuyla. Zorluklu oyunlarda günde tek zorluk oynanır, sunucu da buna izin vermez (019).
 // - Yoksa önce zorluk, sonra süre seçilir ve tahta açılır.
 // Dönünce ana menü tazelenir.
 Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
@@ -77,7 +85,7 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
       ),
     );
     if (secim == null || !context.mounted) return;
-    acilacak = IzgaraZorlugu.values[secim.zorluk];
+    acilacak = IzgaraZorlugu.values[secim.zorluk!];
     sure = secim.sure;
   }
 
@@ -89,24 +97,17 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
   ref.invalidate(bugunkuIzgaraProvider);
 }
 
-// Seçim sayfasının sonucu: zorluğun sırası (0 kolay, 1 orta, 2 zor) ve süre
-typedef ZorlukSureSecimi = ({int zorluk, OyunSuresi sure});
+// Seçim sayfasının sonucu: zorluğun sırası (0 kolay, 1 orta, 2 zor; zorluksuz oyunda null) ve süre
+typedef ZorlukSureSecimi = ({int? zorluk, OyunSuresi sure});
 
-// Zorluklu her oyunda kullanılan alt sayfa: önce 3 zorluktan biri, sureSecilir ise sonra 4 süreden biri.
-// Süre seçilmeyen oyunlarda zorluğa dokununca sayfa kapanır ve oyun süresiz açılır.
+// Oyun başlamadan açılan alt sayfa. Zorluklu oyunda (Izgara) iki adımlıdır: önce 3 zorluktan biri,
+// sonra 4 süreden biri. Zorluksuz oyunda (Kesişim, Bonservis) sadece süre seçilir.
 class ZorlukSureSecimSayfasi extends StatefulWidget {
   final String oyunAdi;
   final TebesirCizimi cizim;
-  final List<({String ad, String aciklama})> zorluklar;
-  final bool sureSecilir;
+  final List<({String ad, String aciklama})>? zorluklar; // null: zorluksuz oyun
 
-  const ZorlukSureSecimSayfasi({
-    super.key,
-    required this.oyunAdi,
-    required this.cizim,
-    required this.zorluklar,
-    this.sureSecilir = true,
-  });
+  const ZorlukSureSecimSayfasi({super.key, required this.oyunAdi, required this.cizim, this.zorluklar});
 
   @override
   State<ZorlukSureSecimSayfasi> createState() => _ZorlukSureSecimSayfasiState();
@@ -119,6 +120,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
   @override
   Widget build(BuildContext context) {
     final zorluk = _zorluk;
+    final zorluksuz = widget.zorluklar == null;
 
     return SafeArea(
       child: Padding(
@@ -129,7 +131,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
           alignment: Alignment.topCenter,
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: zorluk == null ? _zorlukAdimi() : _sureAdimi(zorluk),
+            child: zorluksuz || zorluk != null ? _sureAdimi(zorluk) : _zorlukAdimi(),
           ),
         ),
       ),
@@ -170,37 +172,29 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
       );
 
   Widget _zorlukAdimi() {
+    final zorluklar = widget.zorluklar!;
     return Column(
       key: const ValueKey('zorluk'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _baslik(aciklama: 'Bugün yalnızca bir zorluk oynayabilirsin.'),
-        _adim(widget.sureSecilir ? '1 · Zorluk seç' : 'Zorluk seç'),
-        for (var i = 0; i < widget.zorluklar.length; i++) ...[
+        _adim('1 · Zorluk seç'),
+        for (var i = 0; i < zorluklar.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
           _SecimSatiri(
-            baslik: widget.zorluklar[i].ad,
-            aciklama: widget.zorluklar[i].aciklama,
-            onTap: () => widget.sureSecilir
-                ? setState(() => _zorluk = i)
-                : Navigator.pop(context, (zorluk: i, sure: OyunSuresi.suresiz)),
-          ),
-        ],
-        if (!widget.sureSecilir) ...[
-          const SizedBox(height: 14),
-          Text(
-            'Seçtiğin anda ${widget.oyunAdi} başlar ve bugünlük kapanır, başka zorluk seçilemez.',
-            style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
+            baslik: zorluklar[i].ad,
+            aciklama: zorluklar[i].aciklama,
+            onTap: () => setState(() => _zorluk = i),
           ),
         ],
       ],
     );
   }
 
-  Widget _sureAdimi(int zorluk) {
+  Widget _sureAdimi(int? zorluk) {
     final sure = _sure;
-    final zorlukAdi = widget.zorluklar[zorluk].ad;
+    final zorlukAdi = zorluk == null ? null : widget.zorluklar![zorluk].ad;
 
     Widget sureKutusu(OyunSuresi s) {
       final secili = s == sure;
@@ -236,31 +230,39 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _baslik(aciklama: 'Süreyi seç, sonra başla.', secilenZorluk: zorlukAdi),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () => setState(() {
-              _zorluk = null;
-              _sure = null;
-            }),
-            style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil, padding: EdgeInsets.zero),
-            child: const Text('← Zorluğu değiştir'),
+        if (zorlukAdi != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() {
+                _zorluk = null;
+                _sure = null;
+              }),
+              style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil, padding: EdgeInsets.zero),
+              child: const Text('← Zorluğu değiştir'),
+            ),
           ),
-        ),
-        _adim('2 · Süre seç'),
+        _adim(zorlukAdi == null ? 'Süre seç' : '2 · Süre seç'),
         Row(children: [sureKutusu(OyunSuresi.values[0]), const SizedBox(width: 8), sureKutusu(OyunSuresi.values[1])]),
         const SizedBox(height: 8),
         Row(children: [sureKutusu(OyunSuresi.values[2]), const SizedBox(width: 8), sureKutusu(OyunSuresi.values[3])]),
         const SizedBox(height: 14),
         Text(
-          'Başladığında ${widget.oyunAdi} bugünlük kapanır, başka zorluk ya da süre seçilemez.',
+          zorlukAdi == null
+              ? 'Süre bütün sorular içindir ve oyundan çıksan da işler. Süre bitmediyse kaldığın yerden devam edersin.'
+              : 'Başladıktan sonra bugün başka zorluk ya da süre seçilemez. Süre oyundan çıksan da işler; '
+                  'bitmediyse kaldığın yerden devam edersin.',
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
         ),
         const SizedBox(height: 14),
         FilledButton(
           onPressed: sure == null ? null : () => Navigator.pop(context, (zorluk: zorluk, sure: sure)),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-          child: Text(sure == null ? 'SÜRE SEÇ' : Yazi.buyuk('$zorlukAdi · ${sure.ad} başla')),
+          child: Text(
+            sure == null
+                ? 'SÜRE SEÇ'
+                : Yazi.buyuk(zorlukAdi == null ? '${sure.ad} başla' : '$zorlukAdi · ${sure.ad} başla'),
+          ),
         ),
       ],
     );

@@ -13,7 +13,7 @@ using Supabase.Postgrest.Models;
 namespace ScoutIQ.API.Jobs
 {
     // Her gece her oyunun üç modunu (kolay, orta, zor) ayrı günlük oyun olarak üretir: kesisim_kolay, bonservis_orta,
-    // izgara_zor ... Kullanıcı her oyunda günde bunlardan yalnızca birini oynar (018_zorluk_modlari.sql).
+    // izgara_zor ... Kullanıcı her oyunda günde bunlardan yalnızca birini oynar (019_zorluk_modlari.sql).
     public class DailyQuestionJob : IInvocable
     {
         // Oyun günleri Türkiye saatine göre başlar ve biter

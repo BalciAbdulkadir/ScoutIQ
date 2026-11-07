@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/game_provider.dart';
+import '../services/gunluk_oyun.dart' show GunlukOyunSecimi;
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/kulup_logosu.dart';
@@ -15,19 +16,22 @@ import '../widgets/tebesir.dart';
 class GameScreen extends ConsumerStatefulWidget {
   // Oynanan zorluğun günlük oyunu: kesisim_kolay, kesisim_orta ya da kesisim_zor
   final String oyunTipi;
+  final int? sure; // Seçilen süre, saniye; null: süresiz
 
-  const GameScreen({super.key, required this.oyunTipi});
+  const GameScreen({super.key, required this.oyunTipi, this.sure});
 
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
 class _GameScreenState extends ConsumerState<GameScreen> {
+  GunlukOyunSecimi get _secim => (oyunTipi: widget.oyunTipi, sure: widget.sure);
+
   static const _maksimumSkor = 10;
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(gameProvider(widget.oyunTipi));
+    final state = ref.watch(gameProvider(_secim));
 
     return Scaffold(
       appBar: AppBar(title: const Text('KESİŞİM')),
@@ -44,7 +48,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(gameProvider(widget.oyunTipi)),
+          onTekrarDene: () => ref.invalidate(gameProvider(_secim)),
         );
       case 'no_game':
         return const OyunMesajKarti(
@@ -57,12 +61,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ikon: Icons.check_circle_outline_rounded,
           baslik: 'Bugünkü oyununu oynadın',
           aciklama: 'Skorun: ${state.score}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
-        );
-      case 'abandoned':
-        return OyunMesajKarti(
-          ikon: Icons.lock_outline_rounded,
-          baslik: 'Bugünkü hakkını kullandın',
-          aciklama: 'Oyundan çıktığın için oyun tamamlanmış sayıldı.\nSkorun: ${state.score}/$_maksimumSkor',
         );
       case 'completed':
         return _bitis(state);
@@ -86,6 +84,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             sonuclar: state.sonuclar,
             renk: Renkler.kesisim,
             sagMetin: '${state.score} puan',
+            sayac: state.bitisZamani == null
+                ? null
+                : SureSayaci(
+                    bitisZamani: state.bitisZamani!,
+                    onBitti: ref.read(gameProvider(_secim).notifier).sureDoldu,
+                  ),
           ),
           const SizedBox(height: 28),
           Row(
@@ -110,8 +114,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           OyuncuArama(
             renk: Renkler.kesisim,
             gonderiliyor: state.gonderiliyor,
-            ara: ref.read(gameProvider(widget.oyunTipi).notifier).oyuncuAra,
-            gonder: ref.read(gameProvider(widget.oyunTipi).notifier).makeGuess,
+            ara: ref.read(gameProvider(_secim).notifier).oyuncuAra,
+            gonder: ref.read(gameProvider(_secim).notifier).makeGuess,
           ),
           const SizedBox(height: 16),
           _oncekiSonuc(state),
@@ -161,16 +165,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     return OyunBitisEkrani(
       skor: '${state.score}/$_maksimumSkor',
       skorAciklamasi: 'puan',
-      baslik: bitisBasligi(dogruSayisi, state.questions.length),
+      baslik: state.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, state.questions.length),
       renk: Renkler.kesisim,
       ozetSatirlari: [
         for (var i = 0; i < state.questions.length; i++)
           OzetSatiri(
             dogru: i < state.sonuclar.length ? state.sonuclar[i] : null,
             baslik: '${state.questions[i]['kulup_a']}  ×  ${state.questions[i]['kulup_b']}',
-            altBaslik: i < state.cevaplar.length ? 'Cevabın: ${state.cevaplar[i]}' : null,
-            // Doğru cevap sadece yanlış bilinen sorularda gösterilir
-            dogruCevap: (i < state.sonuclar.length && !state.sonuclar[i]) ? state.ornekCevaplar[i] : null,
+            altBaslik: i < state.cevaplar.length ? 'Cevabın: ${state.cevaplar[i]}' : 'Cevaplanmadı',
+            // Doğru cevap yanlış bilinen ve süre dolduğu için cevaplanmayan sorularda gösterilir
+            dogruCevap: (i < state.sonuclar.length && state.sonuclar[i]) ? null : state.ornekCevaplar[i],
           ),
       ],
     );

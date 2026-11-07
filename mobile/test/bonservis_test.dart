@@ -7,6 +7,7 @@ import 'package:mobile/models/bonservis_sorusu.dart';
 import 'package:mobile/providers/bonservis_provider.dart';
 import 'package:mobile/screens/bonservis_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
+import 'package:mobile/widgets/oyun_ortak.dart';
 import 'package:mobile/widgets/oyuncu_fotografi.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
@@ -42,22 +43,26 @@ const testOyunTipi = 'bonservis_zor';
 
 SahteOyunDeposu bonservisDeposu() => SahteOyunDeposu()..oyun = {'id': 'oyun-b', 'soru_verisi': sorular};
 
-Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyunDeposu)? ayarla]) async {
+// Testteki oyunun seçilen süresi (saniye); null: süresiz. oyunuBaslat ayarlar.
+int? testSuresi;
+
+Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
+  testSuresi = sure;
   final depo = bonservisDeposu();
   ayarla?.call(depo);
 
   final container = ProviderContainer(overrides: [oyunDeposuProvider.overrideWithValue(depo)]);
   addTearDown(container.dispose);
-  container.listen(bonservisProvider(testOyunTipi), (_, _) {});
+  container.listen(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi)), (_, _) {});
 
-  for (var i = 0; i < 100 && container.read(bonservisProvider(testOyunTipi)).durum == BonservisDurumu.yukleniyor; i++) {
+  for (var i = 0; i < 100 && container.read(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi))).durum == BonservisDurumu.yukleniyor; i++) {
     await Future<void>.delayed(Duration.zero);
   }
   return (container, depo);
 }
 
-BonservisNotifier notifier(ProviderContainer c) => c.read(bonservisProvider(testOyunTipi).notifier);
-BonservisState durum(ProviderContainer c) => c.read(bonservisProvider(testOyunTipi));
+BonservisNotifier notifier(ProviderContainer c) => c.read(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi)).notifier);
+BonservisState durum(ProviderContainer c) => c.read(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi)));
 
 void main() {
   group('Sorular', () {
@@ -209,16 +214,48 @@ void main() {
       expect(durum(c).skor, 3);
     });
 
-    test('yarıda bırakılan oyun açılmaz', () async {
-      final (c, depo) = await oyunuBaslat((d) => d.kayit = {'skor': 2, 'durum': 'basladi'});
+    test('yarıda bırakılan oyun kapanmaz, kaldığı sorudan skoruyla devam eder', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true},
+          {'dogru': false},
+        ];
+      });
 
-      expect(durum(c).durum, BonservisDurumu.yaridaBirakildi);
-      expect(depo.yarimKayitKapatildi, isTrue);
+      expect(durum(c).durum, BonservisDurumu.oynaniyor);
+      expect(durum(c).soruIndex, 2);
+      expect(durum(c).skor, 2);
+      expect(durum(c).sonuclar, [true, false]);
+      expect(durum(c).soru!.referans.isim, 'Barella');
+
+      await notifier(c).tahminEt(dahaFazla: dogruTahminler[2]);
+      expect(depo.ilerleme, [
+        {'dogru': true},
+        {'dogru': false},
+        {'dogru': true},
+      ]);
+      expect(depo.kayit, {'skor': 4, 'durum': 'basladi'});
+    });
+
+    test('yarım kalan süreli oyunda süre dolduysa oyun o anki skorla kapanır', () async {
+      final (c, depo) = await oyunuBaslat((d) {
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true},
+        ];
+        d.oyunSureToplam = 30;
+        d.oyunSureKalan = 0;
+      });
+
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
     });
   });
 
   group('Ekran', () {
-    Future<SahteOyunDeposu> ekraniAc(WidgetTester tester) async {
+    Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, {int? sure}) async {
       // Emulatördeki telefon boyutu (1080x2400)
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.625;
@@ -227,7 +264,7 @@ void main() {
       final depo = bonservisDeposu();
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-        child: const MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi)),
+        child: MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi, sure: sure)),
       ));
       await tester.pumpAndSettle();
       return depo;
@@ -330,6 +367,67 @@ void main() {
       expect(find.text('8/10'), findsOneWidget);
       expect(find.text('ÖZET'), findsOneWidget);
       expect(find.textContaining('Dumfries'), findsOneWidget);
+    });
+
+    testWidgets('süresiz oyunda sayaç görünmez', (tester) async {
+      await ekraniAc(tester);
+
+      expect(find.byType(SureSayaci), findsNothing);
+    });
+
+    testWidgets('süreli oyunda sayaç görünür', (tester) async {
+      await ekraniAc(tester, sure: 60);
+
+      expect(find.byType(SureSayaci), findsOneWidget);
+      expect(find.text('1:00'), findsOneWidget);
+    });
+  });
+
+  group('Süre', () {
+    test('süre seçildiyse oyun başlarken sayaç kurulur, süresizde kurulmaz', () async {
+      final (suresiz, _) = await oyunuBaslat();
+      expect(durum(suresiz).bitisZamani, isNull);
+
+      final once = DateTime.now();
+      final (sureli, _) = await oyunuBaslat(null, 90);
+      expect(durum(sureli).bitisZamani!.difference(once).inSeconds, inInclusiveRange(89, 90));
+    });
+
+    test('süre dolunca oyun o anki skorla biter ve kayıt kilitlenir', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      await notifier(c).tahminEt(dahaFazla: dogruTahminler[0]);
+      notifier(c).devamEt();
+      await notifier(c).tahminEt(dahaFazla: !dogruTahminler[1]);
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).skor, 2);
+      expect(durum(c).sonuclar, [true, false]);
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
+
+      // Sonuç bandındaki bekleme süre dolduktan sonra bitince sıradaki soruya geçilmez
+      notifier(c).devamEt();
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).soruIndex, 1);
+    });
+
+    test('tahmin gönderilirken süre dolarsa bildirim yok sayılır, tahmin işlenir', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      depo.skorYazBekletici = Completer<void>();
+
+      final tahmin = notifier(c).tahminEt(dahaFazla: dogruTahminler[0]);
+      await Future<void>.delayed(Duration.zero);
+      await notifier(c).sureDoldu();
+      expect(durum(c).durum, BonservisDurumu.oynaniyor);
+
+      depo.skorYazBekletici!.complete();
+      await tahmin;
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
     });
   });
 }
