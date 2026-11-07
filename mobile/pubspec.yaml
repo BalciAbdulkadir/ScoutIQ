@@ -52,16 +52,11 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 # Uygulama ikonu: değiştirdikten sonra `dart run flutter_launcher_icons` ile yeniden üretilir.
-# Android 8+ adaptive ikonda tebeşir çerçeve yoktur (launcher kendi şekliyle kırpar);
-# katmanlar icon_v1.jpeg'den tool/adaptive_ikon.py ile türetilir: arka = yeşil gradyan, ön = saydam zeminli logo.
 flutter_launcher_icons:
   image_path: "assets/icons/icon_v1.jpeg"
   android: true
   ios: true
   remove_alpha_ios: true
-  adaptive_icon_background: "assets/icons/icon_adaptive_arka.png"
-  adaptive_icon_foreground: "assets/icons/icon_adaptive_on.png"
-  adaptive_icon_foreground_inset: 0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
