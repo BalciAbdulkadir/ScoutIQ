@@ -28,7 +28,7 @@ class LoginScreen extends ConsumerWidget {
                   // Tahtanın ortasındaki orta yuvarlak
                   const Center(child: _OrtaSaha()),
                   const SizedBox(height: 36),
-                  const Center(child: FootyLoreLogo(boyut: 52)),
+                  const Center(child: FootyLoreLogo(genislik: 300)),
                   const SizedBox(height: 10),
                   Text(
                     'futbol zekanı her gün test et',
