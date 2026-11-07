@@ -21,3 +21,26 @@ class FootyLoreLogo extends StatelessWidget {
     );
   }
 }
+
+// Tek satır tebeşir logo: FOOTY'nin O'sundan çıkan sarı koşu, LORE'daki O futbol topu.
+// Görselin oranı sabit, sadece yükseklik verilir.
+class FootyLoreLogoGorseli extends StatelessWidget {
+  final double yukseklik;
+
+  const FootyLoreLogoGorseli({super.key, this.yukseklik = 36});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'FootyLore',
+      image: true,
+      child: Image.asset(
+        'assets/logo/footylore_logo.png',
+        height: yukseklik,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        excludeFromSemantics: true,
+      ),
+    );
+  }
+}

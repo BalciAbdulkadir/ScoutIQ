@@ -158,7 +158,7 @@ class _UstBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const FootyLoreLogo(),
+        const FootyLoreLogoGorseli(),
         const Spacer(),
         IconButton(
           tooltip: 'Hesap',
