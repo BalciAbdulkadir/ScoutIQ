@@ -52,17 +52,15 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 # Uygulama ikonu: değiştirdikten sonra `dart run flutter_launcher_icons` ile yeniden üretilir.
-# Android'de ikon yuvarlak: icon_v1'deki çizim ortalanıp tebeşir daire içine alındı (assets/icons/yuvarlak_ikon.py).
-# iOS ikonları köşeleri yuvarlatılmış kare olduğu için orada asıl görsel kullanılır.
+# Android 8+: ikonun şeklini (daire, yuvarlatılmış kare ...) telefon belirler. Zemin ikonun tamamını kaplar,
+# tebeşir çizimi her maskede görünen orta alanda durur. Katmanlar assets/icons/ikon_katmanlari.py ile üretilir.
+# iOS ve Android 7 ve öncesi: tebeşir çerçeveli asıl görsel.
 flutter_launcher_icons:
   image_path: "assets/icons/icon_v1.jpeg"
-  image_path_android: "assets/icons/ikon_yuvarlak.png"
-  image_path_ios: "assets/icons/icon_v1.jpeg"
   android: true
   ios: true
   remove_alpha_ios: true
-  # Android 8+: ön katmandaki daire, launcher'ın yuvarlak maskesine tam oturur
-  adaptive_icon_background: "#133729"
+  adaptive_icon_background: "assets/icons/ikon_zemin.png"
   adaptive_icon_foreground: "assets/icons/ikon_on_katman.png"
   adaptive_icon_foreground_inset: 0
 
