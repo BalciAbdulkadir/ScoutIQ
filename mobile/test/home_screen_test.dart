@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/providers/hub_provider.dart';
+import 'package:mobile/screens/bonservis_screen.dart';
+import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/izgara_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
@@ -112,6 +114,52 @@ void main() {
     // Süre sunucuda başlatıldı
     expect(depo.sureBaslatmaIstekleri, [60]);
     expect(find.text('1:00'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets("Kesişim'e dokununca zorluk sorulmadan süre seçilir ve oyun o süreyle açılır", (tester) async {
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
+    expect(find.text('SÜRE SEÇ'), findsNWidgets(2)); // adım başlığı ve pasif buton
+    expect(find.text('← Zorluğu değiştir'), findsNothing);
+
+    await tester.tap(find.text('30'));
+    await tester.pump();
+    await tester.tap(find.text('30 SN BAŞLA'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<GameScreen>(find.byType(GameScreen)).sure, 30);
+    expect(find.text('0:30'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('Bonservis süresiz seçilince sayaçsız açılır', (tester) async {
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
+
+    await tester.tap(find.text('BONSERVİS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('∞'));
+    await tester.pump();
+    await tester.tap(find.text('SÜRESİZ BAŞLA'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<BonservisScreen>(find.byType(BonservisScreen)).sure, isNull);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets("bugün oynanmış Kesişim'e dokununca süre sorulmadan sonuç açılır", (tester) async {
+    final depo = SahteOyunDeposu()..kayit = {'skor': 6, 'durum': 'tamamlandi'};
+    await anaMenuyuAc(tester, oynananlar: {'kesisim': 6}, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SÜRE SEÇ'), findsNothing);
+    expect(find.text('Bugünkü oyununu oynadın'), findsOneWidget);
     await ekraniKapat(tester);
   });
 

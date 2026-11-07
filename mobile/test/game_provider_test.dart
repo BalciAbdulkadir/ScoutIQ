@@ -12,8 +12,12 @@ import 'yardimcilar/sahte_oyun_deposu.dart';
 const dogruOyuncu = OyuncuOneri(id: 'o-1', isim: 'Arda Güler');
 const yanlisOyuncu = OyuncuOneri(id: 'o-2', isim: 'Mesut Özil');
 
+// Testteki oyunun seçilen süresi (saniye); null: süresiz. oyunuBaslat ayarlar.
+int? testSuresi;
+
 // Sahte depoyla bir ProviderContainer kurar ve oyunun yüklenmesini bekler
-Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyunDeposu)? ayarla]) async {
+Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
+  testSuresi = sure;
   final depo = SahteOyunDeposu();
   ayarla?.call(depo);
 
@@ -21,19 +25,19 @@ Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyu
   addTearDown(container.dispose);
 
   // autoDispose provider test boyunca canlı kalsın
-  container.listen(gameProvider, (_, _) {});
+  container.listen(gameProvider(testSuresi), (_, _) {});
   await yuklenmesiniBekle(container);
   return (container, depo);
 }
 
 Future<void> yuklenmesiniBekle(ProviderContainer container) async {
-  for (var i = 0; i < 100 && container.read(gameProvider).status == 'loading'; i++) {
+  for (var i = 0; i < 100 && container.read(gameProvider(testSuresi)).status == 'loading'; i++) {
     await Future<void>.delayed(Duration.zero);
   }
 }
 
-GameNotifier notifier(ProviderContainer c) => c.read(gameProvider.notifier);
-GameState durum(ProviderContainer c) => c.read(gameProvider);
+GameNotifier notifier(ProviderContainer c) => c.read(gameProvider(testSuresi).notifier);
+GameState durum(ProviderContainer c) => c.read(gameProvider(testSuresi));
 
 void main() {
   group('Oyunun açılması', () {
@@ -299,6 +303,64 @@ void main() {
 
       expect(depo.cevapKontrolSayisi, 5);
       expect(durum(c).gonderiliyor, isTrue);
+    });
+  });
+
+  group('Süre', () {
+    test('süresiz oyunda sayaç yoktur', () async {
+      final (c, _) = await oyunuBaslat();
+
+      expect(durum(c).bitisZamani, isNull);
+    });
+
+    test('süre seçildiyse oyun başlarken sayaç kurulur', () async {
+      final once = DateTime.now();
+      final (c, _) = await oyunuBaslat(null, 30);
+
+      final kalan = durum(c).bitisZamani!.difference(once).inSeconds;
+      expect(kalan, inInclusiveRange(29, 30));
+    });
+
+    test('süre dolunca oyun o anki skorla biter, kayıt kilitlenir ve cevaplanmayanların doğru cevabı gelir', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      await notifier(c).makeGuess(dogruOyuncu);
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).status, 'completed');
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).score, 2);
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
+      expect(durum(c).ornekCevaplar, isNotEmpty);
+    });
+
+    test('cevap gönderilirken süre dolarsa bildirim yok sayılır, cevap işlenir', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      depo.skorYazBekletici = Completer<void>();
+
+      final cevap = notifier(c).makeGuess(dogruOyuncu);
+      await Future<void>.delayed(Duration.zero);
+      await notifier(c).sureDoldu();
+      expect(durum(c).status, 'playing');
+
+      depo.skorYazBekletici!.complete();
+      await cevap;
+      expect(durum(c).score, 2);
+
+      // Sayaç sıfırda kaldıkça tekrar çağırır: bu sefer oyun biter
+      await notifier(c).sureDoldu();
+      expect(durum(c).status, 'completed');
+      expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
+    });
+
+    test('bağlantı yoksa da oyun bitmiş gösterilir', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      depo.skorYazHataVerir = true;
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).status, 'completed');
+      expect(durum(c).sureDoldu, isTrue);
     });
   });
 }

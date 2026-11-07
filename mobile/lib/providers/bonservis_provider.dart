@@ -17,6 +17,8 @@ class BonservisState {
   final bool gonderiliyor;
   final String? tarih;
   final String? hataMesaji;
+  final DateTime? bitisZamani; // Süreli oyunda sürenin dolacağı an; süresizse null
+  final bool sureDoldu; // Oyun süre dolduğu için bitti
 
   const BonservisState({
     this.durum = BonservisDurumu.yukleniyor,
@@ -28,6 +30,8 @@ class BonservisState {
     this.gonderiliyor = false,
     this.tarih,
     this.hataMesaji,
+    this.bitisZamani,
+    this.sureDoldu = false,
   });
 
   BonservisSorusu? get soru => soruIndex < sorular.length ? sorular[soruIndex] : null;
@@ -44,6 +48,8 @@ class BonservisState {
     bool? gonderiliyor,
     String? tarih,
     String? hataMesaji,
+    DateTime? bitisZamani,
+    bool? sureDoldu,
   }) {
     return BonservisState(
       durum: durum ?? this.durum,
@@ -55,15 +61,23 @@ class BonservisState {
       gonderiliyor: gonderiliyor ?? this.gonderiliyor,
       tarih: tarih ?? this.tarih,
       hataMesaji: hataMesaji ?? this.hataMesaji,
+      bitisZamani: bitisZamani ?? this.bitisZamani,
+      sureDoldu: sureDoldu ?? this.sureDoldu,
     );
   }
 }
 
 // Bonservis oyunu: her soruda bir oyuncunun bedeli görünür, diğerininki için "daha fazla / daha az" tahmin edilir.
 // Yanlış tahminde oyun bitmez, beş sorunun hepsi oynanır. Her doğru tahmin 2 puan (en fazla 10).
+// Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
+// Oyundan çıkılınca oyun zaten bitmiş sayıldığı için süre cihazda tutulur, sunucuya yazılmaz.
 class BonservisNotifier extends Notifier<BonservisState> {
   static const _oyunTipi = 'bonservis';
   static const puan = 2;
+
+  final int? sure; // Seçilen süre, saniye; null: süresiz
+
+  BonservisNotifier(this.sure);
 
   late OyunDeposu _depo;
 
@@ -81,8 +95,12 @@ class BonservisNotifier extends Notifier<BonservisState> {
       if (!ref.mounted) return;
 
       state = switch (acilis) {
-        Oynanabilir(:final sorular, :final tarih) =>
-          state.copyWith(durum: BonservisDurumu.oynaniyor, sorular: bonservisSorulariniOku(sorular), tarih: tarih),
+        Oynanabilir(:final sorular, :final tarih) => state.copyWith(
+            durum: BonservisDurumu.oynaniyor,
+            sorular: bonservisSorulariniOku(sorular),
+            tarih: tarih,
+            bitisZamani: sure == null ? null : DateTime.now().add(Duration(seconds: sure!)),
+          ),
         ZatenOynandi(:final skor) => state.copyWith(durum: BonservisDurumu.zatenOynandi, skor: skor),
         YaridaBirakildi(:final skor) => state.copyWith(durum: BonservisDurumu.yaridaBirakildi, skor: skor),
         OyunYok() => state.copyWith(durum: BonservisDurumu.oyunYok),
@@ -141,7 +159,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
 
   // Sonuç gösterildikten sonra sıradaki soruya geçer ya da oyunu bitirir
   void devamEt() {
-    if (state.sonCevapDogru == null) return;
+    if (state.durum != BonservisDurumu.oynaniyor || state.sonCevapDogru == null) return;
 
     if (state.sonSoru) {
       state = state.copyWith(durum: BonservisDurumu.bitti);
@@ -150,8 +168,28 @@ class BonservisNotifier extends Notifier<BonservisState> {
 
     state = state.copyWith(soruIndex: state.soruIndex + 1, sonCevapDogru: null);
   }
+
+  // Ekrandaki sayaç sıfıra inince çağrılır: oyun o anki skorla biter, cevaplanmayan sorular boş kalır.
+  // Tahmin gönderilirken çağrılırsa yok sayılır; sayaç sıfırda kaldıkça tekrar çağırır.
+  Future<void> sureDoldu() async {
+    if (state.durum != BonservisDurumu.oynaniyor || state.gonderiliyor) return;
+    final userId = _depo.kullaniciId;
+    state = state.copyWith(gonderiliyor: true);
+
+    if (userId != null) {
+      try {
+        // Son sorunun cevabı verildiyse kayıt zaten kilitlidir, yazılmaz; sorun değil
+        await _depo.skorYaz(kullaniciId: userId, oyunTipi: _oyunTipi, tarih: state.tarih!, skor: state.skor, bitti: true);
+      } catch (_) {
+        // Kayıt kapatılamazsa açık kalır; oyun tekrar açılınca yarıda bırakılmış sayılır, skor aynı kalır
+      }
+    }
+    if (!ref.mounted) return;
+
+    state = state.copyWith(durum: BonservisDurumu.bitti, sureDoldu: true);
+  }
 }
 
-final bonservisProvider = NotifierProvider.autoDispose<BonservisNotifier, BonservisState>(() {
-  return BonservisNotifier();
-});
+// Parametre seçilen süredir (saniye); null: süresiz
+final bonservisProvider =
+    NotifierProvider.autoDispose.family<BonservisNotifier, BonservisState, int?>(BonservisNotifier.new);

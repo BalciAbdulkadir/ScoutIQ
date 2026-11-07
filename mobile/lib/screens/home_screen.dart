@@ -25,14 +25,35 @@ class HomeScreen extends ConsumerWidget {
       return;
     }
 
-    final Widget? oyunEkrani = switch (mod.tip) {
-      'kesisim' => const GameScreen(),
-      'bonservis' => const BonservisScreen(),
+    final Widget Function(int? sure)? oyunEkrani = switch (mod.tip) {
+      'kesisim' => (sure) => GameScreen(sure: sure),
+      'bonservis' => (sure) => BonservisScreen(sure: sure),
       _ => null,
     };
 
     if (oyunEkrani != null) {
-      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani));
+      // Bugün oynanmadıysa önce süre seçilir; oynandıysa ekran sonucu göstermek için doğrudan açılır
+      var sure = OyunSuresi.suresiz;
+      bool oynandi;
+      try {
+        oynandi = (await ref.read(bugunOynananlarProvider.future)).containsKey(mod.tip);
+      } catch (_) {
+        oynandi = false; // Bilinmiyorsa seçim gösterilir; oyun ekranı günde tek atışı yine kontrol eder
+      }
+      if (!context.mounted) return;
+
+      if (!oynandi) {
+        final secim = await showModalBottomSheet<ZorlukSureSecimi>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) => ZorlukSureSecimSayfasi(oyunAdi: mod.baslik, cizim: mod.cizim!),
+        );
+        if (secim == null || !context.mounted) return;
+        sure = secim.sure;
+      }
+
+      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani(sure.saniye)));
       // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
       if (!context.mounted) return;
       ref.invalidate(bugunOynananlarProvider);

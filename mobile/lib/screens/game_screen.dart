@@ -13,7 +13,9 @@ import '../widgets/tebesir.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
-  const GameScreen({super.key});
+  final int? sure; // Seçilen süre, saniye; null: süresiz
+
+  const GameScreen({super.key, this.sure});
 
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
@@ -24,7 +26,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(gameProvider);
+    final state = ref.watch(gameProvider(widget.sure));
 
     return Scaffold(
       appBar: AppBar(title: const Text('KESİŞİM')),
@@ -41,7 +43,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(gameProvider),
+          onTekrarDene: () => ref.invalidate(gameProvider(widget.sure)),
         );
       case 'no_game':
         return const OyunMesajKarti(
@@ -83,6 +85,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             sonuclar: state.sonuclar,
             renk: Renkler.kesisim,
             sagMetin: '${state.score} puan',
+            sayac: state.bitisZamani == null
+                ? null
+                : SureSayaci(
+                    bitisZamani: state.bitisZamani!,
+                    onBitti: ref.read(gameProvider(widget.sure).notifier).sureDoldu,
+                  ),
           ),
           const SizedBox(height: 28),
           Row(
@@ -107,8 +115,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           OyuncuArama(
             renk: Renkler.kesisim,
             gonderiliyor: state.gonderiliyor,
-            ara: ref.read(gameProvider.notifier).oyuncuAra,
-            gonder: ref.read(gameProvider.notifier).makeGuess,
+            ara: ref.read(gameProvider(widget.sure).notifier).oyuncuAra,
+            gonder: ref.read(gameProvider(widget.sure).notifier).makeGuess,
           ),
           const SizedBox(height: 16),
           _oncekiSonuc(state),
@@ -158,16 +166,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     return OyunBitisEkrani(
       skor: '${state.score}/$_maksimumSkor',
       skorAciklamasi: 'puan',
-      baslik: bitisBasligi(dogruSayisi, state.questions.length),
+      baslik: state.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, state.questions.length),
       renk: Renkler.kesisim,
       ozetSatirlari: [
         for (var i = 0; i < state.questions.length; i++)
           OzetSatiri(
             dogru: i < state.sonuclar.length ? state.sonuclar[i] : null,
             baslik: '${state.questions[i]['kulup_a']}  ×  ${state.questions[i]['kulup_b']}',
-            altBaslik: i < state.cevaplar.length ? 'Cevabın: ${state.cevaplar[i]}' : null,
-            // Doğru cevap sadece yanlış bilinen sorularda gösterilir
-            dogruCevap: (i < state.sonuclar.length && !state.sonuclar[i]) ? state.ornekCevaplar[i] : null,
+            altBaslik: i < state.cevaplar.length ? 'Cevabın: ${state.cevaplar[i]}' : 'Cevaplanmadı',
+            // Doğru cevap yanlış bilinen ve süre dolduğu için cevaplanmayan sorularda gösterilir
+            dogruCevap: (i < state.sonuclar.length && state.sonuclar[i]) ? null : state.ornekCevaplar[i],
           ),
       ],
     );

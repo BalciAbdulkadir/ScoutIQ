@@ -16,6 +16,8 @@ class GameState {
   final List<bool> sonuclar; // Cevaplanan soruların doğru/yanlış sonucu (ilerleme çubuğu ve özet için)
   final List<String> cevaplar; // Cevaplanan sorularda seçilen oyuncular (özet için)
   final Map<int, String> ornekCevaplar; // Oyun bitince sunucudan gelen örnek doğru cevaplar: soru index'i -> oyuncu
+  final DateTime? bitisZamani; // Süreli oyunda sürenin dolacağı an; süresizse null
+  final bool sureDoldu; // Oyun süre dolduğu için bitti
 
   GameState({
     this.sonuclar = const [],
@@ -30,6 +32,8 @@ class GameState {
     this.tarih,
     this.gonderiliyor = false,
     this.hataMesaji,
+    this.bitisZamani,
+    this.sureDoldu = false,
   });
 
   GameState copyWith({
@@ -45,6 +49,8 @@ class GameState {
     List<bool>? sonuclar,
     List<String>? cevaplar,
     Map<int, String>? ornekCevaplar,
+    DateTime? bitisZamani,
+    bool? sureDoldu,
   }) {
     return GameState(
       sonuclar: sonuclar ?? this.sonuclar,
@@ -59,13 +65,21 @@ class GameState {
       tarih: tarih ?? this.tarih,
       gonderiliyor: gonderiliyor ?? this.gonderiliyor,
       hataMesaji: hataMesaji ?? this.hataMesaji,
+      bitisZamani: bitisZamani ?? this.bitisZamani,
+      sureDoldu: sureDoldu ?? this.sureDoldu,
     );
   }
 }
 
+// Kesişim oyunu. Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
+// Oyundan çıkılınca oyun zaten bitmiş sayıldığı için süre cihazda tutulur, sunucuya yazılmaz.
 class GameNotifier extends Notifier<GameState> {
   static const _oyunTipi = 'kesisim';
   static const _puan = 2;
+
+  final int? sure; // Seçilen süre, saniye; null: süresiz
+
+  GameNotifier(this.sure);
 
   late OyunDeposu _depo;
 
@@ -84,8 +98,13 @@ class GameNotifier extends Notifier<GameState> {
       if (!ref.mounted) return;
 
       state = switch (acilis) {
-        Oynanabilir(:final oyunId, :final sorular, :final tarih) =>
-          state.copyWith(status: 'playing', questions: sorular, gameId: oyunId, tarih: tarih),
+        Oynanabilir(:final oyunId, :final sorular, :final tarih) => state.copyWith(
+            status: 'playing',
+            questions: sorular,
+            gameId: oyunId,
+            tarih: tarih,
+            bitisZamani: sure == null ? null : DateTime.now().add(Duration(seconds: sure!)),
+          ),
         ZatenOynandi(:final skor) => state.copyWith(status: 'already_played', score: skor),
         YaridaBirakildi(:final skor) => state.copyWith(status: 'abandoned', score: skor),
         OyunYok() => state.copyWith(status: 'no_game'),
@@ -183,14 +202,34 @@ class GameNotifier extends Notifier<GameState> {
     }
 
     // Bitiş ekranı açıldı; yanlış cevap varsa özette gösterilecek doğru cevapları getiriyoruz
-    if (state.status == 'completed' && state.sonuclar.contains(false)) {
-      await _ornekCevaplariYukle();
-    }
+    if (state.status == 'completed') await _ornekCevaplariYukle();
     return null;
   }
 
-  // Örnek doğru cevaplar özete ek bilgidir: gelmezse özet yine gösterilir, hata kullanıcıya yansıtılmaz
+  // Ekrandaki sayaç sıfıra inince çağrılır: oyun o anki skorla biter, cevaplanmayan sorular boş kalır.
+  // Cevap gönderilirken çağrılırsa yok sayılır; sayaç sıfırda kaldıkça tekrar çağırır.
+  Future<void> sureDoldu() async {
+    if (state.status != 'playing' || state.gonderiliyor) return;
+    final userId = _depo.kullaniciId;
+    state = state.copyWith(gonderiliyor: true);
+
+    if (userId != null) {
+      try {
+        await _depo.skorYaz(kullaniciId: userId, oyunTipi: _oyunTipi, tarih: state.tarih!, skor: state.score, bitti: true);
+      } catch (_) {
+        // Kayıt kapatılamazsa açık kalır; oyun tekrar açılınca yarıda bırakılmış sayılır, skor aynı kalır
+      }
+    }
+    if (!ref.mounted) return;
+
+    state = state.copyWith(status: 'completed', sureDoldu: true);
+    await _ornekCevaplariYukle();
+  }
+
+  // Örnek doğru cevaplar özete ek bilgidir: gelmezse özet yine gösterilir, hata kullanıcıya yansıtılmaz.
+  // Sadece yanlış ya da cevaplanmamış soru varsa gerekir.
   Future<void> _ornekCevaplariYukle() async {
+    if (state.sonuclar.length == state.questions.length && !state.sonuclar.contains(false)) return;
     try {
       final ornekler = await _depo.kesisimOrnekCevaplar(state.gameId!);
       if (!ref.mounted) return;
@@ -199,6 +238,5 @@ class GameNotifier extends Notifier<GameState> {
   }
 }
 
-final gameProvider = NotifierProvider.autoDispose<GameNotifier, GameState>(() {
-  return GameNotifier();
-});
+// Parametre seçilen süredir (saniye); null: süresiz
+final gameProvider = NotifierProvider.autoDispose.family<GameNotifier, GameState, int?>(GameNotifier.new);
