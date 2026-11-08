@@ -12,22 +12,16 @@ import '../widgets/oyuncu_fotografi.dart';
 import '../widgets/tebesir.dart';
 
 // Bingo: destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
-// Yanlış kutuya konan oyuncu yanar. Amaç 4x4 kartı doldurmak.
+// Yanlış kutuya konan oyuncu gitmez, başka kutu denenebilir; oyuncu sadece pas geçilince gider. Amaç 12 kutuyu doldurmak.
 class BingoScreen extends ConsumerWidget {
-  // Oynanan zorluğun günlük oyunu: bingo_kolay, bingo_orta ya da bingo_zor
+  // Günlük oyunun tipi. Bingo'nun zorluk modu yoktur: 'bingo'
   final String oyunTipi;
-  // Ana menüde zorluktan sonra seçilen süre (saniye; null: süresiz). Sadece yeni başlanan oyunda kullanılır.
+  // Ana menüde seçilen süre (saniye; null: süresiz). Sadece yeni başlanan oyunda kullanılır.
   final int? sure;
 
-  const BingoScreen({super.key, required this.oyunTipi, this.sure});
+  const BingoScreen({super.key, this.oyunTipi = 'bingo', this.sure});
 
   GunlukOyunSecimi get _secim => (oyunTipi: oyunTipi, sure: sure);
-
-  (String, Color) get _zorluk => switch (oyunTipi.split('_').last) {
-        'kolay' => ('Kolay', Renkler.kolay),
-        'orta' => ('Orta', Renkler.orta),
-        _ => ('Zor', Renkler.zor),
-      };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,13 +30,7 @@ class BingoScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Flexible(child: Text('BİNGO', overflow: TextOverflow.ellipsis)),
-            const SizedBox(width: 10),
-            OyunEtiketi(metin: _zorluk.$1, renk: _zorluk.$2),
-          ],
-        ),
+        title: const Text('BİNGO'),
         actions: [
           if (oynaniyor)
             Padding(
@@ -68,7 +56,7 @@ class BingoScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Pes etmek istiyor musun?'),
-        content: Text('Oyun şu anki skorunla (${state.skor}/$bingoHucreSayisi) biter. Bugün Bingo\'yu tekrar oynayamazsın.'),
+        content: Text('Oyun şu anki skorunla (${state.skor}/${state.kart!.hucreSayisi}) biter. Bugün Bingo\'yu tekrar oynayamazsın.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -153,7 +141,7 @@ class BingoScreen extends ConsumerWidget {
                 SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),
                 const SizedBox(width: 12),
               ],
-              Text('${state.skor}/$bingoHucreSayisi kutu', style: Yazi.tebesir(16)),
+              Text('${state.skor}/${state.kart!.hucreSayisi} kutu', style: Yazi.tebesir(16)),
             ],
           ),
           const SizedBox(height: 14),
@@ -176,14 +164,15 @@ class BingoScreen extends ConsumerWidget {
   }
 
   Widget _bitis(BuildContext context, BingoState state) {
-    final tamDolu = state.skor == bingoHucreSayisi;
+    final kutuSayisi = state.kart!.hucreSayisi;
+    final tamDolu = state.skor == kutuSayisi;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         const SizedBox(height: 8),
         Text(
-          Yazi.buyuk(state.sureDoldu ? 'Süre doldu' : (tamDolu ? 'Bingo!' : bitisBasligi(state.skor, bingoHucreSayisi))),
+          Yazi.buyuk(state.sureDoldu ? 'Süre doldu' : (tamDolu ? 'Bingo!' : bitisBasligi(state.skor, kutuSayisi))),
           textAlign: TextAlign.center,
           style: Yazi.baslik(34, kalinlik: FontWeight.w900),
         ),
@@ -193,7 +182,7 @@ class BingoScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text('${state.skor}/$bingoHucreSayisi', style: Yazi.tebesir(52, renk: Renkler.vurgu)),
+            Text('${state.skor}/$kutuSayisi', style: Yazi.tebesir(52, renk: Renkler.vurgu)),
             const SizedBox(width: 8),
             Text('kutu', style: Yazi.tebesir(18, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400)),
           ],
@@ -271,7 +260,8 @@ class _SonHamle extends StatelessWidget {
     final h = hamle;
     if (h == null) {
       return const Text(
-        'Gelen oyuncuyu uyduğu kategorinin kutusuna koy. Yanlış kutuya konan oyuncu yanar, emin değilsen pas geç.',
+        'Gelen oyuncuyu uyduğu kategorinin kutusuna koy. Yanlış kutuda oyuncu gitmez, başka kutu deneyebilirsin. '
+        'Uyan kutu yoksa pas geç.',
         style: TextStyle(color: Renkler.metinSoluk, fontSize: 13, height: 1.4),
       );
     }
@@ -288,7 +278,7 @@ class _SonHamle extends StatelessWidget {
           Icons.cancel_rounded,
           Renkler.hata,
           'Yanlış',
-          '${h.oyuncu.isim} ${kart.hucreler[hucre].isim} kutusuna uymuyor',
+          '${h.oyuncu.isim} ${kart.hucreler[hucre].isim} kutusuna uymuyor, başka kutu dene',
         ),
     };
 
@@ -315,7 +305,7 @@ class _SonHamle extends StatelessWidget {
   }
 }
 
-// 4x4 kart. onKutu doluysa boş kutulara dokunulabilir.
+// Kart: 4 satır, 3 sütun (eski kartlarda 4x4). onKutu doluysa boş kutulara dokunulabilir.
 class BingoKartiGorunumu extends StatelessWidget {
   final BingoState state;
   final void Function(int hucre)? onKutu;
@@ -330,25 +320,29 @@ class BingoKartiGorunumu extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, kisitlar) {
-        final kenar = (kisitlar.maxWidth - (bingoBoyutu - 1) * _bosluk) / bingoBoyutu;
+        final sutun = kart.sutunSayisi;
+        final kenar = (kisitlar.maxWidth - (sutun - 1) * _bosluk) / sutun;
+        // Üç sütunda kutular geniş olduğu için biraz basık tutulur, kart ekrana sığsın
+        final yukseklik = kenar * (sutun == 3 ? 0.88 : 1.1);
         return Column(
           children: [
-            for (var s = 0; s < bingoBoyutu; s++) ...[
+            for (var s = 0; s < kart.satirSayisi; s++) ...[
               if (s > 0) const SizedBox(height: _bosluk),
               Row(
                 children: [
-                  for (var t = 0; t < bingoBoyutu; t++) ...[
+                  for (var t = 0; t < sutun; t++) ...[
                     if (t > 0) const SizedBox(width: _bosluk),
                     SizedBox(
                       width: kenar,
-                      height: kenar * 1.1,
+                      height: yukseklik,
                       child: _Kutu(
-                        kategori: kart.hucreler[s * bingoBoyutu + t],
-                        oyuncu: state.hucreler[s * bingoBoyutu + t],
-                        ornekCevap: state.ornekCevaplar[s * bingoBoyutu + t],
-                        onTap: onKutu == null || state.hucreler.containsKey(s * bingoBoyutu + t)
+                        kategori: kart.hucreler[s * sutun + t],
+                        oyuncu: state.hucreler[s * sutun + t],
+                        ornekCevap: state.ornekCevaplar[s * sutun + t],
+                        yanlis: state.yanlisKutu == s * sutun + t,
+                        onTap: onKutu == null || state.hucreler.containsKey(s * sutun + t)
                             ? null
-                            : () => onKutu!(s * bingoBoyutu + t),
+                            : () => onKutu!(s * sutun + t),
                       ),
                     ),
                   ],
@@ -367,9 +361,10 @@ class _Kutu extends StatelessWidget {
   final BingoKategorisi kategori;
   final BingoOyuncusu? oyuncu;
   final BingoOyuncusu? ornekCevap;
+  final bool yanlis; // Sıradaki oyuncu az önce bu kutuya yanlış kondu
   final VoidCallback? onTap;
 
-  const _Kutu({required this.kategori, this.oyuncu, this.ornekCevap, this.onTap});
+  const _Kutu({required this.kategori, this.oyuncu, this.ornekCevap, this.yanlis = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -383,9 +378,11 @@ class _Kutu extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           decoration: BoxDecoration(
-            color: dolu ? Renkler.basari.withValues(alpha: 0.10) : null,
+            color: dolu
+                ? Renkler.basari.withValues(alpha: 0.10)
+                : (yanlis ? Renkler.hata.withValues(alpha: 0.10) : null),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: dolu ? Renkler.basari : Renkler.kenar, width: 1.5),
+            border: Border.all(color: dolu ? Renkler.basari : (yanlis ? Renkler.hata : Renkler.kenar), width: 1.5),
           ),
           padding: const EdgeInsets.all(4),
           child: LayoutBuilder(

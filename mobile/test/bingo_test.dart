@@ -9,20 +9,20 @@ import 'package:mobile/services/oyun_deposu.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
 
-// 16 kutu: 6 kulüp, 4 milli takım, 2 lig, 4 başarı; deste 20 oyuncu
+// 12 kutu (4 satır, 3 sütun): 4 kulüp, 3 milli takım, 2 lig, 3 başarı; deste 16 oyuncu
 final ornekKart = {
   'hucreler': [
-    for (var i = 0; i < 6; i++) {'tip': 'kulup', 'anahtar': 'k$i', 'isim': 'Kulüp $i', 'id': 'kulup-$i', 'logo': null},
-    for (var i = 0; i < 4; i++) {'tip': 'milli', 'anahtar': 'm$i', 'isim': 'Ülke $i'},
+    for (var i = 0; i < 4; i++) {'tip': 'kulup', 'anahtar': 'k$i', 'isim': 'Kulüp $i', 'id': 'kulup-$i', 'logo': null},
+    for (var i = 0; i < 3; i++) {'tip': 'milli', 'anahtar': 'm$i', 'isim': 'Ülke $i'},
     for (var i = 0; i < 2; i++) {'tip': 'lig', 'anahtar': 'l$i', 'isim': 'Lig $i'},
-    for (var i = 0; i < 4; i++) {'tip': 'basari', 'anahtar': 'b$i', 'isim': 'Kupa $i'},
+    for (var i = 0; i < 3; i++) {'tip': 'basari', 'anahtar': 'b$i', 'isim': 'Kupa $i'},
   ],
   'oyuncular': [
-    for (var i = 1; i <= 20; i++) {'id': 'o-$i', 'isim': 'Oyuncu $i', 'foto': null},
+    for (var i = 1; i <= 16; i++) {'id': 'o-$i', 'isim': 'Oyuncu $i', 'foto': null},
   ],
 };
 
-const testOyunTipi = 'bingo_orta';
+const testOyunTipi = 'bingo';
 
 SahteOyunDeposu bingoDeposu() => SahteOyunDeposu()..oyun = {'id': 'bingo-1', 'soru_verisi': ornekKart};
 
@@ -45,11 +45,13 @@ BingoNotifier notifier(ProviderContainer c, [int? sure]) => c.read(bingoProvider
 
 void main() {
   group('Kart', () {
-    test('soru verisinden 16 kutu ve deste okunur', () {
+    test('soru verisinden 12 kutu ve deste okunur, kart 4 satır 3 sütundur', () {
       final kart = BingoKarti.oku(ornekKart)!;
 
-      expect(kart.hucreler, hasLength(bingoHucreSayisi));
-      expect(kart.deste, hasLength(20));
+      expect(kart.hucreler, hasLength(12));
+      expect(kart.satirSayisi, 4);
+      expect(kart.sutunSayisi, 3);
+      expect(kart.deste, hasLength(16));
       expect(kart.hucreler.first.tip, BingoKategoriTipi.kulup);
       expect(kart.hucreler.last.tip, BingoKategoriTipi.basari);
       expect(kart.hucreler.last.aciklama, 'kazandı');
@@ -60,15 +62,24 @@ void main() {
       expect(BingoKarti.oku({'hucreler': [], 'oyuncular': []}), isNull);
       expect(BingoKarti.oku({...ornekKart, 'oyuncular': []}), isNull);
     });
+
+    test('tek moddan önce üretilmiş 16 kutulu kart da 4x4 okunur', () {
+      final hucreler = ornekKart['hucreler']!;
+      final kart = BingoKarti.oku({...ornekKart, 'hucreler': [...hucreler, ...hucreler.take(4)]})!;
+
+      expect(kart.hucreSayisi, 16);
+      expect(kart.sutunSayisi, 4);
+      expect(kart.satirSayisi, 4);
+    });
   });
 
   group('Oyunun açılması', () {
-    test('günün kartı varsa oyun başlar, seçilen zorluğun kaydı açılır ve ilk oyuncu gelir', () async {
+    test('günün kartı varsa oyun başlar, tek modlu Bingo kaydı açılır ve ilk oyuncu gelir', () async {
       final (c, depo) = await kartiAc();
 
       expect(durum(c).durum, BingoDurumu.oynaniyor);
       expect(durum(c).siradaki!.isim, 'Oyuncu 1');
-      expect(durum(c).kalanOyuncu, 20);
+      expect(durum(c).kalanOyuncu, 16);
       expect(depo.istenenOyunTipleri, [testOyunTipi]);
       expect(depo.acilanKayitTipleri, [testOyunTipi]);
     });
@@ -110,7 +121,7 @@ void main() {
 
       expect(durum(c).durum, BingoDurumu.bitti);
       expect(durum(c).ornekCevaplar.containsKey(0), isFalse);
-      expect(durum(c).ornekCevaplar, hasLength(15));
+      expect(durum(c).ornekCevaplar, hasLength(11));
     });
   });
 
@@ -127,15 +138,34 @@ void main() {
       expect(durum(c).sonHamle!.dogru, isTrue);
     });
 
-    test('yanlış kutuya konan oyuncu yanar, kutu boş kalır', () async {
-      final (c, _) = await kartiAc();
+    test('yanlış kutuya konan oyuncu gitmez, kutu kırmızı gösterilir, başka kutu denenebilir', () async {
+      final (c, depo) = await kartiAc();
 
       await notifier(c).yerlestir(3);
 
       expect(durum(c).hucreler, isEmpty);
-      expect(durum(c).siradaki!.isim, 'Oyuncu 2');
+      expect(durum(c).siradaki!.isim, 'Oyuncu 1');
+      expect(durum(c).kalanOyuncu, 16);
       expect(durum(c).sonHamle!.dogru, isFalse);
-      expect(durum(c).sonHamle!.hucre, 3);
+      expect(durum(c).yanlisKutu, 3);
+
+      // Ceza yok: aynı oyuncu doğru kutuya konabilir
+      await notifier(c).yerlestir(0);
+
+      expect(depo.bingoHamleIstekleri, [(sira: 1, hucre: 3), (sira: 1, hucre: 0)]);
+      expect(durum(c).hucreler[0]!.isim, 'Oyuncu 1');
+      expect(durum(c).siradaki!.isim, 'Oyuncu 2');
+      expect(durum(c).yanlisKutu, isNull);
+    });
+
+    test('yanlış kutudan sonra pas geçilince oyuncu gider', () async {
+      final (c, _) = await kartiAc();
+
+      await notifier(c).yerlestir(3);
+      await notifier(c).pasGec();
+
+      expect(durum(c).siradaki!.isim, 'Oyuncu 2');
+      expect(durum(c).yanlisKutu, isNull);
     });
 
     test('pas geçilen oyuncu sıradakine geçer', () async {
@@ -166,7 +196,7 @@ void main() {
 
       expect(durum(c).durum, BingoDurumu.bitti);
       expect(durum(c).skor, 1);
-      expect(durum(c).ornekCevaplar, hasLength(15));
+      expect(durum(c).ornekCevaplar, hasLength(11));
     });
 
     test('bağlantı hatasında hamle sayılmaz, mesaj döner', () async {
@@ -231,21 +261,32 @@ void main() {
       final depo = bingoDeposu();
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-        child: const MaterialApp(home: BingoScreen(oyunTipi: testOyunTipi)),
+        child: const MaterialApp(home: BingoScreen()),
       ));
       await tester.pumpAndSettle();
       return depo;
     }
 
-    testWidgets('sıradaki oyuncu, kart ve zorluk görünür', (tester) async {
+    testWidgets('sıradaki oyuncu ve 12 kutulu kart görünür, zorluk etiketi yoktur', (tester) async {
       await ekraniAc(tester);
 
       expect(find.text('Oyuncu 1'), findsOneWidget);
-      expect(find.text('ORTA'), findsOneWidget);
+      expect(find.text('ORTA'), findsNothing);
       expect(find.text('Kulüp 0'), findsOneWidget);
-      expect(find.text('Kupa 3'), findsOneWidget);
-      expect(find.text('0/16 kutu'), findsOneWidget);
-      expect(find.text('20 oyuncu kaldı'), findsOneWidget);
+      expect(find.text('Kupa 2'), findsOneWidget);
+      expect(find.text('0/12 kutu'), findsOneWidget);
+      expect(find.text('16 oyuncu kaldı'), findsOneWidget);
+    });
+
+    testWidgets('yanlış kutuya dokununca oyuncu ekranda kalır', (tester) async {
+      await ekraniAc(tester);
+
+      await tester.tap(find.text('Kulüp 3'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Oyuncu 1'), findsOneWidget);
+      expect(find.textContaining('Yanlış', findRichText: true), findsOneWidget);
+      expect(find.text('0/12 kutu'), findsOneWidget);
     });
 
     testWidgets('kutuya dokununca oyuncu yerleşir, pas ile sıradaki gelir', (tester) async {
@@ -253,7 +294,7 @@ void main() {
 
       await tester.tap(find.text('Kulüp 0'));
       await tester.pumpAndSettle();
-      expect(find.text('1/16 kutu'), findsOneWidget);
+      expect(find.text('1/12 kutu'), findsOneWidget);
       expect(find.text('Oyuncu 2'), findsOneWidget);
 
       await tester.tap(find.text('Pas'));
@@ -269,14 +310,14 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(bingoDeposu())],
-        child: const MaterialApp(home: BingoScreen(oyunTipi: testOyunTipi)),
+        child: const MaterialApp(home: BingoScreen()),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Kulüp 0'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('1/16 kutu'), findsOneWidget);
+      expect(find.text('1/12 kutu'), findsOneWidget);
     });
 
     testWidgets('pes et onay sorar, onaylanınca sonuç ekranı açılır', (tester) async {

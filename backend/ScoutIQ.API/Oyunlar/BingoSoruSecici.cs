@@ -4,29 +4,40 @@ using System.Linq;
 
 namespace ScoutIQ.API.Oyunlar
 {
-    // Bingo oyununun bir modu için kartı ve oyuncu destesini seçer. Veritabanına dokunmaz: kategorileri (her biri
-    // kendisine uyan oyuncularla) ve oyuncu kademelerini parametre olarak alır, böylece kurallar gerçek veri olmadan test edilebilir.
+    // Günün Bingo kartını ve oyuncu destesini seçer. Bingo'nun zorluk modu yoktur, günde tek kart vardır.
+    // Veritabanına dokunmaz: kategorileri (her biri kendisine uyan oyuncularla) ve oyuncu kademelerini parametre olarak alır,
+    // böylece kurallar gerçek veri olmadan test edilebilir.
     //
-    // Kart 4x4'tür: 6 kulüp, 4 milli takım, 2 lig ve 4 başarı kategorisi. Deste 20 oyuncudur; oyuncular sırayla gelir,
-    // kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer. Destedeki oyuncuların kademeleri modun dağılımına uyar
-    // (ZorlukDagilimi): kolay 20 ünlü, orta 10 ünlü + 10 bilinen, zor 8 ünlü + 6 bilinen + 6 diğer.
+    // Kart 4 satır, 3 sütundur (12 kutu): 4 kulüp, 3 milli takım, 2 lig ve 3 başarı kategorisi. Deste 16 oyuncudur;
+    // oyuncular sırayla gelir, kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer. Destede sadece ünlü ve bilinen
+    // oyuncular vardır (DesteDagilimi): 8 ünlü, 8 bilinen. Kategoriler de bu oyuncuların kulüplerinden, milli takımlarından,
+    // liglerinden ve başarılarından kurulur.
     // Kart her zaman doldurulabilir: her kutuya desteden ayrı bir oyuncu uyar. Kalan 4 oyuncu da en az bir kutuya uyar.
-    // Oyun kuralları (sıra, yanlış kutu, pas, süre) sunucuda, 020_bingo.sql'de.
+    // Oyun kuralları (sıra, yanlış kutu, pas, süre) sunucuda: 020_bingo.sql ve 021_bingo_tek_mod.sql.
     public class BingoSoruSecici
     {
-        public const int Boyut = 4;
-        public const int HucreSayisi = Boyut * Boyut;
-        public const int DesteBoyutu = 20;
+        public const string OyunTipi = "bingo";
+        public const int SatirSayisi = 4;
+        public const int SutunSayisi = 3;
+        public const int HucreSayisi = SatirSayisi * SutunSayisi;
+        public const int DesteBoyutu = 16;
+
+        // Destedeki oyuncuların kademeleri, toplamı DesteBoyutu
+        public static readonly IReadOnlyDictionary<Kademe, int> DesteDagilimi = new Dictionary<Kademe, int>
+        {
+            [Kademe.Unlu] = 8,
+            [Kademe.Bilinen] = 8,
+        };
 
         public enum KategoriTipi { Kulup, Milli, Lig, Basari }
 
-        // Karttaki kategori sayıları, toplamı 16
+        // Karttaki kategori sayıları, toplamı HucreSayisi
         public static readonly IReadOnlyDictionary<KategoriTipi, int> KartDagilimi = new Dictionary<KategoriTipi, int>
         {
-            [KategoriTipi.Kulup] = 6,
-            [KategoriTipi.Milli] = 4,
+            [KategoriTipi.Kulup] = 4,
+            [KategoriTipi.Milli] = 3,
             [KategoriTipi.Lig] = 2,
-            [KategoriTipi.Basari] = 4,
+            [KategoriTipi.Basari] = 3,
         };
 
         // Lig kategorileri: Transfermarkt lig kodu -> ekranda görünen isim
@@ -62,7 +73,7 @@ namespace ScoutIQ.API.Oyunlar
         // Oynayanlar: kartı kurarken kullanılanlar; kulüp ve ligde sadece gerçekten maça çıkmış oyuncular.
         public record Aday(Kategori Kategori, HashSet<string> Oyuncular, HashSet<string> Oynayanlar);
 
-        // Deste: oyuncu ID'leri, geliş sırasıyla. Eslesmeler[i]: destedeki i. oyuncunun uyduğu kutular (0-15).
+        // Deste: oyuncu ID'leri, geliş sırasıyla. Eslesmeler[i]: destedeki i. oyuncunun uyduğu kutular (0-11).
         public record BingoKarti(List<Kategori> Hucreler, List<string> Deste, List<int[]> Eslesmeler);
 
         // Arama deneme üst sınırı: veri yetersizse aramayı sonsuza kadar sürdürmesin
@@ -76,9 +87,12 @@ namespace ScoutIQ.API.Oyunlar
         }
 
         // Kurallara uyan bir kart ya da bulunamazsa null
-        public BingoKarti? Sec(Zorluk zorluk, IEnumerable<Aday> adayListesi, IReadOnlyDictionary<string, Kademe> kademeler)
+        public BingoKarti? Sec(IEnumerable<Aday> adayListesi, IReadOnlyDictionary<string, Kademe> tumKademeler)
         {
-            // Sıralı tutulur ki aynı tohumla (seed) aynı kart çıksın. Havuzdan hiç oyuncusu olmayan kategori kullanılamaz.
+            // Sadece ünlü ve bilinen oyuncular: kategoriler de deste de onlardan kurulur
+            var kademeler = tumKademeler.Where(k => DesteDagilimi.ContainsKey(k.Value)).ToDictionary(k => k.Key, k => k.Value);
+
+            // Sıralı tutulur ki aynı tohumla (seed) aynı kart çıksın. Ünlü ya da bilinen oyuncusu olmayan kategori kullanılamaz.
             var adaylar = adayListesi
                 .Where(a => a.Oynayanlar.Any(kademeler.ContainsKey))
                 .OrderBy(a => a.Kategori.Tip).ThenBy(a => a.Kategori.Anahtar, StringComparer.Ordinal)
@@ -89,11 +103,11 @@ namespace ScoutIQ.API.Oyunlar
             // Her kategorinin kademeye göre oyuncuları, sıralı
             var kademeOyunculari = adaylar.ToDictionary(
                 a => a,
-                a => Enum.GetValues<Kademe>().ToDictionary(
+                a => DesteDagilimi.Keys.ToDictionary(
                     k => k,
                     k => a.Oynayanlar.Where(o => kademeler.TryGetValue(o, out var ok) && ok == k).OrderBy(o => o, StringComparer.Ordinal).ToList()));
 
-            var kademeSirasi = ZorlukDagilimi.Dagit(zorluk, DesteBoyutu).SelectMany(d => Enumerable.Repeat(d.Key, d.Value)).ToList();
+            var kademeSirasi = DesteDagilimi.OrderBy(d => d.Key).SelectMany(d => Enumerable.Repeat(d.Key, d.Value)).ToList();
 
             for (int deneme = 0; deneme < MaxDeneme; deneme++)
             {

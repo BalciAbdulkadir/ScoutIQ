@@ -43,6 +43,7 @@ Future<void> zorlukluOyunuAc(
         zorluklar: [
           for (var i = 0; i < altTipler.length; i++) (ad: zorlukAdlari[i], aciklama: mod.zorlukAciklamalari?[i] ?? ''),
         ],
+        sureler: mod.sureSecenekleri,
       ),
     );
     if (secim == null || !context.mounted) return;
@@ -55,6 +56,48 @@ Future<void> zorlukluOyunuAc(
   if (!context.mounted) return;
   ref.invalidate(bugunOynananlarProvider);
   ref.invalidate(bugunkuModProvider(oyun));
+}
+
+// Ana menüde zorluk modu olmayan bir oyunun (Bingo) kutucuğuna dokununca çağrılır.
+// - Bugün başlandıysa sorulmadan açılır: yarımsa sunucudaki kalan süresiyle kaldığı yerden, bittiyse sonucuyla.
+// - Yoksa sadece süre seçilir (oyunun süre seçenekleriyle) ve oyun açılır.
+// Dönünce ana menü tazelenir.
+Future<void> tekModluOyunuAc(
+  BuildContext context,
+  WidgetRef ref,
+  OyunModu mod,
+  Widget Function(String oyunTipi, int? sure) ekran,
+) async {
+  final oyunTipi = mod.tip!;
+  var sure = OyunSuresi.suresiz;
+  bool baslandi;
+
+  try {
+    baslandi = await ref.read(bugunkuModProvider(oyunTipi).future) != null;
+  } catch (_) {
+    baslandi = false; // Bilinmiyorsa seçim gösterilir; başlanmış oyunda sunucudaki süre geçerli olur
+  }
+  if (!context.mounted) return;
+
+  if (!baslandi) {
+    final secim = await showModalBottomSheet<ZorlukSureSecimi>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => ZorlukSureSecimSayfasi(
+        oyunAdi: mod.baslik,
+        cizim: mod.cizim ?? TebesirCizimi.kesisim,
+        sureler: mod.sureSecenekleri,
+      ),
+    );
+    if (secim == null || !context.mounted) return;
+    sure = secim.sure;
+  }
+
+  await Navigator.push(context, MaterialPageRoute(builder: (context) => ekran(oyunTipi, sure.saniye)));
+  if (!context.mounted) return;
+  ref.invalidate(bugunOynananlarProvider);
+  ref.invalidate(bugunkuModProvider(oyunTipi));
 }
 
 // Ana menüde Izgara kutucuğuna dokununca çağrılır.
@@ -106,8 +149,15 @@ class ZorlukSureSecimSayfasi extends StatefulWidget {
   final String oyunAdi;
   final TebesirCizimi cizim;
   final List<({String ad, String aciklama})>? zorluklar; // null: zorluksuz oyun
+  final List<OyunSuresi> sureler; // Seçilebilen süreler
 
-  const ZorlukSureSecimSayfasi({super.key, required this.oyunAdi, required this.cizim, this.zorluklar});
+  const ZorlukSureSecimSayfasi({
+    super.key,
+    required this.oyunAdi,
+    required this.cizim,
+    this.zorluklar,
+    this.sureler = OyunSuresi.values,
+  });
 
   @override
   State<ZorlukSureSecimSayfasi> createState() => _ZorlukSureSecimSayfasiState();
@@ -196,6 +246,8 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
     final sure = _sure;
     final zorlukAdi = zorluk == null ? null : widget.zorluklar![zorluk].ad;
 
+    final dar = widget.sureler.length == 3;
+
     Widget sureKutusu(OyunSuresi s) {
       final secili = s == sure;
       final saniye = s.saniye;
@@ -208,13 +260,15 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
             child: TebesirKutusu(
               kenarRengi: secili ? Renkler.vurgu : Renkler.kenar,
               dolgu: secili ? Renkler.vurgu.withValues(alpha: 0.08) : null,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
+              padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 14, vertical: 12),
+              // Üç kutu yan yana durunca sayı ve etiket alt alta yazılır, dar kutuya sığsın
+              child: Flex(
+                direction: dar ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: dar ? CrossAxisAlignment.center : CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(saniye == null ? '∞' : '$saniye', style: Yazi.tebesir(30, renk: secili ? Renkler.vurgu : Renkler.metin)),
-                  const SizedBox(width: 6),
+                  if (!dar) const SizedBox(width: 6),
                   Text(Yazi.buyuk(saniye == null ? 'süresiz' : 'saniye'), style: Yazi.etiket(boyut: 10)),
                 ],
               ),
@@ -243,13 +297,20 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
             ),
           ),
         _adim(zorlukAdi == null ? 'Süre seç' : '2 · Süre seç'),
-        Row(children: [sureKutusu(OyunSuresi.values[0]), const SizedBox(width: 8), sureKutusu(OyunSuresi.values[1])]),
-        const SizedBox(height: 8),
-        Row(children: [sureKutusu(OyunSuresi.values[2]), const SizedBox(width: 8), sureKutusu(OyunSuresi.values[3])]),
+        // Üç ya da daha az seçenek tek satırda, dört seçenek iki satırda
+        for (final (i, satir) in _satirlar(widget.sureler).indexed) ...[
+          if (i > 0) const SizedBox(height: 8),
+          Row(children: [
+            for (final (j, s) in satir.indexed) ...[
+              if (j > 0) const SizedBox(width: 8),
+              sureKutusu(s),
+            ],
+          ]),
+        ],
         const SizedBox(height: 14),
         Text(
           zorlukAdi == null
-              ? 'Süre bütün sorular içindir ve oyundan çıksan da işler. Süre bitmediyse kaldığın yerden devam edersin.'
+              ? 'Süre bütün oyun içindir ve oyundan çıksan da işler. Süre bitmediyse kaldığın yerden devam edersin.'
               : 'Başladıktan sonra bugün başka zorluk ya da süre seçilemez. Süre oyundan çıksan da işler; '
                   'bitmediyse kaldığın yerden devam edersin.',
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
@@ -268,6 +329,9 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
     );
   }
 }
+
+List<List<OyunSuresi>> _satirlar(List<OyunSuresi> sureler) =>
+    sureler.length <= 3 ? [sureler] : [for (var i = 0; i < sureler.length; i += 2) sureler.skip(i).take(2).toList()];
 
 class _SecimSatiri extends StatelessWidget {
   final String baslik;

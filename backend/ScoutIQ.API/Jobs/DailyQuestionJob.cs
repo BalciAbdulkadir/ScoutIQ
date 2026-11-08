@@ -84,62 +84,60 @@ namespace ScoutIQ.API.Jobs
 
         // ---------------- Bingo ----------------
 
+        // Bingo'nun zorluk modu yoktur: günde tek kart (oyun_tipi 'bingo')
         private async Task UretBingoOyunlari(DateTime tarih, Dictionary<string, Kademe> kademeler)
         {
-            var eksikler = await EksikModlar("bingo", tarih);
-            if (eksikler.Count == 0) return;
+            if (await OyunVarMi(BingoSoruSecici.OyunTipi, tarih))
+            {
+                Console.WriteLine($"bingo: {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
+                return;
+            }
 
             var adaylar = await BingoAdaylari();
-            foreach (var zorluk in eksikler)
+            var kart = new BingoSoruSecici().Sec(adaylar, kademeler);
+            if (kart == null)
             {
-                var kart = new BingoSoruSecici().Sec(zorluk, adaylar, kademeler);
-                if (kart == null)
-                {
-                    Console.WriteLine($"Uyarı: Bingo ({zorluk}) için kurallara uyan kart kurulamadı.");
-                    continue;
-                }
-
-                var soruVerisi = await BingoSoruVerisi(kart);
-                var oyun = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
-                {
-                    OyunTipi = ZorlukDagilimi.OyunTipi("bingo", zorluk),
-                    Tarih = tarih,
-                    SoruVerisi = soruVerisi
-                })).Models.First();
-
-                // Eşleşmeler yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
-                try
-                {
-                    await _supabaseClient.From<BingoEslesmesi>().Insert(kart.Eslesmeler
-                        .Select((h, i) => new BingoEslesmesi { OyunId = oyun.Id, Sira = i + 1, Hucreler = h })
-                        .ToList());
-                }
-                catch
-                {
-                    await _supabaseClient.From<GunlukOyun>().Where(g => g.Id == oyun.Id).Delete();
-                    throw;
-                }
-
-                Console.WriteLine($"Başarılı: {oyun.OyunTipi} için {tarih:yyyy-MM-dd} tarihli kart eklendi.");
-                BingoKartiniYaz(kart, kademeler);
+                Console.WriteLine("Uyarı: Bingo için kurallara uyan kart kurulamadı.");
+                return;
             }
+
+            var soruVerisi = await BingoSoruVerisi(kart);
+            var oyun = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+            {
+                OyunTipi = BingoSoruSecici.OyunTipi,
+                Tarih = tarih,
+                SoruVerisi = soruVerisi
+            })).Models.First();
+
+            // Eşleşmeler yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
+            try
+            {
+                await _supabaseClient.From<BingoEslesmesi>().Insert(kart.Eslesmeler
+                    .Select((h, i) => new BingoEslesmesi { OyunId = oyun.Id, Sira = i + 1, Hucreler = h })
+                    .ToList());
+            }
+            catch
+            {
+                await _supabaseClient.From<GunlukOyun>().Where(g => g.Id == oyun.Id).Delete();
+                throw;
+            }
+
+            Console.WriteLine($"Başarılı: {oyun.OyunTipi} için {tarih:yyyy-MM-dd} tarihli kart eklendi.");
+            BingoKartiniYaz(kart, kademeler);
         }
 
-        // Veritabanına yazmadan her moddan bir Bingo kartı seçip ekrana basar:
+        // Veritabanına yazmadan bir Bingo kartı seçip ekrana basar:
         // dotnet run -- --bingo-onizleme
         public async Task BingoOnizleme()
         {
             var kademeler = await KademeleriOku();
             var adaylar = await BingoAdaylari();
-            foreach (var zorluk in Enum.GetValues<Zorluk>())
-            {
-                Console.WriteLine($"\nBingo ({zorluk}) önizleme (veritabanına yazılmadı):");
-                var kart = new BingoSoruSecici().Sec(zorluk, adaylar, kademeler);
-                if (kart == null)
-                    Console.WriteLine("   Kurallara uyan kart kurulamadı.");
-                else
-                    BingoKartiniYaz(kart, kademeler);
-            }
+            Console.WriteLine("\nBingo önizleme (veritabanına yazılmadı):");
+            var kart = new BingoSoruSecici().Sec(adaylar, kademeler);
+            if (kart == null)
+                Console.WriteLine("   Kurallara uyan kart kurulamadı.");
+            else
+                BingoKartiniYaz(kart, kademeler);
         }
 
         // Bütün kategoriler, kendilerine uyan oyuncularla
@@ -234,9 +232,9 @@ namespace ScoutIQ.API.Jobs
 
         private static void BingoKartiniYaz(BingoSoruSecici.BingoKarti kart, Dictionary<string, Kademe> kademeler)
         {
-            for (int s = 0; s < BingoSoruSecici.Boyut; s++)
+            for (int s = 0; s < BingoSoruSecici.SatirSayisi; s++)
             {
-                var satir = Enumerable.Range(0, BingoSoruSecici.Boyut).Select(t => $"{kart.Hucreler[s * BingoSoruSecici.Boyut + t].Isim,-24}");
+                var satir = Enumerable.Range(0, BingoSoruSecici.SutunSayisi).Select(t => $"{kart.Hucreler[s * BingoSoruSecici.SutunSayisi + t].Isim,-24}");
                 Console.WriteLine($"   {string.Join("", satir)}");
             }
             var sayilar = kart.Deste.GroupBy(o => kademeler[o]).OrderBy(g => g.Key).Select(g => $"{g.Count()} {ZorlukDagilimi.Metin(g.Key)}");

@@ -14,8 +14,8 @@ class BingoState {
   final BingoDurumu durum;
   final BingoKarti? kart;
   final String? oyunId;
-  final Map<int, BingoOyuncusu> hucreler; // Dolu kutular: kutu (0-15) -> oyuncu
-  final int oynanan; // Destede sırası geçmiş oyuncu sayısı (yerleşen, yanan ya da pas geçilen)
+  final Map<int, BingoOyuncusu> hucreler; // Dolu kutular: kutu (0-11) -> oyuncu
+  final int oynanan; // Destede sırası geçmiş oyuncu sayısı (yerleşen ya da pas geçilen)
   final bool gonderiliyor; // Hamle ya da pes etme sunucuda işlenirken ikinci isteği engeller
   final String? hataMesaji; // durum 'hata' iken gösterilir
   final SonBingoHamlesi? sonHamle;
@@ -46,6 +46,13 @@ class BingoState {
   BingoOyuncusu? get siradaki => kart != null && oynanan < kart!.deste.length ? kart!.deste[oynanan] : null;
 
   int get kalanOyuncu => (kart?.deste.length ?? 0) - oynanan;
+
+  // Sıradaki oyuncunun az önce yanlış konduğu kutu: kartta kırmızı gösterilir, oyuncu başka kutu deneyebilir
+  int? get yanlisKutu {
+    final h = sonHamle;
+    if (h == null || h.dogru || h.hucre == null || !identical(h.oyuncu, siradaki)) return null;
+    return h.hucre;
+  }
 
   BingoState copyWith({
     BingoDurumu? durum,
@@ -78,9 +85,11 @@ class BingoState {
   }
 }
 
-// Bingo oyunu. Destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu bir kutuya koyar ya da pas geçer.
+// Bingo oyunu. Destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
+// Yanlış kutuya konan oyuncu gitmez, ceza da yoktur: başka kutu denenebilir. Oyuncu sadece doğru kutuya konunca
+// ya da pas geçilince sıradakine geçilir.
 // Hamleler sunucuda tutulduğu için yarıda bırakılan kart tekrar açılınca kaldığı yerden devam eder; skor istemciden alınmaz.
-// Oyun 16 kutu dolunca, deste bitince, pes edilince ya da süre dolunca biter.
+// Oyun bütün kutular dolunca, deste bitince, pes edilince ya da süre dolunca biter.
 class BingoNotifier extends Notifier<BingoState> {
   final GunlukOyunSecimi secim;
 
@@ -145,7 +154,7 @@ class BingoNotifier extends Notifier<BingoState> {
         for (final h in hamleler)
           if (h.dogru && h.hucre != null && h.sira <= kart.deste.length) h.hucre!: kart.deste[h.sira - 1],
       };
-      var bitti = kayit['durum'] == 'tamamlandi' || hucreler.length >= bingoHucreSayisi || hamleler.length >= kart.deste.length;
+      var bitti = kayit['durum'] == 'tamamlandi' || hucreler.length >= kart.hucreSayisi || hamleler.length >= kart.deste.length;
 
       // Süre: yeni oyunda seçilen süre başlatılır, yarım kalan oyunda sunucudaki kalan süre okunur
       OyunSuresiDurumu? sure;
@@ -209,11 +218,13 @@ class BingoNotifier extends Notifier<BingoState> {
 
     final hucreler = {...state.hucreler};
     if (sonuc.dogru && sonuc.hucre != null) hucreler[sonuc.hucre!] = oyuncu;
+    // Yanlış kutu hamle sayılmaz: oyuncu sırada kalır
+    final yanlisKutu = hucre != null && !sonuc.dogru;
 
     state = state.copyWith(
       durum: sonuc.bitti ? BingoDurumu.bitti : BingoDurumu.oynaniyor,
       hucreler: hucreler,
-      oynanan: sonuc.sureDoldu ? state.oynanan : state.oynanan + 1,
+      oynanan: sonuc.sureDoldu || yanlisKutu ? state.oynanan : state.oynanan + 1,
       sonHamle: sonuc.sureDoldu ? null : (oyuncu: oyuncu, hucre: hucre, dogru: sonuc.dogru),
       gonderiliyor: false,
       sureDoldu: sonuc.sureDoldu,
@@ -261,7 +272,7 @@ class BingoNotifier extends Notifier<BingoState> {
 
   // Örnek cevaplar karta ek bilgidir: gelmezse boş kutular boş kalır, hata kullanıcıya yansıtılmaz
   Future<void> _ornekCevaplariYukle() async {
-    if (state.skor >= bingoHucreSayisi) return;
+    if (state.skor >= state.kart!.hucreSayisi) return;
     try {
       final ornekler = await _depo.bingoOrnekCevaplar(state.oyunId!);
       if (!ref.mounted) return;
@@ -270,5 +281,5 @@ class BingoNotifier extends Notifier<BingoState> {
   }
 }
 
-// Parametre: zorluğun oyun tipi (ör. bingo_orta) ve seçilen süre
+// Parametre: oyun tipi ('bingo') ve seçilen süre
 final bingoProvider = NotifierProvider.autoDispose.family<BingoNotifier, BingoState, GunlukOyunSecimi>(BingoNotifier.new);

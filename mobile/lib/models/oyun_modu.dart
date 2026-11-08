@@ -17,6 +17,8 @@ class OyunModu {
   final List<String>? altTipler;
   // Zorluk seçim sayfasında her zorluğun altında yazan açıklama, altTipler ile aynı sırada
   final List<String>? zorlukAciklamalari;
+  // Oyun başlarken seçilebilen süreler
+  final List<OyunSuresi> sureSecenekleri;
 
   const OyunModu({
     this.tip,
@@ -29,6 +31,7 @@ class OyunModu {
     this.maksimumSkor,
     this.altTipler,
     this.zorlukAciklamalari,
+    this.sureSecenekleri = OyunSuresi.values,
   });
 
   // Bu modun veritabanındaki günlük oyun tipleri
@@ -48,7 +51,7 @@ const _oyuncuZorluklari = [
   'Ünlü, bilinen ve az bilinen oyuncular',
 ];
 
-// Zorluklu oyunlarda zorluktan sonra seçilen süre. Her zorluklu oyunda aynı dört seçenek vardır.
+// Oyun başlarken seçilen süre. Oyunların çoğunda dört seçenek de vardır; Bingo'da 30 saniye yoktur.
 enum OyunSuresi {
   suresiz(null, 'Süresiz'),
   saniye30(30, '30 sn'),
@@ -108,13 +111,8 @@ const List<OyunModu> oyunModlari = [
     cizim: TebesirCizimi.bingo,
     renk: Renkler.bingo,
     durum: OyunDurumu.aktif,
-    maksimumSkor: 16,
-    // Destedeki 20 oyuncunun kademeleri zorluğa göre değişir, kart her zaman doldurulabilir
-    altTipler: ['bingo_kolay', 'bingo_orta', 'bingo_zor'],
-    zorlukAciklamalari: [
-      'Destede sadece ünlü oyuncular',
-      'Destenin yarısı ünlü, yarısı bilinen oyuncular',
-      'Destede ünlü, bilinen ve az bilinen oyuncular',
-    ],
+    maksimumSkor: 12,
+    // Zorluk modu yoktur: 12 kutulu tek kart, destede ünlü ve bilinen oyuncular. Kart her zaman doldurulabilir.
+    sureSecenekleri: [OyunSuresi.suresiz, OyunSuresi.saniye60, OyunSuresi.saniye90],
   ),
 ];
