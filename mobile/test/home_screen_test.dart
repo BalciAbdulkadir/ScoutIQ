@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/providers/hub_provider.dart';
+import 'package:mobile/screens/bingo_screen.dart';
 import 'package:mobile/screens/bonservis_screen.dart';
 import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
@@ -53,11 +54,11 @@ void main() {
   testWidgets('günlük ilerleme bitirilen oyunları sayar, biten kutucukta skor yazar', (tester) async {
     await anaMenuyuAc(tester, oynananlar: {'kesisim_kolay': 6});
 
-    // Kesişim, Bonservis ve Izgara: 3 günlük oyun (Izgara'nın zorlukları tek oyun sayılır)
-    expect(find.text('1 / 3'), findsOneWidget);
+    // Kesişim, Bonservis, Izgara ve Bingo: 4 günlük oyun (bir oyunun zorlukları tek oyun sayılır)
+    expect(find.text('1 / 4'), findsOneWidget);
     expect(find.text('6/10'), findsOneWidget);
     expect(find.text('KOLAY'), findsOneWidget); // Kesişim'de oynanan zorluk
-    expect(find.text('Oyna'), findsNWidgets(2)); // Bonservis ve Izgara henüz oynanmadı
+    expect(find.text('Oyna'), findsNWidgets(3)); // Bonservis, Izgara ve Bingo henüz oynanmadı
     await ekraniKapat(tester);
   });
 
@@ -67,9 +68,9 @@ void main() {
     expect(find.text('KESİŞİM'), findsOneWidget);
     expect(find.text('BONSERVİS'), findsOneWidget);
     expect(find.text('IZGARA'), findsOneWidget);
-    expect(find.text('K'), findsNWidgets(3));
-    expect(find.text('O'), findsNWidgets(3));
-    expect(find.text('Z'), findsNWidgets(3));
+    expect(find.text('K'), findsNWidgets(4));
+    expect(find.text('O'), findsNWidgets(4));
+    expect(find.text('Z'), findsNWidgets(4));
     expect(find.text('TEK MOD'), findsNothing);
     await ekraniKapat(tester);
   });
@@ -126,8 +127,8 @@ void main() {
 
     expect(find.text('7/9'), findsOneWidget);
     expect(find.text('KOLAY'), findsOneWidget);
-    expect(find.text('1 / 3'), findsOneWidget);
-    expect(find.text('Oyna'), findsNWidgets(2));
+    expect(find.text('1 / 4'), findsOneWidget);
+    expect(find.text('Oyna'), findsNWidgets(3));
     await ekraniKapat(tester);
   });
 
@@ -290,6 +291,7 @@ void main() {
       'kesisim_kolay': 6,
       'bonservis_zor': 3,
       'izgara_orta': 4,
+      'bingo_kolay': 12,
     });
 
     expect(find.text('Hepsi bitti'), findsOneWidget);
@@ -297,12 +299,24 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('yakındaki oyunlar ızgaranın sonunda dokunulamaz kutucuk olarak durur', (tester) async {
-    await anaMenuyuAc(tester);
+  testWidgets('Bingo\'ya dokununca zorluk ve süre seçilir, o zorluğun kartı açılır', (tester) async {
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
 
-    expect(find.text('YAKINDA'), findsOneWidget);
-    expect(find.text('BİNGO'), findsOneWidget);
-    expect(find.ancestor(of: find.text('BİNGO'), matching: find.byType(InkWell)), findsNothing);
+    expect(find.text('YAKINDA'), findsNothing);
+
+    await tester.tap(find.text('BİNGO'));
+    await tester.pumpAndSettle();
+    expect(find.text('Destede sadece ünlü oyuncular'), findsOneWidget);
+    await tester.tap(find.text('ZOR'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('∞'));
+    await tester.pump();
+    await tester.tap(find.text('ZOR · SÜRESİZ BAŞLA'));
+    await tester.pumpAndSettle();
+
+    final ekran = tester.widget<BingoScreen>(find.byType(BingoScreen));
+    expect(ekran.oyunTipi, 'bingo_zor');
+    expect(ekran.sure, isNull);
     await ekraniKapat(tester);
   });
 

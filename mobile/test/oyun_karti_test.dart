@@ -78,9 +78,9 @@ void main() {
     expect(find.text('Oyna'), findsNothing);
   });
 
-  test('ilk fazın modları (Kesişim, Bonservis ve Izgara) oynanabilir durumda', () {
+  test('oynanabilir modlar Kesişim, Bonservis, Izgara ve Bingo', () {
     final aktifler = oyunModlari.where((m) => m.durum == OyunDurumu.aktif).map((m) => m.tip);
-    expect(aktifler, ['kesisim', 'bonservis', 'izgara']);
+    expect(aktifler, ['kesisim', 'bonservis', 'izgara', 'bingo']);
   });
 
   test('her oyun zorlukludur, her zorluğun ayrı günlük oyunu vardır', () {

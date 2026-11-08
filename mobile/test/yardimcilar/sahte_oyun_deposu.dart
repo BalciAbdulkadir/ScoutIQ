@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:mobile/models/bingo.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/services/oyun_deposu.dart';
@@ -82,6 +83,20 @@ class SahteOyunDeposu implements OyunDeposu {
   // Kulüp ID'si -> logo (Kesişim'de logosu olmayan eski sorular için)
   Map<String, String> logolar = {};
   int logoIstekSayisi = 0;
+
+  // Bingo: destedeki sıra (1'den) -> oyuncunun uyduğu kutular. Listede olmayan oyuncu hiçbir kutuya uymaz.
+  Map<int, List<int>> bingoEslesmeleri = {1: [0], 2: [5, 6]};
+  int bingoDesteBoyutu = 20;
+  // Sunucudaki hamleler (uygulama yeniden açılınca okunur)
+  List<BingoHamlesi> bingoHamleListesi = [];
+  bool bingoHamleHataVerir = false;
+  // Doluysa sunucu süre dolmuş gibi hamleyi reddeder
+  bool bingoSuresiDoldu = false;
+  int bingoPesSayisi = 0;
+  final List<({int sira, int? hucre})> bingoHamleIstekleri = [];
+  Map<int, BingoOyuncusu> bingoOrnekleri = {
+    for (var i = 0; i < 16; i++) i: BingoOyuncusu(isim: 'Örnek Oyuncu $i'),
+  };
 
   // Çağrı kayıtları
   int kayitAcSayisi = 0;
@@ -239,5 +254,40 @@ class SahteOyunDeposu implements OyunDeposu {
   Future<Map<String, String>> kulupLogolari(List<String> kulupIdleri) async {
     logoIstekSayisi++;
     return {for (final id in kulupIdleri) if (logolar[id] != null) id: logolar[id]!};
+  }
+
+  int get _bingoSkoru => bingoHamleListesi.where((h) => h.dogru).length;
+
+  @override
+  Future<List<BingoHamlesi>> bingoHamleleri(String oyunId) async => List.of(bingoHamleListesi);
+
+  // 020_bingo.sql'deki bingo_hamle fonksiyonunun basit bir kopyası
+  @override
+  Future<BingoHamleSonucu> bingoHamle({required String oyunId, required int sira, int? hucre}) async {
+    bingoHamleIstekleri.add((sira: sira, hucre: hucre));
+    if (bingoHamleHataVerir) throw Exception('bağlantı yok');
+    if (bingoSuresiDoldu) {
+      kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': 'tamamlandi'};
+      return BingoHamleSonucu(dogru: false, skor: _bingoSkoru, bitti: true, sureDoldu: true);
+    }
+    final dogru = hucre != null && (bingoEslesmeleri[sira] ?? const []).contains(hucre);
+    bingoHamleListesi.add(BingoHamlesi(sira: sira, hucre: hucre, dogru: dogru));
+    final bitti = _bingoSkoru == bingoHucreSayisi || sira >= bingoDesteBoyutu;
+    kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': bitti ? 'tamamlandi' : 'basladi'};
+    return BingoHamleSonucu(dogru: dogru, hucre: hucre, skor: _bingoSkoru, bitti: bitti);
+  }
+
+  @override
+  Future<int> bingoPesEt(String oyunId) async {
+    bingoPesSayisi++;
+    kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': 'tamamlandi'};
+    return _bingoSkoru;
+  }
+
+  @override
+  Future<Map<int, BingoOyuncusu>> bingoOrnekCevaplar(String oyunId) async {
+    if (kayit?['durum'] != 'tamamlandi') return {};
+    final dolular = bingoHamleListesi.where((h) => h.dogru).map((h) => h.hucre).toSet();
+    return {for (final e in bingoOrnekleri.entries) if (!dolular.contains(e.key)) e.key: e.value};
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/bingo.dart';
 import '../models/izgara.dart';
 import '../models/oyuncu_oneri.dart';
 
@@ -69,6 +70,20 @@ abstract class OyunDeposu {
 
   // Kulüplerin logo adresleri: kulüp ID'si -> logo. Logosuz kulüpler dönmez.
   Future<Map<String, String>> kulupLogolari(List<String> kulupIdleri);
+
+  // Bingo: hamleler ve skor sunucuda tutulur (020_bingo.sql)
+
+  // Kullanıcının bu karttaki hamleleri, sırayla. Uygulama yeniden açılınca kart bunlarla kurulur.
+  Future<List<BingoHamlesi>> bingoHamleleri(String oyunId);
+
+  // Destedeki sira. oyuncuyu hucre kutusuna koyar; hucre null ise pas geçer
+  Future<BingoHamleSonucu> bingoHamle({required String oyunId, required int sira, int? hucre});
+
+  // Oyunu o anki skorla bitirir, skoru döndürür
+  Future<int> bingoPesEt(String oyunId);
+
+  // Bitmiş kartta boş kalan her kutu için desteden ona uyan bir oyuncu: kutu -> oyuncu
+  Future<Map<int, BingoOyuncusu>> bingoOrnekCevaplar(String oyunId);
 }
 
 class SupabaseOyunDeposu implements OyunDeposu {
@@ -230,6 +245,39 @@ class SupabaseOyunDeposu implements OyunDeposu {
     return {
       for (final satir in satirlar)
         if (satir['logo_url'] != null) satir['id'] as String: satir['logo_url'] as String,
+    };
+  }
+
+  @override
+  Future<List<BingoHamlesi>> bingoHamleleri(String oyunId) async {
+    final satirlar = await _supabase
+        .from('bingo_hamleleri')
+        .select('sira, hucre, dogru')
+        .eq('kullanici_id', kullaniciId!)
+        .eq('oyun_id', oyunId)
+        .order('sira');
+    return satirlar.map(BingoHamlesi.fromJson).toList();
+  }
+
+  @override
+  Future<BingoHamleSonucu> bingoHamle({required String oyunId, required int sira, int? hucre}) async {
+    final sonuc = await _supabase.rpc('bingo_hamle', params: {'p_oyun_id': oyunId, 'p_sira': sira, 'p_hucre': hucre});
+    return BingoHamleSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<int> bingoPesEt(String oyunId) async {
+    final skor = await _supabase.rpc('bingo_pes_et', params: {'p_oyun_id': oyunId});
+    return (skor as num).toInt();
+  }
+
+  @override
+  Future<Map<int, BingoOyuncusu>> bingoOrnekCevaplar(String oyunId) async {
+    final satirlar = await _supabase.rpc('bingo_ornek_cevaplar', params: {'p_oyun_id': oyunId}) as List<dynamic>;
+    return {
+      for (final satir in satirlar.cast<Map<String, dynamic>>())
+        if (satir['oyuncu_isim'] != null)
+          (satir['hucre'] as num).toInt(): BingoOyuncusu(isim: satir['oyuncu_isim'] as String, fotoUrl: satir['foto_url'] as String?),
     };
   }
 }

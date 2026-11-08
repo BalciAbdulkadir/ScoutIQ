@@ -95,7 +95,8 @@ namespace ScoutIQ.API.Oyunlar
                     {
                         var oyuncular = g.Select(m => m.OyuncuId).ToHashSet();
                         var isim = OrtaMilliTakimlar.TryGetValue(g.Key, out var turkce) ? turkce : g.First().MilliTakimIsim;
-                        return new Aday(new Baslik(BaslikTipi.Milli, null, g.Key, isim), oyuncular, oyuncular);
+                        var bayrak = Logolar.Bayrak(g.First().MilliTakimIsim);
+                        return new Aday(new Baslik(BaslikTipi.Milli, null, g.Key, isim, bayrak), oyuncular, oyuncular);
                     })
                     .ToList();
 

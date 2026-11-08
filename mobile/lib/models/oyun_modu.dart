@@ -61,8 +61,7 @@ enum OyunSuresi {
   const OyunSuresi(this.saniye, this.ad);
 }
 
-// Hub'da gösterilen modlar. İlk faz: Kesişim, Bonservis ve Izgara.
-// Bingo proje planında ileriki fazlar için öngörülüyor.
+// Hub'da gösterilen modlar: Kesişim, Bonservis, Izgara ve Bingo.
 const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'kesisim',
@@ -102,11 +101,20 @@ const List<OyunModu> oyunModlari = [
     // Zorluk açıklamaları IzgaraZorlugu'nda
   ),
   OyunModu(
+    tip: 'bingo',
     baslik: 'Bingo',
-    aciklama: 'Kartındaki özellikleri tamamla.',
+    aciklama: 'Gelen oyuncuyu uyduğu kutuya koy, kartı doldur.',
     ikon: Icons.apps_rounded,
     cizim: TebesirCizimi.bingo,
-    renk: Renkler.metinSoluk,
-    durum: OyunDurumu.yakinda,
+    renk: Renkler.bingo,
+    durum: OyunDurumu.aktif,
+    maksimumSkor: 16,
+    // Destedeki 20 oyuncunun kademeleri zorluğa göre değişir, kart her zaman doldurulabilir
+    altTipler: ['bingo_kolay', 'bingo_orta', 'bingo_zor'],
+    zorlukAciklamalari: [
+      'Destede sadece ünlü oyuncular',
+      'Destenin yarısı ünlü, yarısı bilinen oyuncular',
+      'Destede ünlü, bilinen ve az bilinen oyuncular',
+    ],
   ),
 ];

@@ -11,6 +11,7 @@ import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/oyun_karti.dart';
 import '../widgets/logo.dart';
 import '../widgets/tebesir.dart';
+import 'bingo_screen.dart';
 import 'bonservis_screen.dart';
 import 'game_screen.dart';
 
@@ -22,6 +23,7 @@ class HomeScreen extends ConsumerWidget {
     final Widget Function(String oyunTipi, int? sure)? ekran = switch (mod.tip) {
       'kesisim' => (oyunTipi, sure) => GameScreen(oyunTipi: oyunTipi, sure: sure),
       'bonservis' => (oyunTipi, sure) => BonservisScreen(oyunTipi: oyunTipi, sure: sure),
+      'bingo' => (oyunTipi, sure) => BingoScreen(oyunTipi: oyunTipi, sure: sure),
       _ => null,
     };
     if (mod.tip == 'izgara') return izgaraAc(context, ref);
