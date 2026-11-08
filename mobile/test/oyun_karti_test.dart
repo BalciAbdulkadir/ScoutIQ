@@ -38,15 +38,14 @@ void main() {
     expect(find.text('6/10'), findsOneWidget);
   });
 
-  testWidgets('zorluksuz oyunda "tek mod", zorluklu oyunda K O Z yazar', (tester) async {
-    await kartiGoster(tester, kesisim, null);
-    expect(find.text('TEK MOD'), findsOneWidget);
-
-    await kartiGoster(tester, izgara, null);
-    expect(find.text('TEK MOD'), findsNothing);
-    expect(find.text('K'), findsOneWidget);
-    expect(find.text('O'), findsOneWidget);
-    expect(find.text('Z'), findsOneWidget);
+  testWidgets('zorluklu oyunlarda K O Z yazar', (tester) async {
+    for (final mod in [kesisim, bonservis, izgara]) {
+      await kartiGoster(tester, mod, null);
+      expect(find.text('TEK MOD'), findsNothing);
+      expect(find.text('K'), findsOneWidget);
+      expect(find.text('O'), findsOneWidget);
+      expect(find.text('Z'), findsOneWidget);
+    }
   });
 
   testWidgets('zorluklu oyun bitince oynanan zorluk ve skor kalır', (tester) async {
@@ -84,11 +83,12 @@ void main() {
     expect(aktifler, ['kesisim', 'bonservis', 'izgara']);
   });
 
-  test('Izgara zorluklu bir oyundur, her zorluğun ayrı günlük tahtası vardır', () {
+  test('her oyun zorlukludur, her zorluğun ayrı günlük oyunu vardır', () {
     expect(izgara.zorluklu, isTrue);
     expect(izgara.oyunTipleri, ['izgara_kolay', 'izgara_orta', 'izgara_zor']);
-    expect(kesisim.zorluklu, isFalse);
-    expect(kesisim.oyunTipleri, ['kesisim']);
+    expect(kesisim.zorluklu, isTrue);
+    expect(bonservis.oyunTipleri, ['bonservis_kolay', 'bonservis_orta', 'bonservis_zor']);
+    expect(kesisim.oyunTipleri, ['kesisim_kolay', 'kesisim_orta', 'kesisim_zor']);
   });
 
   test('süre seçenekleri süresiz, 30, 60 ve 90 saniyedir', () {

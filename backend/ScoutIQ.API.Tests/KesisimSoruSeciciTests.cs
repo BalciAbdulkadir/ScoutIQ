@@ -6,11 +6,12 @@ namespace ScoutIQ.API.Tests;
 
 public class KesisimSoruSeciciTests
 {
-    // Testler için küçük bir futbol dünyası: kulüpler ve aralarındaki ortak oyuncular
+    // Testler için küçük bir futbol dünyası: kulüpler, aralarındaki ortak oyuncular ve oyuncu kademeleri
     private sealed class TestVerisi
     {
         public List<Kulup> Kulupler { get; } = new();
         public List<KariyerGecmisi> Kariyer { get; } = new();
+        public Dictionary<string, Kademe> Kademeler { get; } = new();
         private int _oyuncuNo;
 
         public Kulup Kulup(string transfermarktId, string isim, string? lig)
@@ -20,113 +21,107 @@ public class KesisimSoruSeciciTests
             return kulup;
         }
 
-        // İki kulüpte de oynamış "adet" kadar yeni oyuncu ekler
-        public void OrtakOyuncuEkle(Kulup a, Kulup b, int adet)
+        // İki kulüpte de oynamış "adet" kadar yeni oyuncu ekler. kademe null: soru havuzunda değil.
+        // macSayisi 0: kadroda olmuş ama maça çıkmamış.
+        public void OrtakOyuncuEkle(Kulup a, Kulup b, int adet, Kademe? kademe, int macSayisi = 10)
         {
             for (int i = 0; i < adet; i++)
             {
                 var oyuncuId = $"oyuncu-{++_oyuncuNo}";
-                Kariyer.Add(new KariyerGecmisi { OyuncuId = oyuncuId, KulupId = a.Id });
-                Kariyer.Add(new KariyerGecmisi { OyuncuId = oyuncuId, KulupId = b.Id });
+                Kariyer.Add(new KariyerGecmisi { OyuncuId = oyuncuId, KulupId = a.Id, MacSayisi = macSayisi });
+                Kariyer.Add(new KariyerGecmisi { OyuncuId = oyuncuId, KulupId = b.Id, MacSayisi = macSayisi });
+                if (kademe != null) Kademeler[oyuncuId] = kademe.Value;
             }
         }
 
-        public int GercekOrtakSayisi(Kulup a, Kulup b)
-        {
-            var aOyunculari = Kariyer.Where(k => k.KulupId == a.Id).Select(k => k.OyuncuId).ToHashSet();
-            return Kariyer.Where(k => k.KulupId == b.Id).Select(k => k.OyuncuId).Distinct().Count(aOyunculari.Contains);
-        }
+        public HashSet<string> Oyunculari(Kulup k, bool sadeceOynayan) =>
+            Kariyer.Where(r => r.KulupId == k.Id && (!sadeceOynayan || r.Oynadi)).Select(r => r.OyuncuId).ToHashSet();
+
+        public int GercekOrtakSayisi(Kulup a, Kulup b) => Oyunculari(a, false).Intersect(Oyunculari(b, false)).Count();
+
+        public Kademe? GercekKademe(Kulup a, Kulup b) =>
+            ZorlukDagilimi.EnBilinen(Oyunculari(a, true).Intersect(Oyunculari(b, true)), Kademeler);
+
+        public SecimSonucu Sec(int tohum, Zorluk zorluk) => new KesisimSoruSecici(new Random(tohum)).Sec(zorluk, Kulupler, Kariyer, Kademeler);
     }
 
     private static bool Buyuk(Kulup k) => BuyukKulupler.ContainsKey(k.TransfermarktId);
-    private static bool BasAlti(Kulup k) => BasAltiKulupler.ContainsKey(k.TransfermarktId);
 
-    // Her zorluk için bol çift olan, tuzaklar da içeren gerçekçi bir veri seti
+    // Listedeki 16 kulüp birbirine bağlı; çiftlerin kademeleri karışık. Tuzaklar da var.
     private static TestVerisi ZenginVeri()
     {
         var v = new TestVerisi();
-
-        var buyukler = new[]
+        var kulupler = new[]
         {
-            v.Kulup("141", "Galatasaray", "TR1"), v.Kulup("36", "Fenerbahce", "TR1"), v.Kulup("114", "Beşiktaş JK", "TR1"),
-            v.Kulup("281", "Manchester City", "GB1"), v.Kulup("631", "Chelsea FC", "GB1"),
-            v.Kulup("418", "Real Madrid", "ES1"), v.Kulup("131", "FC Barcelona", "ES1"),
-            v.Kulup("506", "Juventus FC", "IT1"), v.Kulup("27", "FC Bayern Munich", "L1"), v.Kulup("583", "Paris Saint-Germain", "FR1"),
-        };
-        var basAltilar = new[]
-        {
-            v.Kulup("244", "Olympique Marseille", "FR1"), v.Kulup("405", "Aston Villa", "GB1"), v.Kulup("368", "Sevilla FC", "ES1"),
-            v.Kulup("6195", "SSC Napoli", "IT1"), v.Kulup("15", "Bayer 04 Leverkusen", "L1"), v.Kulup("449", "Trabzonspor", "TR1"),
-        };
-        var siradanlar = new[]
-        {
-            v.Kulup("10484", "Kasımpaşa", "TR1"), v.Kulup("130", "Parma Calcio 1913", "IT1"), v.Kulup("3911", "Stade Brestois 29", "FR1"),
-            v.Kulup("989", "AFC Bournemouth", "GB1"), v.Kulup("1531", "Elche CF", "ES1"), v.Kulup("39", "1.FSV Mainz 05", "L1"),
+            v.Kulup("141", "Galatasaray", "TR1"), v.Kulup("36", "Fenerbahce", "TR1"), v.Kulup("449", "Trabzonspor", "TR1"),
+            v.Kulup("281", "Manchester City", "GB1"), v.Kulup("631", "Chelsea FC", "GB1"), v.Kulup("405", "Aston Villa", "GB1"),
+            v.Kulup("418", "Real Madrid", "ES1"), v.Kulup("131", "FC Barcelona", "ES1"), v.Kulup("368", "Sevilla FC", "ES1"),
+            v.Kulup("506", "Juventus FC", "IT1"), v.Kulup("6195", "SSC Napoli", "IT1"),
+            v.Kulup("27", "FC Bayern Munich", "L1"), v.Kulup("15", "Bayer 04 Leverkusen", "L1"),
+            v.Kulup("583", "Paris Saint-Germain", "FR1"), v.Kulup("244", "Olympique Marseille", "FR1"), v.Kulup("162", "AS Monaco", "FR1"),
         };
 
-        // Büyük kulüplerin hepsi birbirine 1-2 ortak oyuncuyla bağlı: kolay havuzu
-        for (int i = 0; i < buyukler.Length; i++)
-            for (int j = i + 1; j < buyukler.Length; j++)
-                v.OrtakOyuncuEkle(buyukler[i], buyukler[j], 1 + (i + j) % 2);
+        for (int i = 0; i < kulupler.Length; i++)
+        {
+            for (int j = i + 1; j < kulupler.Length; j++)
+            {
+                // Her çiftte en bilinen oyuncunun kademesi farklı; havuz dışı bir oyuncu da var
+                var kademe = ((i + 2 * j) % 3) switch { 0 => Kademe.Unlu, 1 => Kademe.Bilinen, _ => Kademe.Diger };
+                v.OrtakOyuncuEkle(kulupler[i], kulupler[j], 1 + (i + j) % 2, kademe);
+                if (kademe != Kademe.Diger) v.OrtakOyuncuEkle(kulupler[i], kulupler[j], 1, Kademe.Diger);
+                v.OrtakOyuncuEkle(kulupler[i], kulupler[j], 1, null);
 
-        // Baş altı kulüpler, farklı ligdeki büyük ve baş altı kulüplere 2-3 ortak oyuncuyla bağlı: orta havuzu
-        var ustSeviye = buyukler.Concat(basAltilar).ToArray();
-        for (int i = 0; i < ustSeviye.Length; i++)
-            for (int j = i + 1; j < ustSeviye.Length; j++)
-                if (ustSeviye[i].Lig != ustSeviye[j].Lig && (BasAlti(ustSeviye[i]) || BasAlti(ustSeviye[j])))
-                    v.OrtakOyuncuEkle(ustSeviye[i], ustSeviye[j], 2 + (i + j) % 2);
+                // Tuzak: kadroda olup maça çıkmamış ünlü oyuncu çiftin kademesini yükseltmemeli
+                if ((i + j) % 4 == 0) v.OrtakOyuncuEkle(kulupler[i], kulupler[j], 1, Kademe.Unlu, macSayisi: 0);
+            }
+        }
 
-        // Sıradan kulüpler farklı ligdeki kulüplere tek ortak oyuncuyla bağlı: zor havuzu
-        foreach (var siradan in siradanlar)
-            foreach (var diger in siradanlar.Where(k => k.Lig != siradan.Lig && string.CompareOrdinal(k.Id, siradan.Id) < 0))
-                v.OrtakOyuncuEkle(siradan, diger, 1);
-
-        // Tuzaklar: hiçbiri kurallara aykırı bir yerde sorulmamalı
-        v.OrtakOyuncuEkle(siradanlar[0], basAltilar[5], 6);  // Kasımpaşa x Trabzonspor: aynı lig, çok ortak oyuncu
-        v.OrtakOyuncuEkle(siradanlar[1], basAltilar[3], 5);  // Parma x Napoli: aynı lig
-        v.OrtakOyuncuEkle(siradanlar[2], basAltilar[1], 4);  // Brest x Aston Villa: baş altı + sıradan, orta sayılmamalı
+        // Tuzak: listede olmayan kulüpler, ünlü ortak oyuncuları olsa da sorulmamalı
+        var parma = v.Kulup("130", "Parma Calcio 1913", "IT1");
+        var brest = v.Kulup("3911", "Stade Brestois 29", "FR1");
+        foreach (var kulup in kulupler)
+        {
+            v.OrtakOyuncuEkle(parma, kulup, 5, Kademe.Unlu);
+            v.OrtakOyuncuEkle(brest, kulup, 5, Kademe.Unlu);
+        }
 
         return v;
     }
 
-    public static IEnumerable<object[]> Tohumlar() => Enumerable.Range(0, 100).Select(t => new object[] { t });
+    public static IEnumerable<object[]> TohumVeZorluklar() =>
+        from tohum in Enumerable.Range(0, 50)
+        from zorluk in Enum.GetValues<Zorluk>()
+        select new object[] { tohum, zorluk };
 
     [Theory]
-    [MemberData(nameof(Tohumlar))]
-    public void Sec_HerTohumda_TumKurallaraUyar(int tohum)
+    [MemberData(nameof(TohumVeZorluklar))]
+    public void Sec_HerTohumda_TumKurallaraUyar(int tohum, Zorluk zorluk)
     {
         var veri = ZenginVeri();
 
-        var sonuc = new KesisimSoruSecici(new Random(tohum)).Sec(veri.Kulupler, veri.Kariyer);
+        var sonuc = veri.Sec(tohum, zorluk);
 
         Assert.NotNull(sonuc.Sorular);
+        Assert.Empty(sonuc.Uyarilar);
         var sorular = sonuc.Sorular!;
-        Assert.Equal(SoruSirasi, sorular.Select(s => s.Zorluk).ToList());
+        Assert.Equal(SoruSayisi, sorular.Count);
+
+        // Kademe dağılımı moda tam uyar ve sorular kolaydan zora sıralıdır
+        var dagilim = ZorlukDagilimi.Dagit(zorluk, SoruSayisi);
+        foreach (var kademe in Enum.GetValues<Kademe>())
+            Assert.Equal(dagilim.GetValueOrDefault(kademe), sorular.Count(s => s.Kademe == kademe));
+        Assert.Equal(sorular.Select(s => s.Kademe).OrderBy(k => k), sorular.Select(s => s.Kademe));
 
         foreach (var soru in sorular)
         {
-            var (a, b) = (soru.Cift.KulupA, soru.Cift.KulupB);
-            Assert.Equal(veri.GercekOrtakSayisi(a, b), soru.Cift.OrtakOyuncuSayisi);
-            Assert.True(soru.Cift.OrtakOyuncuSayisi >= 1, $"{a.Isim} x {b.Isim}: ortak oyuncu yok");
-
-            switch (soru.Zorluk)
-            {
-                case Zorluk.Kolay:
-                    Assert.True(Buyuk(a) && Buyuk(b), $"Kolay soruda büyük olmayan kulüp: {a.Isim} x {b.Isim}");
-                    break;
-                case Zorluk.Orta:
-                    Assert.True(BasAlti(a) || BasAlti(b), $"Orta soruda baş altı kulüp yok: {a.Isim} x {b.Isim}");
-                    Assert.True((Buyuk(a) || BasAlti(a)) && (Buyuk(b) || BasAlti(b)), $"Orta soruda sıradan kulüp: {a.Isim} x {b.Isim}");
-                    Assert.NotEqual(a.Lig, b.Lig);
-                    Assert.True(soru.Cift.OrtakOyuncuSayisi >= OrtaMinOrtakOyuncu, $"Orta soruda 2'den az ortak oyuncu: {a.Isim} x {b.Isim}");
-                    break;
-                case Zorluk.Zor:
-                    Assert.NotEqual(a.Lig, b.Lig);
-                    break;
-            }
+            var (a, b) = (soru.KulupA, soru.KulupB);
+            Assert.True(Kulupler.ContainsKey(a.TransfermarktId) && Kulupler.ContainsKey(b.TransfermarktId), $"Listede olmayan kulüp: {a.Isim} x {b.Isim}");
+            Assert.Equal(veri.GercekOrtakSayisi(a, b), soru.OrtakOyuncuSayisi);
+            Assert.Equal(veri.GercekKademe(a, b), soru.Kademe);
+            Assert.True(a.Lig != b.Lig || (Buyuk(a) && Buyuk(b)), $"Aynı ligden büyük olmayan çift: {a.Isim} x {b.Isim}");
         }
 
-        var kullanilanKulupler = sorular.SelectMany(s => new[] { s.Cift.KulupA.Id, s.Cift.KulupB.Id }).ToList();
+        var kullanilanKulupler = sorular.SelectMany(s => new[] { s.KulupA.Id, s.KulupB.Id }).ToList();
         Assert.Equal(kullanilanKulupler.Count, kullanilanKulupler.Distinct().Count());
     }
 
@@ -135,12 +130,10 @@ public class KesisimSoruSeciciTests
     {
         var veri = ZenginVeri();
 
-        var ilk = new KesisimSoruSecici(new Random(42)).Sec(veri.Kulupler, veri.Kariyer).Sorular!;
-        var ikinci = new KesisimSoruSecici(new Random(42)).Sec(veri.Kulupler, veri.Kariyer).Sorular!;
+        var ilk = veri.Sec(42, Zorluk.Zor).Sorular!;
+        var ikinci = veri.Sec(42, Zorluk.Zor).Sorular!;
 
-        Assert.Equal(
-            ilk.Select(s => (s.Cift.KulupA.Id, s.Cift.KulupB.Id)),
-            ikinci.Select(s => (s.Cift.KulupA.Id, s.Cift.KulupB.Id)));
+        Assert.Equal(ilk.Select(s => (s.KulupA.Id, s.KulupB.Id)), ikinci.Select(s => (s.KulupA.Id, s.KulupB.Id)));
     }
 
     [Fact]
@@ -149,83 +142,104 @@ public class KesisimSoruSeciciTests
         var veri = ZenginVeri();
 
         var setler = Enumerable.Range(0, 20)
-            .Select(t => string.Join("|", new KesisimSoruSecici(new Random(t)).Sec(veri.Kulupler, veri.Kariyer).Sorular!
-                .Select(s => $"{s.Cift.KulupA.Id}-{s.Cift.KulupB.Id}")))
+            .Select(t => string.Join("|", veri.Sec(t, Zorluk.Orta).Sorular!.Select(s => $"{s.KulupA.Id}-{s.KulupB.Id}")))
             .ToHashSet();
 
         Assert.True(setler.Count > 1, "Her gün aynı sorular seçiliyor");
     }
 
-    [Fact]
-    public void Sec_OrtaCiftKalmazsa_ZorCiftKullanmaz_KolayaDuser()
+    // Birbirinden bağımsız 5 kulüp çifti: her çiftin ortak oyuncusu verilen kademede
+    private static TestVerisi BesCift(params Kademe[] kademeler)
     {
         var v = new TestVerisi();
-        var gs = v.Kulup("141", "Galatasaray", "TR1");
-        var fb = v.Kulup("36", "Fenerbahce", "TR1");
-        var city = v.Kulup("281", "Manchester City", "GB1");
-        var chelsea = v.Kulup("631", "Chelsea FC", "GB1");
-        var real = v.Kulup("418", "Real Madrid", "ES1");
-        var barca = v.Kulup("131", "FC Barcelona", "ES1");
-        var juve = v.Kulup("506", "Juventus FC", "IT1");
-        var bayern = v.Kulup("27", "FC Bayern Munich", "L1");
-        var parma = v.Kulup("130", "Parma Calcio 1913", "IT1");
-        var brest = v.Kulup("3911", "Stade Brestois 29", "FR1");
-
-        // Sadece kolay ve zor çiftler var, hiç orta çift yok
-        v.OrtakOyuncuEkle(gs, fb, 1);
-        v.OrtakOyuncuEkle(city, chelsea, 1);
-        v.OrtakOyuncuEkle(real, barca, 1);
-        v.OrtakOyuncuEkle(juve, bayern, 1);
-        v.OrtakOyuncuEkle(parma, brest, 1);
-
-        var sonuc = new KesisimSoruSecici(new Random(1)).Sec(v.Kulupler, v.Kariyer);
-
-        Assert.NotNull(sonuc.Sorular);
-        var ortaSorular = sonuc.Sorular!.Where(s => s.Zorluk == Zorluk.Orta).ToList();
-        Assert.Equal(2, ortaSorular.Count);
-        Assert.All(ortaSorular, s => Assert.True(Buyuk(s.Cift.KulupA) && Buyuk(s.Cift.KulupB)));
-        Assert.Contains(sonuc.Uyarilar, u => u.Contains("Orta çift kalmadı"));
+        var kulupler = new[]
+        {
+            v.Kulup("141", "Galatasaray", "TR1"), v.Kulup("281", "Manchester City", "GB1"),
+            v.Kulup("36", "Fenerbahce", "TR1"), v.Kulup("631", "Chelsea FC", "GB1"),
+            v.Kulup("418", "Real Madrid", "ES1"), v.Kulup("506", "Juventus FC", "IT1"),
+            v.Kulup("131", "FC Barcelona", "ES1"), v.Kulup("27", "FC Bayern Munich", "L1"),
+            v.Kulup("583", "Paris Saint-Germain", "FR1"), v.Kulup("16", "Borussia Dortmund", "L1"),
+        };
+        for (int i = 0; i < kademeler.Length; i++)
+            v.OrtakOyuncuEkle(kulupler[2 * i], kulupler[2 * i + 1], 2, kademeler[i]);
+        return v;
     }
 
     [Fact]
-    public void Sec_YeterliCiftYoksa_NullVeUyariDoner()
+    public void Sec_DigerCiftKalmazsa_BilinenKullanir_UyariVerir()
     {
-        var v = new TestVerisi();
-        var gs = v.Kulup("141", "Galatasaray", "TR1");
-        var fb = v.Kulup("36", "Fenerbahce", "TR1");
-        var parma = v.Kulup("130", "Parma Calcio 1913", "IT1");
-        var brest = v.Kulup("3911", "Stade Brestois 29", "FR1");
-        v.OrtakOyuncuEkle(gs, fb, 2);
-        v.OrtakOyuncuEkle(parma, brest, 1);
+        var veri = BesCift(Kademe.Unlu, Kademe.Unlu, Kademe.Bilinen, Kademe.Bilinen, Kademe.Bilinen);
 
-        var sonuc = new KesisimSoruSecici(new Random(1)).Sec(v.Kulupler, v.Kariyer);
+        var sonuc = veri.Sec(1, Zorluk.Zor);
+
+        Assert.NotNull(sonuc.Sorular);
+        Assert.Equal(new[] { Kademe.Unlu, Kademe.Unlu, Kademe.Bilinen, Kademe.Bilinen, Kademe.Bilinen }, sonuc.Sorular!.Select(s => s.Kademe));
+        Assert.Contains(sonuc.Uyarilar, u => u.Contains("Diger çift kalmadı"));
+    }
+
+    [Fact]
+    public void Sec_KolaydaUnluCiftYetmezse_DahaZorCiftKullanmaz_NullDoner()
+    {
+        var veri = BesCift(Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Bilinen);
+
+        var sonuc = veri.Sec(1, Zorluk.Kolay);
 
         Assert.Null(sonuc.Sorular);
         Assert.Contains(sonuc.Uyarilar, u => u.Contains("5 eşleşme bulunamadı"));
     }
 
     [Fact]
-    public void Sec_LigiOlmayanKulubu_SoruOlarakSecmez()
+    public void Sec_TamDagilimKurulabiliyorsa_YedekKademeKullanmaz()
     {
-        var veri = ZenginVeri();
-        // Efsanelerin eski kulüpleri: ligi yok, ama ana lig kulüpleriyle çok ortak oyuncusu var
-        var santos = veri.Kulup("221", "Santos FC", null);
-        var boca = veri.Kulup("189", "CA Boca Juniors", null);
-        foreach (var kulup in veri.Kulupler.Where(k => k.Lig != null).ToList())
-        {
-            veri.OrtakOyuncuEkle(santos, kulup, 5);
-            veri.OrtakOyuncuEkle(boca, kulup, 5);
-        }
-        veri.OrtakOyuncuEkle(santos, boca, 5);
+        // Bilinen çiftlerden biri, tek diğer çiftin kulübünü kullanıyor: ilk karıştırmada diğer çift kaçırılabilir,
+        // seçici yine de dağılıma tam uyan seti bulmalı
+        var veri = BesCift(Kademe.Unlu, Kademe.Unlu, Kademe.Bilinen, Kademe.Bilinen, Kademe.Diger);
+        var psg = veri.Kulupler.Single(k => k.TransfermarktId == "583");
+        var juve = veri.Kulupler.Single(k => k.TransfermarktId == "506");
+        veri.OrtakOyuncuEkle(psg, juve, 2, Kademe.Bilinen);
 
-        for (int tohum = 0; tohum < 50; tohum++)
+        for (int tohum = 0; tohum < 30; tohum++)
         {
-            var sonuc = new KesisimSoruSecici(new Random(tohum)).Sec(veri.Kulupler, veri.Kariyer);
-
-            Assert.NotNull(sonuc.Sorular);
-            Assert.All(sonuc.Sorular!, s => Assert.True(s.Cift.KulupA.Lig != null && s.Cift.KulupB.Lig != null,
-                $"Ligi olmayan kulüp soruldu: {s.Cift.KulupA.Isim} x {s.Cift.KulupB.Isim}"));
+            var sonuc = veri.Sec(tohum, Zorluk.Zor);
+            Assert.Empty(sonuc.Uyarilar);
+            Assert.Equal(new[] { Kademe.Unlu, Kademe.Unlu, Kademe.Bilinen, Kademe.Bilinen, Kademe.Diger }, sonuc.Sorular!.Select(s => s.Kademe));
         }
+    }
+
+    [Fact]
+    public void Sec_MacaCikmayanUnluOyuncu_CiftiUnluYapmaz()
+    {
+        var veri = BesCift(Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Diger);
+        // Son çiftte maça çıkmamış bir ünlü oyuncu da var: çift yine diğer sayılmalı
+        var psg = veri.Kulupler.Single(k => k.TransfermarktId == "583");
+        var bvb = veri.Kulupler.Single(k => k.TransfermarktId == "16");
+        veri.OrtakOyuncuEkle(psg, bvb, 1, Kademe.Unlu, macSayisi: 0);
+
+        Assert.Null(veri.Sec(1, Zorluk.Kolay).Sorular);
+        Assert.Equal(Kademe.Diger, veri.Sec(1, Zorluk.Zor).Sorular!.Single(s => s.KulupA == psg || s.KulupB == psg).Kademe);
+    }
+
+    [Fact]
+    public void Sec_MacSayisiBilinmeyenOyuncu_OynamisSayilir()
+    {
+        var veri = BesCift(Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Diger);
+        var psg = veri.Kulupler.Single(k => k.TransfermarktId == "583");
+        var bvb = veri.Kulupler.Single(k => k.TransfermarktId == "16");
+        veri.OrtakOyuncuEkle(psg, bvb, 1, Kademe.Unlu);
+        veri.Kariyer.Where(k => k.KulupId == psg.Id || k.KulupId == bvb.Id).ToList().ForEach(k => k.MacSayisi = null);
+
+        Assert.NotNull(veri.Sec(1, Zorluk.Kolay).Sorular);
+    }
+
+    [Fact]
+    public void Sec_HavuzdanOrtakOyuncusuOlmayanCift_Sorulmaz()
+    {
+        var veri = BesCift(Kademe.Unlu, Kademe.Unlu, Kademe.Unlu, Kademe.Unlu);
+        var psg = veri.Kulupler.Single(k => k.TransfermarktId == "583");
+        var bvb = veri.Kulupler.Single(k => k.TransfermarktId == "16");
+        veri.OrtakOyuncuEkle(psg, bvb, 3, null);
+
+        Assert.Null(veri.Sec(1, Zorluk.Kolay).Sorular);
     }
 
     [Fact]
@@ -235,70 +249,31 @@ public class KesisimSoruSeciciTests
         v.Kulup("141", "Galatasaray", "TR1");
         v.Kulup("36", "Fenerbahce", "TR1");
 
-        var sonuc = new KesisimSoruSecici(new Random(1)).Sec(v.Kulupler, v.Kariyer);
-
-        Assert.Null(sonuc.Sorular);
+        Assert.Null(v.Sec(1, Zorluk.Kolay).Sorular);
     }
 
-    // ZorlukBelirle: tek tek kural örnekleri
+    // Sorulabilir: aynı ligden çift sadece iki büyük kulüpse sorulur
 
     private static readonly Kulup Galatasaray = new() { Id = "gs", TransfermarktId = "141", Lig = "TR1" };
     private static readonly Kulup Fenerbahce = new() { Id = "fb", TransfermarktId = "36", Lig = "TR1" };
-    private static readonly Kulup Chelsea = new() { Id = "chelsea", TransfermarktId = "631", Lig = "GB1" };
-    private static readonly Kulup Marsilya = new() { Id = "om", TransfermarktId = "244", Lig = "FR1" };
-    private static readonly Kulup AstonVilla = new() { Id = "villa", TransfermarktId = "405", Lig = "GB1" };
     private static readonly Kulup Trabzonspor = new() { Id = "ts", TransfermarktId = "449", Lig = "TR1" };
-    private static readonly Kulup Kasimpasa = new() { Id = "kasimpasa", TransfermarktId = "10484", Lig = "TR1" };
-    private static readonly Kulup Parma = new() { Id = "parma", TransfermarktId = "130", Lig = "IT1" };
+    private static readonly Kulup Chelsea = new() { Id = "chelsea", TransfermarktId = "631", Lig = "GB1" };
+    private static readonly Kulup AstonVilla = new() { Id = "villa", TransfermarktId = "405", Lig = "GB1" };
 
-    private static Zorluk? Belirle(Kulup a, Kulup b, int ortak)
+    [Fact]
+    public void Sorulabilir_IkiBuyukKulup_AyniLigdeBile() => Assert.True(Sorulabilir(Galatasaray, Fenerbahce));
+
+    [Fact]
+    public void Sorulabilir_FarkliLig() => Assert.True(Sorulabilir(Trabzonspor, AstonVilla));
+
+    [Fact]
+    public void Sorulabilir_AyniLig_BuyukCiftDegilse_Hayir()
     {
-        var kulupler = new[] { Galatasaray, Fenerbahce, Chelsea, Marsilya, AstonVilla, Trabzonspor, Kasimpasa, Parma };
-        return ZorlukBelirle(
-            new KulupCifti(a, b, ortak),
-            ListedekiKulupIdleri(BuyukKulupler, kulupler),
-            ListedekiKulupIdleri(BasAltiKulupler, kulupler));
+        Assert.False(Sorulabilir(Trabzonspor, Galatasaray));
+        Assert.False(Sorulabilir(AstonVilla, Chelsea));
     }
-
-    [Fact]
-    public void ZorlukBelirle_IkiBuyukKulup_AyniLigdeBileKolay() =>
-        Assert.Equal(Zorluk.Kolay, Belirle(Galatasaray, Fenerbahce, 1));
-
-    [Fact]
-    public void ZorlukBelirle_BasAltiVeBuyuk_FarkliLig_IkiOrtak_Orta() =>
-        Assert.Equal(Zorluk.Orta, Belirle(Marsilya, Chelsea, 2));
-
-    [Fact]
-    public void ZorlukBelirle_IkiBasAlti_FarkliLig_IkiOrtak_Orta() =>
-        Assert.Equal(Zorluk.Orta, Belirle(Marsilya, AstonVilla, 3));
-
-    [Fact]
-    public void ZorlukBelirle_BasAltiVeBuyuk_TekOrtak_Zor() =>
-        Assert.Equal(Zorluk.Zor, Belirle(Marsilya, Chelsea, 1));
-
-    [Fact]
-    public void ZorlukBelirle_BasAltiVeSiradan_CokOrtakOlsaBile_Zor() =>
-        Assert.Equal(Zorluk.Zor, Belirle(Marsilya, Parma, 5));
-
-    [Fact]
-    public void ZorlukBelirle_AyniLig_BuyukCiftDegilse_Sorulmaz()
-    {
-        Assert.Null(Belirle(Kasimpasa, Trabzonspor, 6));
-        Assert.Null(Belirle(Trabzonspor, Galatasaray, 4));
-        Assert.Null(Belirle(AstonVilla, Chelsea, 3));
-    }
-
-    // Kulüp listeleri elle düzenlendiği için temel tutarlılık kontrolleri
 
     [Fact]
     public void KulupListeleri_BirbiriyleCakismaz() =>
         Assert.Empty(BuyukKulupler.Keys.Intersect(BasAltiKulupler.Keys));
-
-    [Fact]
-    public void SoruSirasi_IkiKolayIkiOrtaBirZor() =>
-        Assert.Equal(new[] { Zorluk.Kolay, Zorluk.Kolay, Zorluk.Orta, Zorluk.Orta, Zorluk.Zor }, SoruSirasi);
-
-    [Fact]
-    public void YedekSirasi_OrtaSoruIcinZorCiftKullanilmaz() =>
-        Assert.DoesNotContain(Zorluk.Zor, YedekSirasi(Zorluk.Orta));
 }

@@ -7,6 +7,9 @@ namespace ScoutIQ.API.Models
     [Table("milli_takim_kariyeri")]
     public class MilliTakimKariyeri : BaseModel
     {
+        [Column("id")]
+        public string Id { get; set; } = string.Empty;
+
         [Column("oyuncu_id")]
         public string OyuncuId { get; set; } = string.Empty;
 

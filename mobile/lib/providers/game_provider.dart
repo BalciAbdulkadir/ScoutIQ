@@ -71,15 +71,20 @@ class GameState {
   }
 }
 
-// Kesişim oyunu. Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
+// Kesişim oyunu. Her zorluk ayrı bir günlük oyundur: kesisim_kolay, kesisim_orta ya da kesisim_zor.
+// Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 class GameNotifier extends Notifier<GameState> {
-  static const _oyunTipi = 'kesisim';
   static const _puan = 2;
 
-  final int? sure; // Yeni oyunda seçilen süre, saniye; null: süresiz. Yarım kalan oyunda sunucudaki süre geçerlidir.
+  final GunlukOyunSecimi secim;
 
-  GameNotifier(this.sure);
+  GameNotifier(this.secim);
+
+  String get _oyunTipi => secim.oyunTipi;
+
+  // Yeni oyunda seçilen süre, saniye; null: süresiz. Yarım kalan oyunda sunucudaki süre geçerlidir.
+  int? get sure => secim.sure;
 
   late OyunDeposu _depo;
 
@@ -114,6 +119,7 @@ class GameNotifier extends Notifier<GameState> {
         ZatenOynandi(:final skor) => state.copyWith(status: 'already_played', score: skor),
         OyunYok() => state.copyWith(status: 'no_game'),
         OturumYok() => state.copyWith(status: 'error', hataMesaji: oturumYokMesaji),
+        BaskaZorlukOynandi() => state.copyWith(status: 'error', hataMesaji: baskaZorlukMesaji),
       };
       if (acilis is Oynanabilir) {
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
@@ -269,5 +275,5 @@ class GameNotifier extends Notifier<GameState> {
   }
 }
 
-// Parametre seçilen süredir (saniye); null: süresiz
-final gameProvider = NotifierProvider.autoDispose.family<GameNotifier, GameState, int?>(GameNotifier.new);
+// Parametre: zorluğun oyun tipi (ör. kesisim_orta) ve seçilen süre
+final gameProvider = NotifierProvider.autoDispose.family<GameNotifier, GameState, GunlukOyunSecimi>(GameNotifier.new);

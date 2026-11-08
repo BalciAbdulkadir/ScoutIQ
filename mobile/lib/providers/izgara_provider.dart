@@ -127,7 +127,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
         } on KayitZatenVar {
           // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
           kayit = await _depo.oyunKaydi(kullaniciId, zorluk.oyunTipi, tarih) ?? {'durum': 'basladi'};
-        } on BaskaIzgaraOynandi {
+        } on BaskaModOynandi {
           if (!ref.mounted) return;
           state = state.copyWith(durum: IzgaraDurumu.hata, hataMesaji: baskaIzgaraMesaji);
           return;

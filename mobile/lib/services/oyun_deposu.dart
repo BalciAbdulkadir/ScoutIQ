@@ -6,8 +6,8 @@ import '../models/oyuncu_oneri.dart';
 // Aynı gün aynı oyun için kayıt zaten varsa (örneğin başka bir cihazda başlanmışsa) fırlatılır
 class KayitZatenVar implements Exception {}
 
-// Kullanıcı bugün başka bir zorlukta Izgara'ya başlamış: günde tek Izgara oynanır (014_izgara_gunde_bir.sql)
-class BaskaIzgaraOynandi implements Exception {}
+// Kullanıcı bu oyunun bugün başka bir zorluğuna başlamış: her oyunda günde tek zorluk oynanır (019_zorluk_modlari.sql)
+class BaskaModOynandi implements Exception {}
 
 // Oyunların veritabanı işlemleri. Oyun mantığı bu arayüz üzerinden çalışır,
 // böylece testlerde Supabase yerine sahte bir depo verilebilir.
@@ -122,7 +122,7 @@ class SupabaseOyunDeposu implements OyunDeposu {
     } on PostgrestException catch (e) {
       // 23505: aynı gün için kayıt zaten var
       if (e.code == '23505') throw KayitZatenVar();
-      if (e.hint == 'izgara_gunde_bir') throw BaskaIzgaraOynandi();
+      if (e.hint == 'oyun_gunde_bir') throw BaskaModOynandi();
       rethrow;
     }
   }

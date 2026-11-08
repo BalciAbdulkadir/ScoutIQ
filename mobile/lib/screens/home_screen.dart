@@ -6,7 +6,6 @@ import '../providers/hub_provider.dart';
 import '../services/auth_service.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
-import '../models/izgara.dart';
 import '../widgets/gunluk_kart.dart';
 import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/oyun_karti.dart';
@@ -19,50 +18,14 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _modaTiklandi(BuildContext context, WidgetRef ref, OyunModu mod) async {
-    // Zorluklu oyun: önce zorluk, sonra süre seçilir (yarım ya da bitmiş tahta varsa o açılır)
-    if (mod.tip == 'izgara') {
-      await izgaraAc(context, ref);
-      return;
-    }
-
-    final Widget Function(int? sure)? oyunEkrani = switch (mod.tip) {
-      'kesisim' => (sure) => GameScreen(sure: sure),
-      'bonservis' => (sure) => BonservisScreen(sure: sure),
+    // Her oyunda önce zorluk seçilir (bugün bir zorluk açıldıysa o açılır). Izgara'da zorluktan sonra süre de seçilir.
+    final Widget Function(String oyunTipi, int? sure)? ekran = switch (mod.tip) {
+      'kesisim' => (oyunTipi, sure) => GameScreen(oyunTipi: oyunTipi, sure: sure),
+      'bonservis' => (oyunTipi, sure) => BonservisScreen(oyunTipi: oyunTipi, sure: sure),
       _ => null,
     };
-
-    if (oyunEkrani != null) {
-      // Bugün başlanmadıysa önce süre seçilir. Yarım kalan oyun sunucudaki kalan süresiyle kaldığı yerden,
-      // bitmiş oyun sonucuyla doğrudan açılır.
-      var sure = OyunSuresi.suresiz;
-      bool baslandi;
-      try {
-        final oynananlar = await ref.read(bugunOynananlarProvider.future);
-        final yarimlar = await ref.read(yarimOyunlarProvider.future);
-        baslandi = oynananlar.containsKey(mod.tip) || yarimlar.contains(mod.tip);
-      } catch (_) {
-        baslandi = false; // Bilinmiyorsa seçim gösterilir; başlanmış oyunda sunucudaki süre geçerli olur
-      }
-      if (!context.mounted) return;
-
-      if (!baslandi) {
-        final secim = await showModalBottomSheet<ZorlukSureSecimi>(
-          context: context,
-          isScrollControlled: true,
-          showDragHandle: true,
-          builder: (context) => ZorlukSureSecimSayfasi(oyunAdi: mod.baslik, cizim: mod.cizim!),
-        );
-        if (secim == null || !context.mounted) return;
-        sure = secim.sure;
-      }
-
-      await Navigator.push(context, MaterialPageRoute(builder: (context) => oyunEkrani(sure.saniye)));
-      // Oyundan dönünce skoru ve "tamamlandı" durumunu tazeleyelim
-      if (!context.mounted) return;
-      ref.invalidate(bugunOynananlarProvider);
-      ref.invalidate(yarimOyunlarProvider);
-      return;
-    }
+    if (mod.tip == 'izgara') return izgaraAc(context, ref);
+    if (ekran != null) return zorlukluOyunuAc(context, ref, mod, ekran);
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -75,7 +38,14 @@ class HomeScreen extends ConsumerWidget {
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
     final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
-    final yarimOyunlar = ref.watch(yarimOyunlarProvider).value ?? const <String>{};
+
+    // Zorluklu oyunun bugün açılmış zorluğu (yarım ya da bitmiş)
+    BugunkuMod? bugunku(OyunModu mod) {
+      if (mod.tip == 'izgara') {
+        return bugunkuIzgara == null ? null : (zorluk: bugunkuIzgara.zorluk.index, bitti: bugunkuIzgara.bitti);
+      }
+      return mod.zorluklu ? ref.watch(bugunkuModProvider(mod.tip!)).value : null;
+    }
 
     // Oynanabilenler önce, yakındakiler en sonda; hepsi tek bir ızgarada, kategorisiz
     final modlar = [
@@ -88,8 +58,7 @@ class HomeScreen extends ConsumerWidget {
     final tamamlanan = aktifModlar.where((m) => m.oyunTipleri.any(skorlar.containsKey)).length;
 
     final kutucuklar = [
-      for (final mod in modlar)
-        _kutucuk(context, ref, mod, skorlar, mod.tip == 'izgara' ? bugunkuIzgara : null, yarimOyunlar.contains(mod.tip)),
+      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, bugunku(mod)),
     ];
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
@@ -102,8 +71,8 @@ class HomeScreen extends ConsumerWidget {
               color: Renkler.vurgu,
               backgroundColor: Renkler.yuzey,
               onRefresh: () {
+                ref.invalidate(bugunkuModProvider);
                 ref.invalidate(bugunkuIzgaraProvider);
-                ref.invalidate(yarimOyunlarProvider);
                 return ref.refresh(bugunOynananlarProvider.future);
               },
               child: ListView(
@@ -154,17 +123,18 @@ class HomeScreen extends ConsumerWidget {
     WidgetRef ref,
     OyunModu mod,
     Map<String, int> skorlar,
-    BugunkuIzgara? bugunku,
-    bool yarim,
+    BugunkuMod? bugunku,
   ) {
     if (mod.zorluklu) {
-      // Zorluklu oyunda günde tek zorluk oynanır: bugün başlanan tahta (yarım ya da bitmiş) kutucukta gösterilir
+      // Zorluklu oyunda günde tek zorluk oynanır: bugün açılan zorluk kutucukta gösterilir.
+      // Yarım kalan oyunda "Devam et", bitmiş oyunda o zorluğun skoru yazar.
+      final altTipler = mod.altTipler!;
       final devamEdiyor = bugunku != null && !bugunku.bitti;
-      final oynanan = devamEdiyor ? null : IzgaraZorlugu.values.where((z) => skorlar.containsKey(z.oyunTipi)).firstOrNull;
+      final oynanan = devamEdiyor ? -1 : altTipler.indexWhere(skorlar.containsKey);
       return OyunKarti(
         mod: mod,
-        bugunkuSkor: oynanan != null ? skorlar[oynanan.oyunTipi] : null,
-        oynananZorluk: (oynanan ?? bugunku?.zorluk)?.ad,
+        bugunkuSkor: oynanan >= 0 ? skorlar[altTipler[oynanan]] : null,
+        oynananZorluk: oynanan >= 0 ? zorlukAdlari[oynanan] : (bugunku != null ? zorlukAdlari[bugunku.zorluk] : null),
         devamEdiyor: devamEdiyor,
         onTap: () => _modaTiklandi(context, ref, mod),
       );
@@ -172,7 +142,6 @@ class HomeScreen extends ConsumerWidget {
     return OyunKarti(
       mod: mod,
       bugunkuSkor: skorlar[mod.tip],
-      devamEdiyor: yarim,
       onTap: () => _modaTiklandi(context, ref, mod),
     );
   }

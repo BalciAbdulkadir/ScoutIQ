@@ -13,8 +13,10 @@ class OyunModu {
   final Color renk;
   final OyunDurumu durum;
   final int? maksimumSkor;
-  // Doluysa mod birden fazla ayrı günlük oyundan oluşur (ör. Izgara'nın kolay/orta/zor tahtaları)
+  // Doluysa mod birden fazla ayrı günlük oyundan oluşur: kolay, orta ve zor (ör. kesisim_kolay, kesisim_orta, kesisim_zor)
   final List<String>? altTipler;
+  // Zorluk seçim sayfasında her zorluğun altında yazan açıklama, altTipler ile aynı sırada
+  final List<String>? zorlukAciklamalari;
 
   const OyunModu({
     this.tip,
@@ -26,6 +28,7 @@ class OyunModu {
     required this.durum,
     this.maksimumSkor,
     this.altTipler,
+    this.zorlukAciklamalari,
   });
 
   // Bu modun veritabanındaki günlük oyun tipleri
@@ -34,6 +37,16 @@ class OyunModu {
   // Zorluk seçilerek oynanan mod. Bu modlarda günde yalnızca bir zorluk oynanır.
   bool get zorluklu => altTipler != null;
 }
+
+// Zorluklu oyunlarda altTipler sırasıyla zorlukların adı
+const zorlukAdlari = ['Kolay', 'Orta', 'Zor'];
+
+// Kesişim ve Bonservis'te zorluk, soruların oyuncu kademesinden gelir (backend: Oyunlar/Zorluk.cs)
+const _oyuncuZorluklari = [
+  'Sadece ünlü oyuncular',
+  'Yarısı ünlü, yarısı bilinen oyuncular',
+  'Ünlü, bilinen ve az bilinen oyuncular',
+];
 
 // Zorluklu oyunlarda zorluktan sonra seçilen süre. Her zorluklu oyunda aynı dört seçenek vardır.
 enum OyunSuresi {
@@ -60,6 +73,8 @@ const List<OyunModu> oyunModlari = [
     renk: Renkler.kesisim,
     durum: OyunDurumu.aktif,
     maksimumSkor: 10,
+    altTipler: ['kesisim_kolay', 'kesisim_orta', 'kesisim_zor'],
+    zorlukAciklamalari: _oyuncuZorluklari,
   ),
   OyunModu(
     tip: 'bonservis',
@@ -70,6 +85,8 @@ const List<OyunModu> oyunModlari = [
     renk: Renkler.bonservis,
     durum: OyunDurumu.aktif,
     maksimumSkor: 10, // 5 soru, her doğru 2 puan
+    altTipler: ['bonservis_kolay', 'bonservis_orta', 'bonservis_zor'],
+    zorlukAciklamalari: _oyuncuZorluklari,
   ),
   OyunModu(
     tip: 'izgara',
@@ -82,6 +99,7 @@ const List<OyunModu> oyunModlari = [
     maksimumSkor: 9,
     // Her zorluk ayrı bir tahta; kullanıcı günde bunlardan yalnızca birini seçip oynar
     altTipler: ['izgara_kolay', 'izgara_orta', 'izgara_zor'],
+    // Zorluk açıklamaları IzgaraZorlugu'nda
   ),
   OyunModu(
     baslik: 'Bingo',

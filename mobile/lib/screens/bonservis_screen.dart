@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bonservis_sorusu.dart';
 import '../providers/bonservis_provider.dart';
+import '../services/gunluk_oyun.dart' show GunlukOyunSecimi;
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/bonservis_oyuncu_karti.dart';
@@ -13,9 +14,11 @@ import '../widgets/tebesir.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
+  // Oynanan zorluğun günlük oyunu: bonservis_kolay, bonservis_orta ya da bonservis_zor
+  final String oyunTipi;
   final int? sure; // Seçilen süre, saniye; null: süresiz
 
-  const BonservisScreen({super.key, this.sure});
+  const BonservisScreen({super.key, required this.oyunTipi, this.sure});
 
   // Sonuç gösterildikten sonra sıradaki soruya kendiliğinden geçmeden önceki bekleme
   static const sonucBeklemesi = Duration(milliseconds: 1800);
@@ -25,6 +28,8 @@ class BonservisScreen extends ConsumerStatefulWidget {
 }
 
 class _BonservisScreenState extends ConsumerState<BonservisScreen> {
+  GunlukOyunSecimi get _secim => (oyunTipi: widget.oyunTipi, sure: widget.sure);
+
   static const _maksimumSkor = 10;
 
   Timer? _devamZamanlayici;
@@ -36,7 +41,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   }
 
   Future<void> _tahminEt(bool dahaFazla) async {
-    final hata = await ref.read(bonservisProvider(widget.sure).notifier).tahminEt(dahaFazla: dahaFazla);
+    final hata = await ref.read(bonservisProvider(_secim).notifier).tahminEt(dahaFazla: dahaFazla);
     if (!mounted) return;
 
     if (hata != null) {
@@ -47,7 +52,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     }
 
     // Bedel açıldı: kullanıcı sonucu görsün, sonra sıradaki soruya geç
-    if (ref.read(bonservisProvider(widget.sure)).sonCevapDogru != null) {
+    if (ref.read(bonservisProvider(_secim)).sonCevapDogru != null) {
       _devamZamanlayici?.cancel();
       _devamZamanlayici = Timer(BonservisScreen.sonucBeklemesi, _devamEt);
     }
@@ -56,12 +61,12 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   void _devamEt() {
     _devamZamanlayici?.cancel();
     if (!mounted) return;
-    ref.read(bonservisProvider(widget.sure).notifier).devamEt();
+    ref.read(bonservisProvider(_secim).notifier).devamEt();
   }
 
   @override
   Widget build(BuildContext context) {
-    final durum = ref.watch(bonservisProvider(widget.sure));
+    final durum = ref.watch(bonservisProvider(_secim));
 
     return Scaffold(
       appBar: AppBar(title: const Text('BONSERVİS')),
@@ -78,7 +83,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: durum.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(bonservisProvider(widget.sure)),
+          onTekrarDene: () => ref.invalidate(bonservisProvider(_secim)),
         );
       case BonservisDurumu.oyunYok:
         return const OyunMesajKarti(
@@ -123,7 +128,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
                       ? null
                       : SureSayaci(
                           bitisZamani: durum.bitisZamani!,
-                          onBitti: ref.read(bonservisProvider(widget.sure).notifier).sureDoldu,
+                          onBitti: ref.read(bonservisProvider(_secim).notifier).sureDoldu,
                         ),
                 ),
                 const SizedBox(height: 24),

@@ -22,9 +22,9 @@ class OyunSuresiDurumu {
 
 // Kolay, orta ve zor ayrı oyunlardır; her biri günde bir kez oynanır
 enum IzgaraZorlugu {
-  kolay('izgara_kolay', 'Kolay', 'Sadece kulüpler'),
-  orta('izgara_orta', 'Orta', 'Kulüpler ve tanınmış milli takımlar'),
-  zor('izgara_zor', 'Zor', 'Kulüpler ve diğer milli takımlar');
+  kolay('izgara_kolay', 'Kolay', 'Sadece kulüpler, her kutuda ünlü bir oyuncu'),
+  orta('izgara_orta', 'Orta', 'Tanınmış milli takımlar, ünlü ve bilinen oyuncular'),
+  zor('izgara_zor', 'Zor', 'Diğer milli takımlar, az bilinen oyuncular da var');
 
   final String oyunTipi;
   final String ad;

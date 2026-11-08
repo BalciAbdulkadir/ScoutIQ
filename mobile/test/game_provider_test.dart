@@ -5,9 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/providers/game_provider.dart';
 import 'package:mobile/providers/hub_provider.dart';
+import 'package:mobile/services/gunluk_oyun.dart' show baskaZorlukMesaji;
 import 'package:mobile/services/oyun_deposu.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
+
+// Testler Kesişim'in orta zorluğunu oynar
+const testOyunTipi = 'kesisim_orta';
 
 const dogruOyuncu = OyuncuOneri(id: 'o-1', isim: 'Arda Güler');
 const yanlisOyuncu = OyuncuOneri(id: 'o-2', isim: 'Mesut Özil');
@@ -25,19 +29,19 @@ Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyu
   addTearDown(container.dispose);
 
   // autoDispose provider test boyunca canlı kalsın
-  container.listen(gameProvider(testSuresi), (_, _) {});
+  container.listen(gameProvider((oyunTipi: testOyunTipi, sure: testSuresi)), (_, _) {});
   await yuklenmesiniBekle(container);
   return (container, depo);
 }
 
 Future<void> yuklenmesiniBekle(ProviderContainer container) async {
-  for (var i = 0; i < 100 && container.read(gameProvider(testSuresi)).status == 'loading'; i++) {
+  for (var i = 0; i < 100 && container.read(gameProvider((oyunTipi: testOyunTipi, sure: testSuresi))).status == 'loading'; i++) {
     await Future<void>.delayed(Duration.zero);
   }
 }
 
-GameNotifier notifier(ProviderContainer c) => c.read(gameProvider(testSuresi).notifier);
-GameState durum(ProviderContainer c) => c.read(gameProvider(testSuresi));
+GameNotifier notifier(ProviderContainer c) => c.read(gameProvider((oyunTipi: testOyunTipi, sure: testSuresi)).notifier);
+GameState durum(ProviderContainer c) => c.read(gameProvider((oyunTipi: testOyunTipi, sure: testSuresi)));
 
 void main() {
   group('Oyunun açılması', () {
@@ -48,6 +52,20 @@ void main() {
       expect(durum(c).questions, hasLength(5));
       expect(depo.kayitAcSayisi, 1);
       expect(depo.kayit, {'skor': 0, 'durum': 'basladi'});
+    });
+
+    test('seçilen zorluğun günlük oyunu açılır', () async {
+      final (_, depo) = await oyunuBaslat();
+
+      expect(depo.istenenOyunTipleri, [testOyunTipi]);
+      expect(depo.acilanKayitTipleri, [testOyunTipi]);
+    });
+
+    test('bugün başka bir zorluk oynandıysa oyun açılmaz, nedeni söylenir', () async {
+      final (c, _) = await oyunuBaslat((d) => d.baskaModOynandi = true);
+
+      expect(durum(c).status, 'error');
+      expect(durum(c).hataMesaji, baskaZorlukMesaji);
     });
 
     test('günün oyunu yoksa "no_game" gösterilir ve kayıt açılmaz (hak yanmaz)', () async {

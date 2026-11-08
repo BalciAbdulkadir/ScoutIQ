@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/game_provider.dart';
+import '../services/gunluk_oyun.dart' show GunlukOyunSecimi;
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/kulup_logosu.dart';
@@ -13,20 +14,24 @@ import '../widgets/tebesir.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
+  // Oynanan zorluğun günlük oyunu: kesisim_kolay, kesisim_orta ya da kesisim_zor
+  final String oyunTipi;
   final int? sure; // Seçilen süre, saniye; null: süresiz
 
-  const GameScreen({super.key, this.sure});
+  const GameScreen({super.key, required this.oyunTipi, this.sure});
 
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
 class _GameScreenState extends ConsumerState<GameScreen> {
+  GunlukOyunSecimi get _secim => (oyunTipi: widget.oyunTipi, sure: widget.sure);
+
   static const _maksimumSkor = 10;
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(gameProvider(widget.sure));
+    final state = ref.watch(gameProvider(_secim));
 
     return Scaffold(
       appBar: AppBar(title: const Text('KESİŞİM')),
@@ -43,7 +48,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(gameProvider(widget.sure)),
+          onTekrarDene: () => ref.invalidate(gameProvider(_secim)),
         );
       case 'no_game':
         return const OyunMesajKarti(
@@ -83,7 +88,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 ? null
                 : SureSayaci(
                     bitisZamani: state.bitisZamani!,
-                    onBitti: ref.read(gameProvider(widget.sure).notifier).sureDoldu,
+                    onBitti: ref.read(gameProvider(_secim).notifier).sureDoldu,
                   ),
           ),
           const SizedBox(height: 28),
@@ -109,8 +114,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           OyuncuArama(
             renk: Renkler.kesisim,
             gonderiliyor: state.gonderiliyor,
-            ara: ref.read(gameProvider(widget.sure).notifier).oyuncuAra,
-            gonder: ref.read(gameProvider(widget.sure).notifier).makeGuess,
+            ara: ref.read(gameProvider(_secim).notifier).oyuncuAra,
+            gonder: ref.read(gameProvider(_secim).notifier).makeGuess,
           ),
           const SizedBox(height: 16),
           _oncekiSonuc(state),

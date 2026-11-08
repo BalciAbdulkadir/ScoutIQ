@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/izgara.dart';
+import '../models/oyun_modu.dart';
 
 // Oyunlar Türkiye saatiyle 00.00'da yenilendiği için cihazın saat dilimine güvenmiyoruz.
 // Türkiye'de yaz saati uygulaması yok, saat her zaman UTC+3.
@@ -64,49 +65,41 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
   };
 });
 
-// Bugün başlanıp bitmemiş Kesişim ve Bonservis oyunları (oyun_tipi). Hub'da "Devam et" yazar,
-// dokununca süre sorulmadan oyun kaldığı yerden açılır. Izgara'nınki bugunkuIzgaraProvider'dadır.
-final yarimOyunlarProvider = FutureProvider.autoDispose<Set<String>>((ref) async {
-  final supabase = Supabase.instance.client;
-  final userId = supabase.auth.currentUser?.id;
-  if (userId == null) return {};
-
-  final kayitlar = await supabase
-      .from('kullanici_oyun_gecmisi')
-      .select('oyun_tipi')
-      .eq('kullanici_id', userId)
-      .eq('tarih', bugununTarihi())
-      .eq('durum', 'basladi')
-      .inFilter('oyun_tipi', ['kesisim', 'bonservis']);
-
-  return {for (final kayit in kayitlar) kayit['oyun_tipi'] as String};
-});
-
 bool izgaraTipiMi(String oyunTipi) => oyunTipi.startsWith('izgara_');
 
-// Kullanıcının bugünkü Izgara tahtası (yarım ya da bitmiş). Kullanıcı günde tek bir Izgara oynar:
-// varsa hub'da Izgara'ya dokununca zorluk ve süre sorulmadan bu tahta açılır.
-typedef BugunkuIzgara = ({IzgaraZorlugu zorluk, bool bitti});
+// Zorluklu bir oyunun bugün açılmış zorluğu: altTipler'deki sırası (0 kolay, 1 orta, 2 zor) ve bitip bitmediği.
+// Kullanıcı her oyunda günde tek zorluk oynar: varsa hub'da oyuna dokununca zorluk sorulmadan bu oyun açılır.
+typedef BugunkuMod = ({int zorluk, bool bitti});
 
-final bugunkuIzgaraProvider = FutureProvider.autoDispose<BugunkuIzgara?>((ref) async {
+// Parametre oyunun tipidir: kesisim, bonservis ya da izgara
+final bugunkuModProvider = FutureProvider.autoDispose.family<BugunkuMod?, String>((ref, oyun) async {
   final supabase = Supabase.instance.client;
   final userId = supabase.auth.currentUser?.id;
-  if (userId == null) return null;
+  final altTipler = oyunModlari.firstWhere((m) => m.tip == oyun).altTipler;
+  if (userId == null || altTipler == null) return null;
 
   final kayitlar = await supabase
       .from('kullanici_oyun_gecmisi')
       .select('oyun_tipi, durum')
       .eq('kullanici_id', userId)
       .eq('tarih', bugununTarihi())
-      .inFilter('oyun_tipi', [for (final z in IzgaraZorlugu.values) z.oyunTipi]);
+      .inFilter('oyun_tipi', altTipler);
 
   final durumlar = {for (final kayit in kayitlar) kayit['oyun_tipi'] as String: kayit['durum'] as String?};
   // Kural gelmeden önce birden fazla zorluk oynanmış olabilir: yarım kalan önce, yoksa kolaydan zora ilki
-  for (final zorluk in IzgaraZorlugu.values) {
-    if (durumlar[zorluk.oyunTipi] == 'basladi') return (zorluk: zorluk, bitti: false);
+  for (var i = 0; i < altTipler.length; i++) {
+    if (durumlar[altTipler[i]] == 'basladi') return (zorluk: i, bitti: false);
   }
-  for (final zorluk in IzgaraZorlugu.values) {
-    if (durumlar.containsKey(zorluk.oyunTipi)) return (zorluk: zorluk, bitti: true);
+  for (var i = 0; i < altTipler.length; i++) {
+    if (durumlar.containsKey(altTipler[i])) return (zorluk: i, bitti: true);
   }
   return null;
+});
+
+// Kullanıcının bugünkü Izgara tahtası (yarım ya da bitmiş)
+typedef BugunkuIzgara = ({IzgaraZorlugu zorluk, bool bitti});
+
+final bugunkuIzgaraProvider = FutureProvider.autoDispose<BugunkuIzgara?>((ref) async {
+  final mod = await ref.watch(bugunkuModProvider('izgara').future);
+  return mod == null ? null : (zorluk: IzgaraZorlugu.values[mod.zorluk], bitti: mod.bitti);
 });

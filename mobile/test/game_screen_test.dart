@@ -18,7 +18,7 @@ Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDe
 
   await tester.pumpWidget(ProviderScope(
     overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-    child: MaterialApp(home: GameScreen(sure: sure)),
+    child: MaterialApp(home: GameScreen(oyunTipi: 'kesisim_kolay', sure: sure)),
   ));
   await tester.pumpAndSettle();
   return depo;

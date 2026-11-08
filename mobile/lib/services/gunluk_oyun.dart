@@ -5,8 +5,13 @@ import 'oyun_deposu.dart';
 const oturumYokMesaji = 'Oturumun kapanmış görünüyor. Lütfen tekrar giriş yap.';
 const yuklemeHataMesaji = 'Oyun yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.';
 const gonderimHataMesaji = 'Cevap gönderilemedi. İnternet bağlantını kontrol edip tekrar dene.';
+const baskaZorlukMesaji = 'Bu oyunu bugün başka bir zorlukta oynadın. Yeni oyunlar gece yarısı açılıyor.';
 
-// Bir günlük oyunu (Kesişim, Bonservis) açmaya çalışmanın sonucu.
+// Kesişim ya da Bonservis ekranını açan seçim: zorluğun günlük oyun tipi (ör. kesisim_orta) ve seçilen süre
+// (saniye; null: süresiz). Süre sadece yeni başlanan oyunda kullanılır, yarım kalan oyunun süresi sunucudan okunur.
+typedef GunlukOyunSecimi = ({String oyunTipi, int? sure});
+
+// Bir günlük oyunu (Kesişim ya da Bonservis, herhangi bir zorluğu) açmaya çalışmanın sonucu.
 sealed class OyunAcilisi {}
 
 // Oyun oynanabilir: yeni başladı ya da yarım kalmıştı ve kaldığı yerden devam ediyor
@@ -30,6 +35,9 @@ class ZatenOynandi extends OyunAcilisi {
 class OyunYok extends OyunAcilisi {}
 
 class OturumYok extends OyunAcilisi {}
+
+// Kullanıcı bu oyunun bugün başka bir zorluğunu açmış: her oyunda günde tek zorluk oynanır
+class BaskaZorlukOynandi extends OyunAcilisi {}
 
 // Oyun günü telefonun saatinden değil sunucudan alınır, veritabanı kuralları da bu tarihe göre çalışır.
 // Sunucuya ulaşılamazsa aynı hesabı yapan yerel fonksiyona düşüyoruz.
@@ -76,6 +84,8 @@ Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi, {int? sure})
       kayit = await depo.oyunKaydi(userId, oyunTipi, tarih);
       if (kayit == null) rethrow;
       if (kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit));
+    } on BaskaModOynandi {
+      return BaskaZorlukOynandi();
     }
   }
 

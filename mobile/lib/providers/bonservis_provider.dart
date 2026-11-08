@@ -71,13 +71,18 @@ class BonservisState {
 // Yanlış tahminde oyun bitmez, beş sorunun hepsi oynanır. Her doğru tahmin 2 puan (en fazla 10).
 // Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
+// Her zorluk ayrı bir günlük oyundur: bonservis_kolay, bonservis_orta ya da bonservis_zor.
 class BonservisNotifier extends Notifier<BonservisState> {
-  static const _oyunTipi = 'bonservis';
   static const puan = 2;
 
-  final int? sure; // Yeni oyunda seçilen süre, saniye; null: süresiz. Yarım kalan oyunda sunucudaki süre geçerlidir.
+  final GunlukOyunSecimi secim;
 
-  BonservisNotifier(this.sure);
+  BonservisNotifier(this.secim);
+
+  String get _oyunTipi => secim.oyunTipi;
+
+  // Yeni oyunda seçilen süre, saniye; null: süresiz. Yarım kalan oyunda sunucudaki süre geçerlidir.
+  int? get sure => secim.sure;
 
   late OyunDeposu _depo;
 
@@ -100,6 +105,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
         ZatenOynandi(:final skor) => state.copyWith(durum: BonservisDurumu.zatenOynandi, skor: skor),
         OyunYok() => state.copyWith(durum: BonservisDurumu.oyunYok),
         OturumYok() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: oturumYokMesaji),
+        BaskaZorlukOynandi() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: baskaZorlukMesaji),
       };
       if (acilis is Oynanabilir) {
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
@@ -227,6 +233,6 @@ class BonservisNotifier extends Notifier<BonservisState> {
   }
 }
 
-// Parametre seçilen süredir (saniye); null: süresiz
+// Parametre: zorluğun oyun tipi (ör. bonservis_zor) ve seçilen süre
 final bonservisProvider =
-    NotifierProvider.autoDispose.family<BonservisNotifier, BonservisState, int?>(BonservisNotifier.new);
+    NotifierProvider.autoDispose.family<BonservisNotifier, BonservisState, GunlukOyunSecimi>(BonservisNotifier.new);

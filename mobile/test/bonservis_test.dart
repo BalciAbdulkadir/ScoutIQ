@@ -38,6 +38,9 @@ final sorular = [
 // Her sorunun doğru tahmini: sağdaki oyuncu daha mı pahalı
 const dogruTahminler = [true, false, true, false, true];
 
+// Testler Bonservis'in zor zorluğunu oynar
+const testOyunTipi = 'bonservis_zor';
+
 SahteOyunDeposu bonservisDeposu() => SahteOyunDeposu()..oyun = {'id': 'oyun-b', 'soru_verisi': sorular};
 
 // Testteki oyunun seçilen süresi (saniye); null: süresiz. oyunuBaslat ayarlar.
@@ -50,16 +53,16 @@ Future<(ProviderContainer, SahteOyunDeposu)> oyunuBaslat([void Function(SahteOyu
 
   final container = ProviderContainer(overrides: [oyunDeposuProvider.overrideWithValue(depo)]);
   addTearDown(container.dispose);
-  container.listen(bonservisProvider(testSuresi), (_, _) {});
+  container.listen(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi)), (_, _) {});
 
-  for (var i = 0; i < 100 && container.read(bonservisProvider(testSuresi)).durum == BonservisDurumu.yukleniyor; i++) {
+  for (var i = 0; i < 100 && container.read(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi))).durum == BonservisDurumu.yukleniyor; i++) {
     await Future<void>.delayed(Duration.zero);
   }
   return (container, depo);
 }
 
-BonservisNotifier notifier(ProviderContainer c) => c.read(bonservisProvider(testSuresi).notifier);
-BonservisState durum(ProviderContainer c) => c.read(bonservisProvider(testSuresi));
+BonservisNotifier notifier(ProviderContainer c) => c.read(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi)).notifier);
+BonservisState durum(ProviderContainer c) => c.read(bonservisProvider((oyunTipi: testOyunTipi, sure: testSuresi)));
 
 void main() {
   group('Sorular', () {
@@ -261,7 +264,7 @@ void main() {
       final depo = bonservisDeposu();
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(depo)],
-        child: MaterialApp(home: BonservisScreen(sure: sure)),
+        child: MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi, sure: sure)),
       ));
       await tester.pumpAndSettle();
       return depo;
@@ -279,7 +282,7 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [oyunDeposuProvider.overrideWithValue(bonservisDeposu())],
-        child: const MaterialApp(home: BonservisScreen()),
+        child: const MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi)),
       ));
       await tester.pumpAndSettle();
 

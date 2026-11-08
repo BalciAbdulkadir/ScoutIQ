@@ -18,8 +18,8 @@ import 'yardimcilar/sahte_oyun_deposu.dart';
 Future<void> anaMenuyuAc(
   WidgetTester tester, {
   Map<String, int> oynananlar = const {},
-  Set<String> yarimOyunlar = const {},
   BugunkuIzgara? bugunkuIzgara,
+  Map<String, BugunkuMod> bugunkuModlar = const {}, // oyun -> bugün açılan zorluk (Kesişim, Bonservis)
   List<Override> ekOverridelar = const [],
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
@@ -30,8 +30,8 @@ Future<void> anaMenuyuAc(
     overrides: [
       kullaniciProvider.overrideWithValue(const KullaniciBilgisi(ad: 'Celal Test', eposta: 'test@ornek.com')),
       bugunOynananlarProvider.overrideWith((ref) async => oynananlar),
-      yarimOyunlarProvider.overrideWith((ref) async => yarimOyunlar),
       bugunkuIzgaraProvider.overrideWith((ref) async => bugunkuIzgara),
+      bugunkuModProvider.overrideWith((ref, oyun) async => bugunkuModlar[oyun]),
       ...ekOverridelar,
     ],
     child: MaterialApp(theme: uygulamaTemasi(), home: const HomeScreen()),
@@ -51,25 +51,73 @@ void main() {
   });
 
   testWidgets('günlük ilerleme bitirilen oyunları sayar, biten kutucukta skor yazar', (tester) async {
-    await anaMenuyuAc(tester, oynananlar: {'kesisim': 6});
+    await anaMenuyuAc(tester, oynananlar: {'kesisim_kolay': 6});
 
     // Kesişim, Bonservis ve Izgara: 3 günlük oyun (Izgara'nın zorlukları tek oyun sayılır)
     expect(find.text('1 / 3'), findsOneWidget);
     expect(find.text('6/10'), findsOneWidget);
+    expect(find.text('KOLAY'), findsOneWidget); // Kesişim'de oynanan zorluk
     expect(find.text('Oyna'), findsNWidgets(2)); // Bonservis ve Izgara henüz oynanmadı
     await ekraniKapat(tester);
   });
 
-  testWidgets('oyunlar kategorisiz tek ızgarada, zorluklu oyunda K O Z, diğerlerinde tek mod yazar', (tester) async {
+  testWidgets('oyunlar kategorisiz tek ızgarada, her oyunda K O Z yazar', (tester) async {
     await anaMenuyuAc(tester);
 
     expect(find.text('KESİŞİM'), findsOneWidget);
     expect(find.text('BONSERVİS'), findsOneWidget);
     expect(find.text('IZGARA'), findsOneWidget);
-    expect(find.text('K'), findsOneWidget);
-    expect(find.text('O'), findsOneWidget);
-    expect(find.text('Z'), findsOneWidget);
-    expect(find.text('TEK MOD'), findsNWidgets(2));
+    expect(find.text('K'), findsNWidgets(3));
+    expect(find.text('O'), findsNWidgets(3));
+    expect(find.text('Z'), findsNWidgets(3));
+    expect(find.text('TEK MOD'), findsNothing);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('Kesişim\'e dokununca önce zorluk, sonra süre seçilir ve o zorluğun oyunu o süreyle açılır', (tester) async {
+    final depo = SahteOyunDeposu();
+    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 · ZORLUK SEÇ'), findsOneWidget);
+    expect(find.text('Sadece ünlü oyuncular'), findsOneWidget);
+
+    await tester.tap(find.text('ORTA'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 · SÜRE SEÇ'), findsOneWidget);
+    await tester.tap(find.text('30'));
+    await tester.pump();
+    await tester.tap(find.text('ORTA · 30 SN BAŞLA'));
+    await tester.pumpAndSettle();
+
+    final ekran = tester.widget<GameScreen>(find.byType(GameScreen));
+    expect(ekran.oyunTipi, 'kesisim_orta');
+    expect(ekran.sure, 30);
+    expect(depo.istenenOyunTipleri, ['kesisim_orta']);
+    expect(find.text('0:30'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('bugün Bonservis\'in bir zorluğu açıldıysa seçim sorulmaz, o zorluk açılır', (tester) async {
+    final depo = SahteOyunDeposu()..kayit = {'skor': 6, 'durum': 'tamamlandi'};
+    await anaMenuyuAc(
+      tester,
+      oynananlar: {'bonservis_zor': 6},
+      bugunkuModlar: {'bonservis': (zorluk: 2, bitti: true)},
+      ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)],
+    );
+
+    expect(find.text('ZOR'), findsOneWidget);
+
+    await tester.tap(find.text('BONSERVİS'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ZORLUK SEÇ'), findsNothing);
+    expect(tester.widget<BonservisScreen>(find.byType(BonservisScreen)).oyunTipi, 'bonservis_zor');
+    expect(depo.kayitAcSayisi, 0);
     await ekraniKapat(tester);
   });
 
@@ -120,48 +168,37 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets("Kesişim'e dokununca zorluk sorulmadan süre seçilir ve oyun o süreyle açılır", (tester) async {
-    await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
-
-    await tester.tap(find.text('KESİŞİM'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
-    expect(find.text('SÜRE SEÇ'), findsNWidgets(2)); // adım başlığı ve pasif buton
-    expect(find.text('← Zorluğu değiştir'), findsNothing);
-
-    await tester.tap(find.text('30'));
-    await tester.pump();
-    await tester.tap(find.text('30 SN BAŞLA'));
-    await tester.pumpAndSettle();
-
-    expect(tester.widget<GameScreen>(find.byType(GameScreen)).sure, 30);
-    expect(find.text('0:30'), findsOneWidget);
-    await ekraniKapat(tester);
-  });
-
   testWidgets('Bonservis süresiz seçilince sayaçsız açılır', (tester) async {
     await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
 
     await tester.tap(find.text('BONSERVİS'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('KOLAY'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('∞'));
     await tester.pump();
-    await tester.tap(find.text('SÜRESİZ BAŞLA'));
+    await tester.tap(find.text('KOLAY · SÜRESİZ BAŞLA'));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<BonservisScreen>(find.byType(BonservisScreen)).sure, isNull);
+    final ekran = tester.widget<BonservisScreen>(find.byType(BonservisScreen));
+    expect(ekran.oyunTipi, 'bonservis_kolay');
+    expect(ekran.sure, isNull);
     await ekraniKapat(tester);
   });
 
-  testWidgets("bugün oynanmış Kesişim'e dokununca süre sorulmadan sonuç açılır", (tester) async {
+  testWidgets("bugün oynanmış Kesişim'e dokununca seçim sorulmadan sonuç açılır", (tester) async {
     final depo = SahteOyunDeposu()..kayit = {'skor': 6, 'durum': 'tamamlandi'};
-    await anaMenuyuAc(tester, oynananlar: {'kesisim': 6}, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+    await anaMenuyuAc(
+      tester,
+      oynananlar: {'kesisim_kolay': 6},
+      bugunkuModlar: {'kesisim': (zorluk: 0, bitti: true)},
+      ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)],
+    );
 
     await tester.tap(find.text('KESİŞİM'));
     await tester.pumpAndSettle();
 
-    expect(find.text('SÜRE SEÇ'), findsNothing);
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
     expect(find.text('Bugünkü oyununu oynadın'), findsOneWidget);
     await ekraniKapat(tester);
   });
@@ -175,14 +212,20 @@ void main() {
       ]
       ..oyunSureToplam = 60
       ..oyunSureKalan = 40;
-    await anaMenuyuAc(tester, yarimOyunlar: {'bonservis'}, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+    await anaMenuyuAc(
+      tester,
+      bugunkuModlar: {'bonservis': (zorluk: 1, bitti: false)},
+      ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)],
+    );
 
     expect(find.text('Devam et'), findsOneWidget);
+    expect(find.text('ORTA'), findsOneWidget);
 
     await tester.tap(find.text('BONSERVİS'));
     await tester.pumpAndSettle();
 
-    expect(find.text('SÜRE SEÇ'), findsNothing);
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
+    expect(tester.widget<BonservisScreen>(find.byType(BonservisScreen)).oyunTipi, 'bonservis_orta');
     expect(find.text('Soru 2/5'), findsOneWidget);
     expect(find.text('0:40'), findsOneWidget);
     await ekraniKapat(tester);
@@ -244,8 +287,8 @@ void main() {
 
   testWidgets('tüm oyunlar oynandıysa hepsinin bittiği yazar', (tester) async {
     await anaMenuyuAc(tester, oynananlar: {
-      'kesisim': 6,
-      'bonservis': 3,
+      'kesisim_kolay': 6,
+      'bonservis_zor': 3,
       'izgara_orta': 4,
     });
 
