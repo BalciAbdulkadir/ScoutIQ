@@ -55,7 +55,7 @@ namespace ScoutIQ.API.Oyunlar
             };
 
         // Anahtar: kulüp ve milli takımda Transfermarkt ID'si, ligde lig kodu, başarıda Basarilar'daki anahtar.
-        // KulupId ve LogoUrl sadece kulüpte doludur, uygulamaya taşınır.
+        // KulupId sadece kulüpte doludur. LogoUrl: kulüp logosu, bayrak, lig ya da kupa logosu (Logolar); uygulamaya taşınır.
         public record Kategori(KategoriTipi Tip, string Anahtar, string Isim, string? KulupId = null, string? LogoUrl = null);
 
         // Oyuncular: kategoriye uyan bütün oyuncular (cevap olarak kabul edilenler).

@@ -165,13 +165,14 @@ namespace ScoutIQ.API.Jobs
             {
                 var ligKulupleri = kulupler.Where(k => k.Lig == kod).Select(k => k.Id).ToHashSet();
                 var (hepsi, oynayanlar) = Oyunculari(kariyer.Where(k => ligKulupleri.Contains(k.KulupId)));
-                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Lig, kod, isim), hepsi, oynayanlar));
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Lig, kod, isim, LogoUrl: Logolar.Lig(kod)), hepsi, oynayanlar));
             }
 
             foreach (var g in milliKariyer.GroupBy(m => m.MilliTakimTmId).Where(g => IzgaraSoruSecici.OrtaMilliTakimlar.ContainsKey(g.Key)))
             {
                 var oyuncular = g.Select(m => m.OyuncuId).ToHashSet();
-                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Milli, g.Key, IzgaraSoruSecici.OrtaMilliTakimlar[g.Key]), oyuncular, oyuncular));
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Milli, g.Key, IzgaraSoruSecici.OrtaMilliTakimlar[g.Key],
+                    LogoUrl: Logolar.Bayrak(g.First().MilliTakimIsim)), oyuncular, oyuncular));
             }
 
             foreach (var (anahtar, (isim, basliklar)) in BingoSoruSecici.Basarilar)
@@ -189,7 +190,7 @@ namespace ScoutIQ.API.Jobs
                         Console.WriteLine($"Uyarı: '{baslik}' başlığında {SayfaBoyutu} satırdan fazlası olabilir, bir kısmı okunmadı.");
                     oyuncular.UnionWith(satirlar.Select(s => s.OyuncuId));
                 }
-                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Basari, anahtar, isim), oyuncular, oyuncular));
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Basari, anahtar, isim, LogoUrl: Logolar.Basari(anahtar)), oyuncular, oyuncular));
             }
 
             Console.WriteLine($"Bingo kategorileri: {adaylar.GroupBy(a => a.Kategori.Tip).Select(g => $"{g.Count()} {g.Key}").Aggregate((a, b) => $"{a}, {b}")}.");

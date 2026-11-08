@@ -410,13 +410,17 @@ class _KategoriIcerigi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ikonBoyutu = kenar * 0.38;
-    final Widget simge = switch (kategori.tip) {
-      BingoKategoriTipi.kulup => KulupLogosu(logoUrl: kategori.logoUrl, boyut: ikonBoyutu),
-      BingoKategoriTipi.milli => Icon(Icons.flag_rounded, size: ikonBoyutu, color: Renkler.metinIkincil),
-      BingoKategoriTipi.lig => Icon(Icons.stadium_rounded, size: ikonBoyutu, color: Renkler.metinIkincil),
-      BingoKategoriTipi.basari => Icon(Icons.emoji_events_rounded, size: ikonBoyutu, color: Renkler.vurgu),
-    };
+    // Kulüp logosu, bayrak, lig ya da kupa logosu; logosu olmayan kategoride (ör. Ballon d'Or) türünün simgesi
+    final simge = KulupLogosu(
+      logoUrl: kategori.logoUrl,
+      boyut: kenar * 0.38,
+      yedekIkon: switch (kategori.tip) {
+        BingoKategoriTipi.kulup => Icons.shield_outlined,
+        BingoKategoriTipi.milli => Icons.flag_rounded,
+        BingoKategoriTipi.lig => Icons.stadium_rounded,
+        BingoKategoriTipi.basari => Icons.emoji_events_rounded,
+      },
+    );
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,

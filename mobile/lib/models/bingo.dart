@@ -10,7 +10,7 @@ enum BingoKategoriTipi { kulup, milli, lig, basari }
 class BingoKategorisi {
   final BingoKategoriTipi tip;
   final String isim;
-  final String? logoUrl; // Sadece kulüpte
+  final String? logoUrl; // Kulüp logosu, bayrak, lig ya da kupa logosu; yoksa simge gösterilir
 
   const BingoKategorisi({required this.tip, required this.isim, this.logoUrl});
 
