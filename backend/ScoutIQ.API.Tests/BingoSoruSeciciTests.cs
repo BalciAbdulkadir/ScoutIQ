@@ -37,7 +37,7 @@ public class BingoSoruSeciciTests
 
         public List<Aday> Adaylar() => Kategoriler.Select(k => new Aday(k.Key, k.Value.Oyuncular, k.Value.Oynayanlar)).ToList();
 
-        public BingoKarti? Sec(int tohum, Zorluk zorluk) => new BingoSoruSecici(new Random(tohum)).Sec(zorluk, Adaylar(), Kademeler);
+        public BingoKarti? Sec(int tohum) => new BingoSoruSecici(new Random(tohum)).Sec(Adaylar(), Kademeler);
     }
 
     // Her tipten fazlasıyla kategori; her kategoride her kademeden oyuncu, bazıları iki kategoriye birden uyar
@@ -64,18 +64,15 @@ public class BingoSoruSeciciTests
         return v;
     }
 
-    public static IEnumerable<object[]> TohumVeZorluklar() =>
-        from tohum in Enumerable.Range(0, 30)
-        from zorluk in Enum.GetValues<Zorluk>()
-        select new object[] { tohum, zorluk };
+    public static IEnumerable<object[]> Tohumlar() => Enumerable.Range(0, 60).Select(t => new object[] { t });
 
     [Theory]
-    [MemberData(nameof(TohumVeZorluklar))]
-    public void Sec_HerTohumda_TumKurallaraUyar(int tohum, Zorluk zorluk)
+    [MemberData(nameof(Tohumlar))]
+    public void Sec_HerTohumda_TumKurallaraUyar(int tohum)
     {
         var veri = ZenginVeri();
 
-        var kart = veri.Sec(tohum, zorluk);
+        var kart = veri.Sec(tohum);
 
         Assert.NotNull(kart);
         Assert.Equal(HucreSayisi, kart!.Hucreler.Count);
@@ -83,13 +80,12 @@ public class BingoSoruSeciciTests
         foreach (var (tip, adet) in KartDagilimi)
             Assert.Equal(adet, kart.Hucreler.Count(h => h.Tip == tip));
 
-        // Deste: 20 farklı havuz oyuncusu, kademeleri moda tam uyar
+        // Deste: 16 farklı havuz oyuncusu, 8 ünlü ve 8 bilinen; az bilinen (diğer) oyuncu yok
         Assert.Equal(DesteBoyutu, kart.Deste.Count);
         Assert.Equal(DesteBoyutu, kart.Deste.Distinct().Count());
         Assert.All(kart.Deste, o => Assert.True(veri.Kademeler.ContainsKey(o), $"Havuz dışı oyuncu destede: {o}"));
-        var dagilim = ZorlukDagilimi.Dagit(zorluk, DesteBoyutu);
         foreach (var kademe in Enum.GetValues<Kademe>())
-            Assert.Equal(dagilim.GetValueOrDefault(kademe), kart.Deste.Count(o => veri.Kademeler[o] == kademe));
+            Assert.Equal(DesteDagilimi.GetValueOrDefault(kademe), kart.Deste.Count(o => veri.Kademeler[o] == kademe));
 
         // Eşleşmeler doğru: oyuncunun uyduğu bütün kutular, sadece onlar
         for (int i = 0; i < DesteBoyutu; i++)
@@ -129,8 +125,8 @@ public class BingoSoruSeciciTests
     {
         var veri = ZenginVeri();
 
-        var ilk = veri.Sec(42, Zorluk.Zor)!;
-        var ikinci = veri.Sec(42, Zorluk.Zor)!;
+        var ilk = veri.Sec(42)!;
+        var ikinci = veri.Sec(42)!;
 
         Assert.Equal(ilk.Hucreler, ikinci.Hucreler);
         Assert.Equal(ilk.Deste, ikinci.Deste);
@@ -142,7 +138,7 @@ public class BingoSoruSeciciTests
         var veri = ZenginVeri();
 
         var kartlar = Enumerable.Range(0, 20)
-            .Select(t => string.Join("|", veri.Sec(t, Zorluk.Kolay)!.Hucreler.Select(h => h.Anahtar)))
+            .Select(t => string.Join("|", veri.Sec(t)!.Hucreler.Select(h => h.Anahtar)))
             .ToHashSet();
 
         Assert.True(kartlar.Count > 1, "Her gün aynı kart seçiliyor");
@@ -155,7 +151,7 @@ public class BingoSoruSeciciTests
         var oynamayanlar = veri.Kategoriler.Values.SelectMany(k => k.Oyuncular.Except(k.Oynayanlar)).ToHashSet();
 
         for (int tohum = 0; tohum < 20; tohum++)
-            Assert.DoesNotContain(veri.Sec(tohum, Zorluk.Kolay)!.Deste, oynamayanlar.Contains);
+            Assert.DoesNotContain(veri.Sec(tohum)!.Deste, oynamayanlar.Contains);
     }
 
     [Fact]
@@ -166,21 +162,37 @@ public class BingoSoruSeciciTests
         foreach (var k in veri.Kategoriler.Keys.Where(k => k.Tip == KategoriTipi.Lig).Skip(1).ToList())
             veri.Kategoriler.Remove(k);
 
-        Assert.Null(veri.Sec(1, Zorluk.Kolay));
+        Assert.Null(veri.Sec(1));
     }
 
     [Fact]
-    public void Sec_KademeYetmezse_NullDoner()
+    public void Sec_BilinenOyuncuYetmezse_NullDoner()
     {
         var veri = ZenginVeri();
-        // Bilinen oyuncu kalmasın: orta mod 10 bilinen ister
+        // Bilinen oyuncu kalmasın: deste 8 bilinen ister
         foreach (var id in veri.Kademeler.Where(k => k.Value == Kademe.Bilinen).Select(k => k.Key).ToList())
             veri.Kademeler.Remove(id);
 
-        Assert.Null(veri.Sec(1, Zorluk.Orta));
-        Assert.NotNull(veri.Sec(1, Zorluk.Kolay));
+        Assert.Null(veri.Sec(1));
     }
 
     [Fact]
-    public void KartDagilimi_OnAltiKutu() => Assert.Equal(HucreSayisi, KartDagilimi.Values.Sum());
+    public void Sec_SadeceAzBilinenOyuncusuOlanKategori_KartaGirmez()
+    {
+        var veri = ZenginVeri();
+        // Sadece az bilinen (diğer) oyuncuların oynadığı bir kulüp: hiçbir tohumda karta girmemeli
+        var gizli = veri.Kategori(KategoriTipi.Kulup, "sadece-diger");
+        veri.OyuncuEkle(20, Kademe.Diger, true, gizli);
+
+        for (int tohum = 0; tohum < 40; tohum++)
+            Assert.DoesNotContain(gizli, veri.Sec(tohum)!.Hucreler);
+    }
+
+    [Fact]
+    public void KartDagilimi_OnIkiKutu()
+    {
+        Assert.Equal(12, HucreSayisi);
+        Assert.Equal(HucreSayisi, KartDagilimi.Values.Sum());
+        Assert.Equal(DesteBoyutu, DesteDagilimi.Values.Sum());
+    }
 }

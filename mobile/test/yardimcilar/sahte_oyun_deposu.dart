@@ -86,7 +86,8 @@ class SahteOyunDeposu implements OyunDeposu {
 
   // Bingo: destedeki sıra (1'den) -> oyuncunun uyduğu kutular. Listede olmayan oyuncu hiçbir kutuya uymaz.
   Map<int, List<int>> bingoEslesmeleri = {1: [0], 2: [5, 6]};
-  int bingoDesteBoyutu = 20;
+  int bingoDesteBoyutu = 16;
+  int bingoKutuSayisi = 12;
   // Sunucudaki hamleler (uygulama yeniden açılınca okunur)
   List<BingoHamlesi> bingoHamleListesi = [];
   bool bingoHamleHataVerir = false;
@@ -95,7 +96,7 @@ class SahteOyunDeposu implements OyunDeposu {
   int bingoPesSayisi = 0;
   final List<({int sira, int? hucre})> bingoHamleIstekleri = [];
   Map<int, BingoOyuncusu> bingoOrnekleri = {
-    for (var i = 0; i < 16; i++) i: BingoOyuncusu(isim: 'Örnek Oyuncu $i'),
+    for (var i = 0; i < 12; i++) i: BingoOyuncusu(isim: 'Örnek Oyuncu $i'),
   };
 
   // Çağrı kayıtları
@@ -261,7 +262,7 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<List<BingoHamlesi>> bingoHamleleri(String oyunId) async => List.of(bingoHamleListesi);
 
-  // 020_bingo.sql'deki bingo_hamle fonksiyonunun basit bir kopyası
+  // 021_bingo_tek_mod.sql'deki bingo_hamle fonksiyonunun basit bir kopyası: yanlış kutu kaydedilmez, oyuncu sırada kalır
   @override
   Future<BingoHamleSonucu> bingoHamle({required String oyunId, required int sira, int? hucre}) async {
     bingoHamleIstekleri.add((sira: sira, hucre: hucre));
@@ -271,8 +272,9 @@ class SahteOyunDeposu implements OyunDeposu {
       return BingoHamleSonucu(dogru: false, skor: _bingoSkoru, bitti: true, sureDoldu: true);
     }
     final dogru = hucre != null && (bingoEslesmeleri[sira] ?? const []).contains(hucre);
+    if (hucre != null && !dogru) return BingoHamleSonucu(dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: false);
     bingoHamleListesi.add(BingoHamlesi(sira: sira, hucre: hucre, dogru: dogru));
-    final bitti = _bingoSkoru == bingoHucreSayisi || sira >= bingoDesteBoyutu;
+    final bitti = _bingoSkoru == bingoKutuSayisi || sira >= bingoDesteBoyutu;
     kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return BingoHamleSonucu(dogru: dogru, hucre: hucre, skor: _bingoSkoru, bitti: bitti);
   }

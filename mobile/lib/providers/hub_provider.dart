@@ -71,12 +71,12 @@ bool izgaraTipiMi(String oyunTipi) => oyunTipi.startsWith('izgara_');
 // Kullanıcı her oyunda günde tek zorluk oynar: varsa hub'da oyuna dokununca zorluk sorulmadan bu oyun açılır.
 typedef BugunkuMod = ({int zorluk, bool bitti});
 
-// Parametre oyunun tipidir: kesisim, bonservis ya da izgara
+// Parametre oyunun tipidir: kesisim, bonservis, izgara ya da bingo. Zorluk modu olmayan oyunda (Bingo) zorluk 0'dır.
 final bugunkuModProvider = FutureProvider.autoDispose.family<BugunkuMod?, String>((ref, oyun) async {
   final supabase = Supabase.instance.client;
   final userId = supabase.auth.currentUser?.id;
-  final altTipler = oyunModlari.firstWhere((m) => m.tip == oyun).altTipler;
-  if (userId == null || altTipler == null) return null;
+  final altTipler = oyunModlari.firstWhere((m) => m.tip == oyun).oyunTipleri;
+  if (userId == null || altTipler.isEmpty) return null;
 
   final kayitlar = await supabase
       .from('kullanici_oyun_gecmisi')

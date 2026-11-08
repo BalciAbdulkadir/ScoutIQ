@@ -62,16 +62,16 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('oyunlar kategorisiz tek ızgarada, her oyunda K O Z yazar', (tester) async {
+  testWidgets("oyunlar kategorisiz tek ızgarada, zorluklu oyunlarda K O Z, Bingo'da tek mod yazar", (tester) async {
     await anaMenuyuAc(tester);
 
     expect(find.text('KESİŞİM'), findsOneWidget);
     expect(find.text('BONSERVİS'), findsOneWidget);
     expect(find.text('IZGARA'), findsOneWidget);
-    expect(find.text('K'), findsNWidgets(4));
-    expect(find.text('O'), findsNWidgets(4));
-    expect(find.text('Z'), findsNWidgets(4));
-    expect(find.text('TEK MOD'), findsNothing);
+    expect(find.text('K'), findsNWidgets(3));
+    expect(find.text('O'), findsNWidgets(3));
+    expect(find.text('Z'), findsNWidgets(3));
+    expect(find.text('TEK MOD'), findsOneWidget);
     await ekraniKapat(tester);
   });
 
@@ -291,7 +291,7 @@ void main() {
       'kesisim_kolay': 6,
       'bonservis_zor': 3,
       'izgara_orta': 4,
-      'bingo_kolay': 12,
+      'bingo': 12,
     });
 
     expect(find.text('Hepsi bitti'), findsOneWidget);
@@ -299,24 +299,27 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('Bingo\'ya dokununca zorluk ve süre seçilir, o zorluğun kartı açılır', (tester) async {
+  testWidgets('Bingo\'ya dokununca zorluk sorulmaz, 30 saniyesiz süre seçilir ve kart açılır', (tester) async {
     await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
 
     expect(find.text('YAKINDA'), findsNothing);
 
     await tester.tap(find.text('BİNGO'));
     await tester.pumpAndSettle();
-    expect(find.text('Destede sadece ünlü oyuncular'), findsOneWidget);
-    await tester.tap(find.text('ZOR'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('∞'));
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
+    expect(find.text('∞'), findsOneWidget);
+    expect(find.text('30'), findsNothing);
+    expect(find.text('60'), findsOneWidget);
+    expect(find.text('90'), findsOneWidget);
+
+    await tester.tap(find.text('60'));
     await tester.pump();
-    await tester.tap(find.text('ZOR · SÜRESİZ BAŞLA'));
+    await tester.tap(find.text('60 SN BAŞLA'));
     await tester.pumpAndSettle();
 
     final ekran = tester.widget<BingoScreen>(find.byType(BingoScreen));
-    expect(ekran.oyunTipi, 'bingo_zor');
-    expect(ekran.sure, isNull);
+    expect(ekran.oyunTipi, 'bingo');
+    expect(ekran.sure, 60);
     await ekraniKapat(tester);
   });
 

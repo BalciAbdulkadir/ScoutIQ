@@ -1,8 +1,9 @@
 // Bingo oyununun verileri. Kart ve deste gunluk_oyunlar.soru_verisi'nden okunur (biçim: 020_bingo.sql).
 // Hangi oyuncunun hangi kutuya uyduğu soru verisinde yoktur; hamleler sunucuda kontrol edilir.
 
-const bingoBoyutu = 4;
-const bingoHucreSayisi = bingoBoyutu * bingoBoyutu;
+// Kartın kutu sayısı: günün kartı 12 kutudur (4 satır, 3 sütun, 021_bingo_tek_mod.sql). Tek modlu Bingo'dan önce
+// üretilmiş 16 kutulu (4x4) kartlar da okunur.
+const bingoKutuSayilari = {12, 16};
 
 enum BingoKategoriTipi { kulup, milli, lig, basari }
 
@@ -48,19 +49,25 @@ class BingoOyuncusu {
   }
 }
 
-// Günün kartı: 16 kategori ve sırayla gelecek oyuncular
+// Günün kartı: 12 kategori ve sırayla gelecek oyuncular
 class BingoKarti {
   final List<BingoKategorisi> hucreler;
   final List<BingoOyuncusu> deste;
 
   const BingoKarti({required this.hucreler, required this.deste});
 
+  int get hucreSayisi => hucreler.length;
+
+  // 12 kutu 4 satır x 3 sütun, eski 16 kutulu kart 4x4 dizilir
+  int get sutunSayisi => hucreSayisi > 12 ? 4 : 3;
+  int get satirSayisi => (hucreSayisi / sutunSayisi).ceil();
+
   // Kart eksik ya da bozuksa null
   static BingoKarti? oku(Object? veri) {
     if (veri is! Map<String, dynamic>) return null;
     final hucreler = veri['hucreler'];
     final deste = veri['oyuncular'];
-    if (hucreler is! List || hucreler.length != bingoHucreSayisi || deste is! List || deste.isEmpty) return null;
+    if (hucreler is! List || !bingoKutuSayilari.contains(hucreler.length) || deste is! List || deste.isEmpty) return null;
     return BingoKarti(
       hucreler: hucreler.cast<Map<String, dynamic>>().map(BingoKategorisi.fromJson).toList(),
       deste: deste.cast<Map<String, dynamic>>().map(BingoOyuncusu.fromJson).toList(),

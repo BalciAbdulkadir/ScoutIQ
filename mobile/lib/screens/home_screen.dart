@@ -27,7 +27,9 @@ class HomeScreen extends ConsumerWidget {
       _ => null,
     };
     if (mod.tip == 'izgara') return izgaraAc(context, ref);
-    if (ekran != null) return zorlukluOyunuAc(context, ref, mod, ekran);
+    if (ekran != null) {
+      return mod.zorluklu ? zorlukluOyunuAc(context, ref, mod, ekran) : tekModluOyunuAc(context, ref, mod, ekran);
+    }
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -46,7 +48,8 @@ class HomeScreen extends ConsumerWidget {
       if (mod.tip == 'izgara') {
         return bugunkuIzgara == null ? null : (zorluk: bugunkuIzgara.zorluk.index, bitti: bugunkuIzgara.bitti);
       }
-      return mod.zorluklu ? ref.watch(bugunkuModProvider(mod.tip!)).value : null;
+      // Zorluk modu olmayan oyunda da (Bingo) bugünkü kayıt okunur: yarım kalan oyunda "Devam et" yazar
+      return mod.tip != null && mod.durum == OyunDurumu.aktif ? ref.watch(bugunkuModProvider(mod.tip!)).value : null;
     }
 
     // Oynanabilenler önce, yakındakiler en sonda; hepsi tek bir ızgarada, kategorisiz
@@ -144,6 +147,7 @@ class HomeScreen extends ConsumerWidget {
     return OyunKarti(
       mod: mod,
       bugunkuSkor: skorlar[mod.tip],
+      devamEdiyor: bugunku != null && !bugunku.bitti,
       onTap: () => _modaTiklandi(context, ref, mod),
     );
   }
