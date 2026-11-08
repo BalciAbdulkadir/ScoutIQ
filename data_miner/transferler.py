@@ -5,18 +5,22 @@ Bonservis oyunu için kullanılır.
 Kullanım:
     python transferler.py          # sadece transferleri henüz çekilmemiş oyuncular
     python transferler.py --hepsi  # tüm oyuncular baştan
+    python transferler.py --is 8   # API'ye aynı anda atılan istek sayısı (varsayılan 4)
 
 Önce supabase/migrations/004_transferler.sql çalıştırılmış olmalıdır.
 Yarıda kesilirse (Ctrl+C) tekrar çalıştırmak yeterli: çekilmiş oyuncular atlanır, kayıtlar çoğalmaz.
 Hata alan oyuncular işaretlenmez, bir sonraki çalıştırmada tekrar denenir.
+Çekim bitince oyuncuların toplam bonservisi (toplam_bonservis_hesapla) yeniden hesaplanır.
 """
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from main import api_istek_at, supabase
 
 SAYFA_BOYUTU = 1000  # Supabase tek istekte en fazla 1000 satır döndürür
+VARSAYILAN_IS_SAYISI = 4
 
 
 def oyunculari_oku(hepsi):
@@ -82,36 +86,66 @@ def cekildi_olarak_isaretle(oyuncu_id):
     ).eq("id", oyuncu_id).execute()
 
 
+def transferleri_getir(oyuncu):
+    """API isteği iş parçacıklarında atılır; veritabanına yazma ana akışta yapılır."""
+    data = api_istek_at(f"/players/{oyuncu['transfermarkt_id']}/transfers")
+    time.sleep(0.3)  # Rate limit'e takılmamak için nefes aldırıyoruz
+    return oyuncu, data
+
+
+def is_sayisini_oku():
+    if "--is" not in sys.argv:
+        return VARSAYILAN_IS_SAYISI
+    try:
+        return max(1, int(sys.argv[sys.argv.index("--is") + 1]))
+    except (IndexError, ValueError):
+        print("Kullanım: python transferler.py [--hepsi] [--is SAYI]   örn: python transferler.py --is 8")
+        exit(1)
+
+
 if __name__ == "__main__":
     hepsi = "--hepsi" in sys.argv
+    is_sayisi = is_sayisini_oku()
     oyuncular = oyunculari_oku(hepsi)
     toplam = len(oyuncular)
-    print(f"Transfer çekimi başlatılıyor. İşlenecek oyuncu: {toplam}")
+    print(f"Transfer çekimi başlatılıyor. İşlenecek oyuncu: {toplam}, aynı anda istek: {is_sayisi}")
 
     hata_sayisi = 0
     baslangic = time.time()
+    havuz = ThreadPoolExecutor(max_workers=is_sayisi)
 
-    for sira, oyuncu in enumerate(oyuncular, start=1):
-        data = api_istek_at(f"/players/{oyuncu['transfermarkt_id']}/transfers")
-        if data is None or "transfers" not in data:
-            print(f"!! [{sira}/{toplam}] {oyuncu['isim']}: transferler alınamadı.")
-            hata_sayisi += 1
-            continue
+    try:
+        isler = [havuz.submit(transferleri_getir, o) for o in oyuncular]
+        for sira, is_ in enumerate(as_completed(isler), start=1):
+            oyuncu, data = is_.result()
+            if data is None or "transfers" not in data:
+                print(f"!! [{sira}/{toplam}] {oyuncu['isim']}: transferler alınamadı.")
+                hata_sayisi += 1
+                continue
 
-        try:
-            adet, bedelli = transferleri_kaydet(oyuncu["id"], data["transfers"])
-            cekildi_olarak_isaretle(oyuncu["id"])
-        except Exception as e:
-            print(f"!! [{sira}/{toplam}] {oyuncu['isim']} kaydedilemedi: {e}")
-            hata_sayisi += 1
-            continue
+            try:
+                adet, bedelli = transferleri_kaydet(oyuncu["id"], data["transfers"])
+                cekildi_olarak_isaretle(oyuncu["id"])
+            except Exception as e:
+                print(f"!! [{sira}/{toplam}] {oyuncu['isim']} kaydedilemedi: {e}")
+                hata_sayisi += 1
+                continue
 
-        # Kalan süre tahmini: şu ana kadarki ortalama hıza göre
-        gecen = time.time() - baslangic
-        kalan_dk = gecen / sira * (toplam - sira) / 60
-        print(f">> [{sira}/{toplam}] {oyuncu['isim']}: {adet} transfer, {bedelli} bedelli (kalan ~{kalan_dk:.0f} dk)")
+            # Kalan süre tahmini: şu ana kadarki ortalama hıza göre
+            gecen = time.time() - baslangic
+            kalan_dk = gecen / sira * (toplam - sira) / 60
+            print(f">> [{sira}/{toplam}] {oyuncu['isim']}: {adet} transfer, {bedelli} bedelli (kalan ~{kalan_dk:.0f} dk)")
+    except KeyboardInterrupt:
+        # Sıradaki istekler iptal edilir; o an süren birkaç istek bitince program kapanır
+        havuz.shutdown(wait=False, cancel_futures=True)
+        print("\nDurduruldu. Tekrar çalıştırınca kalan oyuncular çekilir.")
+        exit(1)
 
-        time.sleep(0.3)  # Rate limit'e takılmamak için nefes aldırıyoruz
+    havuz.shutdown()
+
+    # Bonservis oyunu toplam bonservisi kullanır: yeni transferlerle güncellenir
+    print("\nToplam bonservisler hesaplanıyor...")
+    supabase.rpc("toplam_bonservis_hesapla").execute()
 
     if hata_sayisi:
         print(f"\nİşlem tamamlandı ama {hata_sayisi} oyuncuda hata oluştu. "
