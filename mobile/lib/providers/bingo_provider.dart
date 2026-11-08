@@ -1,0 +1,274 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/bingo.dart';
+import '../models/izgara.dart' show OyunSuresiDurumu;
+import '../providers/hub_provider.dart';
+import '../services/gunluk_oyun.dart';
+import '../services/oyun_deposu.dart';
+
+enum BingoDurumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
+
+// Son hamle: hangi oyuncu, nereye, sonucu ne oldu. Kartın üstündeki satırda gösterilir.
+typedef SonBingoHamlesi = ({BingoOyuncusu oyuncu, int? hucre, bool dogru});
+
+class BingoState {
+  final BingoDurumu durum;
+  final BingoKarti? kart;
+  final String? oyunId;
+  final Map<int, BingoOyuncusu> hucreler; // Dolu kutular: kutu (0-15) -> oyuncu
+  final int oynanan; // Destede sırası geçmiş oyuncu sayısı (yerleşen, yanan ya da pas geçilen)
+  final bool gonderiliyor; // Hamle ya da pes etme sunucuda işlenirken ikinci isteği engeller
+  final String? hataMesaji; // durum 'hata' iken gösterilir
+  final SonBingoHamlesi? sonHamle;
+  final Map<int, BingoOyuncusu> ornekCevaplar; // Oyun bitince boş kutular için sunucudan gelen örnek cevaplar
+  final int? sureSaniye; // Süreli oyunda seçilen toplam süre; süresizse null
+  final DateTime? bitisZamani; // Süreli oyunda sürenin dolacağı an (cihaz saatine göre)
+  final bool sureDoldu; // Oyun süre dolduğu için bitti
+
+  const BingoState({
+    this.durum = BingoDurumu.yukleniyor,
+    this.kart,
+    this.oyunId,
+    this.hucreler = const {},
+    this.oynanan = 0,
+    this.gonderiliyor = false,
+    this.hataMesaji,
+    this.sonHamle,
+    this.ornekCevaplar = const {},
+    this.sureSaniye,
+    this.bitisZamani,
+    this.sureDoldu = false,
+  });
+
+  // Skor dolu kutu sayısıdır
+  int get skor => hucreler.length;
+
+  // Sırası gelen oyuncu; deste bittiyse null
+  BingoOyuncusu? get siradaki => kart != null && oynanan < kart!.deste.length ? kart!.deste[oynanan] : null;
+
+  int get kalanOyuncu => (kart?.deste.length ?? 0) - oynanan;
+
+  BingoState copyWith({
+    BingoDurumu? durum,
+    BingoKarti? kart,
+    String? oyunId,
+    Map<int, BingoOyuncusu>? hucreler,
+    int? oynanan,
+    bool? gonderiliyor,
+    String? hataMesaji,
+    SonBingoHamlesi? sonHamle,
+    Map<int, BingoOyuncusu>? ornekCevaplar,
+    int? sureSaniye,
+    DateTime? bitisZamani,
+    bool? sureDoldu,
+  }) {
+    return BingoState(
+      durum: durum ?? this.durum,
+      kart: kart ?? this.kart,
+      oyunId: oyunId ?? this.oyunId,
+      hucreler: hucreler ?? this.hucreler,
+      oynanan: oynanan ?? this.oynanan,
+      gonderiliyor: gonderiliyor ?? this.gonderiliyor,
+      hataMesaji: hataMesaji ?? this.hataMesaji,
+      sonHamle: sonHamle ?? this.sonHamle,
+      ornekCevaplar: ornekCevaplar ?? this.ornekCevaplar,
+      sureSaniye: sureSaniye ?? this.sureSaniye,
+      bitisZamani: bitisZamani ?? this.bitisZamani,
+      sureDoldu: sureDoldu ?? this.sureDoldu,
+    );
+  }
+}
+
+// Bingo oyunu. Destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu bir kutuya koyar ya da pas geçer.
+// Hamleler sunucuda tutulduğu için yarıda bırakılan kart tekrar açılınca kaldığı yerden devam eder; skor istemciden alınmaz.
+// Oyun 16 kutu dolunca, deste bitince, pes edilince ya da süre dolunca biter.
+class BingoNotifier extends Notifier<BingoState> {
+  final GunlukOyunSecimi secim;
+
+  BingoNotifier(this.secim);
+
+  late OyunDeposu _depo;
+
+  @override
+  BingoState build() {
+    _depo = ref.read(oyunDeposuProvider);
+    // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
+    Future.microtask(_yukle);
+    return const BingoState();
+  }
+
+  Future<void> _yukle() async {
+    try {
+      final kullaniciId = _depo.kullaniciId;
+      if (kullaniciId == null) {
+        state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: oturumYokMesaji);
+        return;
+      }
+
+      String tarih;
+      try {
+        tarih = await _depo.oyunTarihi();
+      } catch (_) {
+        tarih = bugununTarihi();
+      }
+
+      final oyun = await _depo.gununOyunu(secim.oyunTipi, tarih);
+      final kart = BingoKarti.oku(oyun?['soru_verisi']);
+      if (!ref.mounted) return;
+      if (oyun == null || kart == null) {
+        state = state.copyWith(durum: BingoDurumu.oyunYok);
+        return;
+      }
+      final oyunId = oyun['id'] as String;
+
+      // Kayıt yoksa oyun 'basladi' olarak açılır; varsa (devam eden ya da bitmiş) kart hamlelerden kurulur
+      var kayit = await _depo.oyunKaydi(kullaniciId, secim.oyunTipi, tarih);
+      var yeni = false;
+      if (kayit == null) {
+        try {
+          await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: secim.oyunTipi, tarih: tarih);
+          kayit = {'durum': 'basladi'};
+          yeni = true;
+        } on KayitZatenVar {
+          // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
+          kayit = await _depo.oyunKaydi(kullaniciId, secim.oyunTipi, tarih) ?? {'durum': 'basladi'};
+        } on BaskaModOynandi {
+          if (!ref.mounted) return;
+          state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: baskaZorlukMesaji);
+          return;
+        }
+      }
+
+      final hamleler = await _depo.bingoHamleleri(oyunId);
+      if (!ref.mounted) return;
+
+      final hucreler = {
+        for (final h in hamleler)
+          if (h.dogru && h.hucre != null && h.sira <= kart.deste.length) h.hucre!: kart.deste[h.sira - 1],
+      };
+      var bitti = kayit['durum'] == 'tamamlandi' || hucreler.length >= bingoHucreSayisi || hamleler.length >= kart.deste.length;
+
+      // Süre: yeni oyunda seçilen süre başlatılır, yarım kalan oyunda sunucudaki kalan süre okunur
+      OyunSuresiDurumu? sure;
+      if (!bitti) {
+        try {
+          sure = await _depo.oyunSureyiBaslat(secim.oyunTipi, tarih, sure: yeni ? secim.sure : null);
+        } catch (_) {
+          // Sunucuya sorulamazsa yeni oyun seçilen süreyle cihazda sayılır, yarım kalan oyun süresiz açılır
+          if (yeni && secim.sure != null) sure = OyunSuresiDurumu(toplam: secim.sure!, kalan: secim.sure!);
+        }
+        if (!ref.mounted) return;
+      }
+      final sureDoldu = sure != null && sure.kalan <= 0;
+      if (sureDoldu) {
+        // Uygulama kapalıyken süre dolmuş: kart o anki skorla kapatılır
+        await _depo.bingoPesEt(oyunId);
+        if (!ref.mounted) return;
+        bitti = true;
+      }
+
+      state = state.copyWith(
+        durum: bitti ? BingoDurumu.bitti : BingoDurumu.oynaniyor,
+        kart: kart,
+        oyunId: oyunId,
+        hucreler: hucreler,
+        oynanan: hamleler.length,
+        sureSaniye: sure?.toplam,
+        bitisZamani: sure == null || sureDoldu ? null : DateTime.now().add(Duration(seconds: sure.kalan)),
+        sureDoldu: sureDoldu,
+      );
+      if (bitti) await _ornekCevaplariYukle();
+    } catch (_) {
+      if (!ref.mounted) return;
+      state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: yuklemeHataMesaji);
+    }
+  }
+
+  // Sırası gelen oyuncuyu kutuya koyar. Hata olursa mesajını döndürür, başarılıysa null.
+  Future<String?> yerlestir(int hucre) {
+    if (state.hucreler.containsKey(hucre)) return Future.value(null);
+    return _hamle(hucre);
+  }
+
+  // Sırası gelen oyuncuyu pas geçer
+  Future<String?> pasGec() => _hamle(null);
+
+  Future<String?> _hamle(int? hucre) async {
+    final oyuncu = state.siradaki;
+    if (state.durum != BingoDurumu.oynaniyor || state.gonderiliyor || oyuncu == null) return null;
+    state = state.copyWith(gonderiliyor: true);
+
+    BingoHamleSonucu sonuc;
+    try {
+      sonuc = await _depo.bingoHamle(oyunId: state.oyunId!, sira: state.oynanan + 1, hucre: hucre);
+    } catch (_) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(gonderiliyor: false);
+      return gonderimHataMesaji;
+    }
+    if (!ref.mounted) return null;
+
+    final hucreler = {...state.hucreler};
+    if (sonuc.dogru && sonuc.hucre != null) hucreler[sonuc.hucre!] = oyuncu;
+
+    state = state.copyWith(
+      durum: sonuc.bitti ? BingoDurumu.bitti : BingoDurumu.oynaniyor,
+      hucreler: hucreler,
+      oynanan: sonuc.sureDoldu ? state.oynanan : state.oynanan + 1,
+      sonHamle: sonuc.sureDoldu ? null : (oyuncu: oyuncu, hucre: hucre, dogru: sonuc.dogru),
+      gonderiliyor: false,
+      sureDoldu: sonuc.sureDoldu,
+    );
+
+    if (sonuc.bitti) await _ornekCevaplariYukle();
+    return null;
+  }
+
+  // Oyunu o anki skorla bitirir
+  Future<String?> pesEt() async {
+    if (state.durum != BingoDurumu.oynaniyor || state.gonderiliyor) return null;
+    state = state.copyWith(gonderiliyor: true);
+
+    try {
+      await _depo.bingoPesEt(state.oyunId!);
+    } catch (_) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(gonderiliyor: false);
+      return 'Bağlantı sorunu. İnternet bağlantını kontrol edip tekrar dene.';
+    }
+    if (!ref.mounted) return null;
+
+    state = state.copyWith(durum: BingoDurumu.bitti, gonderiliyor: false);
+    await _ornekCevaplariYukle();
+    return null;
+  }
+
+  // Ekrandaki sayaç sıfıra inince çağrılır: kart o anki skorla kapatılır.
+  // Sunucu da süreyi kontrol ettiği için bu çağrı gelmese bile süre dolduktan sonra hamle kabul edilmez.
+  Future<void> sureDoldu() async {
+    if (state.durum != BingoDurumu.oynaniyor || state.gonderiliyor) return;
+    state = state.copyWith(gonderiliyor: true);
+
+    try {
+      await _depo.bingoPesEt(state.oyunId!);
+    } catch (_) {
+      // Bağlantı yoksa kart yine kapalı gösterilir; sunucu süresi dolan hamleyi zaten kabul etmez
+    }
+    if (!ref.mounted) return;
+
+    state = state.copyWith(durum: BingoDurumu.bitti, gonderiliyor: false, sureDoldu: true);
+    await _ornekCevaplariYukle();
+  }
+
+  // Örnek cevaplar karta ek bilgidir: gelmezse boş kutular boş kalır, hata kullanıcıya yansıtılmaz
+  Future<void> _ornekCevaplariYukle() async {
+    if (state.skor >= bingoHucreSayisi) return;
+    try {
+      final ornekler = await _depo.bingoOrnekCevaplar(state.oyunId!);
+      if (!ref.mounted) return;
+      state = state.copyWith(ornekCevaplar: ornekler);
+    } catch (_) {}
+  }
+}
+
+// Parametre: zorluğun oyun tipi (ör. bingo_orta) ve seçilen süre
+final bingoProvider = NotifierProvider.autoDispose.family<BingoNotifier, BingoState, GunlukOyunSecimi>(BingoNotifier.new);

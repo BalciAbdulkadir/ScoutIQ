@@ -71,6 +71,175 @@ namespace ScoutIQ.API.Jobs
             {
                 Console.WriteLine($"Izgara: hata oluştu: {ex.Message}");
             }
+
+            try
+            {
+                await UretBingoOyunlari(bugun, kademeler);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Bingo: hata oluştu: {ex.Message}");
+            }
+        }
+
+        // ---------------- Bingo ----------------
+
+        private async Task UretBingoOyunlari(DateTime tarih, Dictionary<string, Kademe> kademeler)
+        {
+            var eksikler = await EksikModlar("bingo", tarih);
+            if (eksikler.Count == 0) return;
+
+            var adaylar = await BingoAdaylari();
+            foreach (var zorluk in eksikler)
+            {
+                var kart = new BingoSoruSecici().Sec(zorluk, adaylar, kademeler);
+                if (kart == null)
+                {
+                    Console.WriteLine($"Uyarı: Bingo ({zorluk}) için kurallara uyan kart kurulamadı.");
+                    continue;
+                }
+
+                var soruVerisi = await BingoSoruVerisi(kart);
+                var oyun = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+                {
+                    OyunTipi = ZorlukDagilimi.OyunTipi("bingo", zorluk),
+                    Tarih = tarih,
+                    SoruVerisi = soruVerisi
+                })).Models.First();
+
+                // Eşleşmeler yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
+                try
+                {
+                    await _supabaseClient.From<BingoEslesmesi>().Insert(kart.Eslesmeler
+                        .Select((h, i) => new BingoEslesmesi { OyunId = oyun.Id, Sira = i + 1, Hucreler = h })
+                        .ToList());
+                }
+                catch
+                {
+                    await _supabaseClient.From<GunlukOyun>().Where(g => g.Id == oyun.Id).Delete();
+                    throw;
+                }
+
+                Console.WriteLine($"Başarılı: {oyun.OyunTipi} için {tarih:yyyy-MM-dd} tarihli kart eklendi.");
+                BingoKartiniYaz(kart, kademeler);
+            }
+        }
+
+        // Veritabanına yazmadan her moddan bir Bingo kartı seçip ekrana basar:
+        // dotnet run -- --bingo-onizleme
+        public async Task BingoOnizleme()
+        {
+            var kademeler = await KademeleriOku();
+            var adaylar = await BingoAdaylari();
+            foreach (var zorluk in Enum.GetValues<Zorluk>())
+            {
+                Console.WriteLine($"\nBingo ({zorluk}) önizleme (veritabanına yazılmadı):");
+                var kart = new BingoSoruSecici().Sec(zorluk, adaylar, kademeler);
+                if (kart == null)
+                    Console.WriteLine("   Kurallara uyan kart kurulamadı.");
+                else
+                    BingoKartiniYaz(kart, kademeler);
+            }
+        }
+
+        // Bütün kategoriler, kendilerine uyan oyuncularla
+        private async Task<List<BingoSoruSecici.Aday>> BingoAdaylari()
+        {
+            var kulupler = await KulupleriOku();
+            var kariyer = await HepsiniOku<KariyerGecmisi>("id, oyuncu_id, kulup_id, mac_sayisi", k => k.Id);
+            var milliKariyer = await TumMilliTakimKariyeri();
+
+            var adaylar = new List<BingoSoruSecici.Aday>();
+            var kulupKayitlari = kariyer.GroupBy(k => k.KulupId).ToDictionary(g => g.Key, g => g.ToList());
+            (HashSet<string>, HashSet<string>) Oyunculari(IEnumerable<KariyerGecmisi> kayitlar) =>
+                (kayitlar.Select(k => k.OyuncuId).ToHashSet(), kayitlar.Where(k => k.Oynadi).Select(k => k.OyuncuId).ToHashSet());
+
+            foreach (var kulup in kulupler.Where(k => KesisimSoruSecici.Kulupler.ContainsKey(k.TransfermarktId) && kulupKayitlari.ContainsKey(k.Id)))
+            {
+                var (hepsi, oynayanlar) = Oyunculari(kulupKayitlari[kulup.Id]);
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Kulup, kulup.TransfermarktId,
+                    KesisimSoruSecici.Kulupler[kulup.TransfermarktId], kulup.Id, kulup.LogoUrl), hepsi, oynayanlar));
+            }
+
+            foreach (var (kod, isim) in BingoSoruSecici.Ligler)
+            {
+                var ligKulupleri = kulupler.Where(k => k.Lig == kod).Select(k => k.Id).ToHashSet();
+                var (hepsi, oynayanlar) = Oyunculari(kariyer.Where(k => ligKulupleri.Contains(k.KulupId)));
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Lig, kod, isim), hepsi, oynayanlar));
+            }
+
+            foreach (var g in milliKariyer.GroupBy(m => m.MilliTakimTmId).Where(g => IzgaraSoruSecici.OrtaMilliTakimlar.ContainsKey(g.Key)))
+            {
+                var oyuncular = g.Select(m => m.OyuncuId).ToHashSet();
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Milli, g.Key, IzgaraSoruSecici.OrtaMilliTakimlar[g.Key]), oyuncular, oyuncular));
+            }
+
+            foreach (var (anahtar, (isim, basliklar)) in BingoSoruSecici.Basarilar)
+            {
+                var oyuncular = new HashSet<string>();
+                foreach (var baslik in basliklar)
+                {
+                    // Bir başlıkta en fazla birkaç yüz oyuncu var; tek istek yeterli, sınıra yaklaşılırsa uyarılır
+                    var satirlar = (await _supabaseClient.From<OyuncuBasarisi>()
+                        .Select("oyuncu_id, baslik")
+                        .Filter("baslik", Operator.Equals, baslik)
+                        .Limit(SayfaBoyutu)
+                        .Get()).Models;
+                    if (satirlar.Count >= SayfaBoyutu)
+                        Console.WriteLine($"Uyarı: '{baslik}' başlığında {SayfaBoyutu} satırdan fazlası olabilir, bir kısmı okunmadı.");
+                    oyuncular.UnionWith(satirlar.Select(s => s.OyuncuId));
+                }
+                adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Basari, anahtar, isim), oyuncular, oyuncular));
+            }
+
+            Console.WriteLine($"Bingo kategorileri: {adaylar.GroupBy(a => a.Kategori.Tip).Select(g => $"{g.Count()} {g.Key}").Aggregate((a, b) => $"{a}, {b}")}.");
+            return adaylar;
+        }
+
+        // Uygulama kutuları ve desteyi gösterir. Hangi oyuncunun hangi kutuya uyduğu soru verisinde yoktur.
+        private async Task<object> BingoSoruVerisi(BingoSoruSecici.BingoKarti kart)
+        {
+            var idler = kart.Deste.Cast<object>().ToList();
+            var oyuncular = (await _supabaseClient.From<Oyuncu>()
+                    .Select("id, isim, foto_url")
+                    .Filter("id", Operator.In, idler)
+                    .Get()).Models
+                .ToDictionary(o => o.Id);
+
+            return new
+            {
+                hucreler = kart.Hucreler.Select(h => new
+                {
+                    tip = h.Tip switch
+                    {
+                        BingoSoruSecici.KategoriTipi.Kulup => "kulup",
+                        BingoSoruSecici.KategoriTipi.Milli => "milli",
+                        BingoSoruSecici.KategoriTipi.Lig => "lig",
+                        _ => "basari"
+                    },
+                    anahtar = h.Anahtar,
+                    isim = h.Isim,
+                    id = h.KulupId,
+                    logo = h.LogoUrl
+                }).ToList(),
+                oyuncular = kart.Deste.Select(id => new
+                {
+                    id,
+                    isim = oyuncular[id].Isim,
+                    foto = oyuncular[id].FotoUrl
+                }).ToList()
+            };
+        }
+
+        private static void BingoKartiniYaz(BingoSoruSecici.BingoKarti kart, Dictionary<string, Kademe> kademeler)
+        {
+            for (int s = 0; s < BingoSoruSecici.Boyut; s++)
+            {
+                var satir = Enumerable.Range(0, BingoSoruSecici.Boyut).Select(t => $"{kart.Hucreler[s * BingoSoruSecici.Boyut + t].Isim,-24}");
+                Console.WriteLine($"   {string.Join("", satir)}");
+            }
+            var sayilar = kart.Deste.GroupBy(o => kademeler[o]).OrderBy(g => g.Key).Select(g => $"{g.Count()} {ZorlukDagilimi.Metin(g.Key)}");
+            Console.WriteLine($"   Deste: {string.Join(", ", sayilar)}; oyuncu başına uyduğu kutu: {string.Join(" ", kart.Eslesmeler.Select(e => e.Length))}");
         }
 
         // Soru havuzundaki oyuncuların kademeleri: oyuncu id -> kademe. Elle düzeltme (kademe_override) doluysa o geçerlidir.

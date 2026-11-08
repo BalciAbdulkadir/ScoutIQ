@@ -8,7 +8,7 @@ import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import 'tebesir.dart';
 
-// Ana menüde Kesişim ya da Bonservis kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipi ve süreyle
+// Ana menüde Kesişim, Bonservis ya da Bingo kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipi ve süreyle
 // oyun ekranını kurar.
 // - Bugün bir zorluk açıldıysa sorulmadan o zorluk açılır: yarımsa sunucudaki kalan süresiyle kaldığı yerden,
 //   bittiyse sonucuyla. Her oyunda günde tek zorluk oynanır, sunucu da buna izin vermez (019_zorluk_modlari.sql).

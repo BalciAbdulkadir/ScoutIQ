@@ -34,6 +34,13 @@ if (args.Contains("--bonservis-onizleme"))
     return;
 }
 
+// "dotnet run -- --bingo-onizleme" her moddan bir Bingo kartı seçip ekrana basar, veritabanına yazmaz
+if (args.Contains("--bingo-onizleme"))
+{
+    await app.Services.GetRequiredService<DailyQuestionJob>().BingoOnizleme();
+    return;
+}
+
 // "dotnet run -- --izgara-onizleme" her moddan bir Izgara tahtası seçip ekrana basar, veritabanına yazmaz
 if (args.Contains("--izgara-onizleme"))
 {
