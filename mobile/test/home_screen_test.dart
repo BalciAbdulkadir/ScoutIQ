@@ -41,6 +41,21 @@ Future<void> anaMenuyuAc(
   await tester.pump();
 }
 
+// Saati testten ayarlanan "bugün": gerçek saate ve zamanlayıcıya bakmaz
+class _SahteBugun extends BugunNotifier {
+  String tarih;
+
+  _SahteBugun(this.tarih);
+
+  @override
+  String build() => tarih;
+
+  @override
+  void kontrolEt() {
+    if (state != tarih) state = tarih;
+  }
+}
+
 // Oyuna ilk dokunuşta gelen kural sayfasını geçer
 Future<void> kurallariGec(WidgetTester tester) async {
   expect(find.text('NASIL OYNANIR'), findsOneWidget);
@@ -377,6 +392,38 @@ void main() {
       Navigator.of(tester.element(find.byType(ZorlukSureSecimSayfasi))).pop();
       await tester.pumpAndSettle();
     }
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('gün değişince dünkü yarım oyun bugüne taşınmaz, kurallar ve zorluk yeniden sorulur', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+    final bugun = _SahteBugun('2026-11-09');
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        kullaniciProvider.overrideWithValue(const KullaniciBilgisi(ad: 'Celal Test')),
+        bugunOynananlarProvider.overrideWith((ref) async => {}),
+        bugunkuIzgaraProvider.overrideWith((ref) async => null),
+        bugunProvider.overrideWith(() => bugun),
+        // Dün Kesişim'in ortası süresiz açılıp yarım bırakıldı; bugün kayıt yok
+        bugunkuModProvider.overrideWith((ref, oyun) async =>
+            ref.watch(bugunProvider) == '2026-11-09' && oyun == 'kesisim' ? (zorluk: 1, bitti: false) : null),
+      ],
+      child: MaterialApp(theme: uygulamaTemasi(), home: const HomeScreen()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Devam et'), findsOneWidget);
+
+    // Uygulama açıkken gece yarısı geçti
+    bugun.tarih = '2026-11-10';
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GameScreen), findsNothing);
+    expect(find.text('NASIL OYNANIR'), findsOneWidget);
+    expect(find.text('Devam et'), findsNothing);
     await ekraniKapat(tester);
   });
 
