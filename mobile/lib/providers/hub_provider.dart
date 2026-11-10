@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -21,6 +24,38 @@ Duration yenilenmeyeKalanSure() {
   final geceYarisi = DateTime.utc(simdi.year, simdi.month, simdi.day + 1);
   return geceYarisi.difference(simdi);
 }
+
+// Bugünün tarihi (Türkiye saatiyle). Gece yarısı ve uygulama arka plandan dönünce güncellenir; bugünkü oyunları okuyan
+// provider'lar bunu izler ve gün değişince yeniden okunur. Yoksa uygulama açık kalınca ya da ertesi gün arka plandan
+// dönünce dünkü zorluk ve süre bugünün oyunu gibi açılıyordu.
+class BugunNotifier extends Notifier<String> {
+  Timer? _zamanlayici;
+
+  @override
+  String build() {
+    final dinleyici = AppLifecycleListener(onResume: kontrolEt);
+    ref.onDispose(() {
+      _zamanlayici?.cancel();
+      dinleyici.dispose();
+    });
+    _geceYarisinaKur();
+    return bugununTarihi();
+  }
+
+  // Gün değiştiyse tarihi günceller
+  void kontrolEt() {
+    final bugun = bugununTarihi();
+    if (bugun != state) state = bugun;
+    _geceYarisinaKur();
+  }
+
+  void _geceYarisinaKur() {
+    _zamanlayici?.cancel();
+    _zamanlayici = Timer(yenilenmeyeKalanSure() + const Duration(seconds: 1), kontrolEt);
+  }
+}
+
+final bugunProvider = NotifierProvider<BugunNotifier, String>(BugunNotifier.new);
 
 class KullaniciBilgisi {
   final String ad; // Tam ad
@@ -48,6 +83,7 @@ final kullaniciProvider = Provider<KullaniciBilgisi?>((ref) {
 
 // Kullanıcının bugün oynadığı oyunlar: oyun_tipi -> skor
 final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((ref) async {
+  final bugun = ref.watch(bugunProvider);
   final supabase = Supabase.instance.client;
   final userId = supabase.auth.currentUser?.id;
   if (userId == null) return {};
@@ -56,7 +92,7 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
       .from('kullanici_oyun_gecmisi')
       .select('oyun_tipi, skor, durum')
       .eq('kullanici_id', userId)
-      .eq('tarih', bugununTarihi());
+      .eq('tarih', bugun);
 
   return {
     for (final kayit in kayitlar)
@@ -73,6 +109,7 @@ typedef BugunkuMod = ({int zorluk, bool bitti});
 
 // Parametre oyunun tipidir: kesisim, bonservis, izgara ya da bingo. Zorluk modu olmayan oyunda (Bingo) zorluk 0'dır.
 final bugunkuModProvider = FutureProvider.autoDispose.family<BugunkuMod?, String>((ref, oyun) async {
+  final bugun = ref.watch(bugunProvider);
   final supabase = Supabase.instance.client;
   final userId = supabase.auth.currentUser?.id;
   final altTipler = oyunModlari.firstWhere((m) => m.tip == oyun).oyunTipleri;
@@ -82,7 +119,7 @@ final bugunkuModProvider = FutureProvider.autoDispose.family<BugunkuMod?, String
       .from('kullanici_oyun_gecmisi')
       .select('oyun_tipi, durum')
       .eq('kullanici_id', userId)
-      .eq('tarih', bugununTarihi())
+      .eq('tarih', bugun)
       .inFilter('oyun_tipi', altTipler);
 
   final durumlar = {for (final kayit in kayitlar) kayit['oyun_tipi'] as String: kayit['durum'] as String?};

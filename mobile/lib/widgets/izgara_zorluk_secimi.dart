@@ -26,6 +26,8 @@ Future<void> zorlukluOyunuAc(
   int? zorluk;
   OyunSuresi sure = OyunSuresi.suresiz;
 
+  // Gün değiştiyse dünkü zorluk bugüne taşınmasın: bugünkü kayıt yeni tarihle okunur
+  ref.read(bugunProvider.notifier).kontrolEt();
   try {
     zorluk = (await ref.read(bugunkuModProvider(oyun).future))?.zorluk;
   } catch (_) {
@@ -74,6 +76,7 @@ Future<void> tekModluOyunuAc(
   var sure = OyunSuresi.suresiz;
   bool baslandi;
 
+  ref.read(bugunProvider.notifier).kontrolEt();
   try {
     baslandi = await ref.read(bugunkuModProvider(oyunTipi).future) != null;
   } catch (_) {
@@ -112,6 +115,7 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
   IzgaraZorlugu? acilacak;
   OyunSuresi sure = OyunSuresi.suresiz;
 
+  ref.read(bugunProvider.notifier).kontrolEt();
   try {
     acilacak = (await ref.read(bugunkuIzgaraProvider.future))?.zorluk;
   } catch (_) {
