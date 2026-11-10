@@ -43,6 +43,21 @@ void main() {
     expect(find.text('KOLAY'), findsOneWidget);
   });
 
+  testWidgets('etiket sorunun kademesini değil oynanan modu gösterir', (tester) async {
+    final depo = SahteOyunDeposu();
+    // Zor modun ilk sorusu ünlü kademesinden: soru verisinde 'kolay' yazar
+    (depo.oyun!['soru_verisi'] as List)[0]['zorluk'] = 'kolay';
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [oyunDeposuProvider.overrideWithValue(depo)],
+      child: const MaterialApp(home: GameScreen(oyunTipi: 'kesisim_zor')),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ZOR'), findsOneWidget);
+    expect(find.text('KOLAY'), findsNothing);
+  });
+
   testWidgets('logosu olan kulübün logosu, olmayanın kalkan ikonu görünür', (tester) async {
     await ekraniAc(tester, (d) {
       final sorular = d.oyun!['soru_verisi'] as List;

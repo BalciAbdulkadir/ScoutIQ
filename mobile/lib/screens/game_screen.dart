@@ -71,7 +71,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   Widget _oyun(GameState state) {
     final soru = state.questions[state.currentIndex] as Map<String, dynamic>;
-    final zorluk = _zorluk(soru['zorluk'] as String?);
+    // Etiket oynanan modu gösterir. Sorudaki 'zorluk' sorunun kendi kademesidir: zor modda da ünlü sorular vardır.
+    final zorluk = _zorluk(widget.oyunTipi.split('_').last);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
