@@ -75,17 +75,31 @@ class BingoKarti {
   }
 }
 
+// Destede sıra döner (023_bingo_sinirsiz_pas.sql'deki bingo_siradaki ile aynı): son gelen oyuncudan sonraki,
+// henüz yerleşmemiş ilk oyuncu; destenin sonundan başa dönülür. Pas geçilen oyuncu böylece sırası gelince tekrar gelir.
+// Sıralar 1'den başlar; son 0 ise henüz oyuncu gelmemiştir. Yerleşmemiş oyuncu kalmadıysa null.
+int? bingoSiradaki({required int desteBoyutu, required Set<int> yerlesenler, required int son}) {
+  for (var adim = 1; adim <= desteBoyutu; adim++) {
+    final sira = (son + adim - 1) % desteBoyutu + 1;
+    if (!yerlesenler.contains(sira)) return sira;
+  }
+  return null;
+}
+
 // bingo_hamleleri tablosundaki bir satır. hucre null: pas.
 class BingoHamlesi {
-  final int sira; // Destedeki sıra, 1'den başlar
+  final int sira; // Kullanıcının kaçıncı hamlesi, 1'den başlar
+  final int oyuncu; // Hamlede gelen oyuncunun destedeki sırası, 1'den başlar
   final int? hucre;
   final bool dogru;
 
-  const BingoHamlesi({required this.sira, this.hucre, required this.dogru});
+  const BingoHamlesi({required this.sira, int? oyuncu, this.hucre, required this.dogru}) : oyuncu = oyuncu ?? sira;
 
   factory BingoHamlesi.fromJson(Map<String, dynamic> json) {
     return BingoHamlesi(
       sira: (json['sira'] as num).toInt(),
+      // 023'ten önceki hamlelerde oyuncu kolonu yoktu: destedeki sıra hamle sırasıyla aynıydı
+      oyuncu: (json['oyuncu'] as num?)?.toInt(),
       hucre: (json['hucre'] as num?)?.toInt(),
       dogru: json['dogru'] == true,
     );
@@ -99,8 +113,16 @@ class BingoHamleSonucu {
   final int skor;
   final bool bitti;
   final bool sureDoldu; // Süre dolduğu için hamle kabul edilmedi, oyun bitti
+  final int? siradaki; // Sunucuya göre sıradaki oyuncunun destedeki sırası; eski sunucu göndermez
 
-  const BingoHamleSonucu({required this.dogru, this.hucre, required this.skor, required this.bitti, this.sureDoldu = false});
+  const BingoHamleSonucu({
+    required this.dogru,
+    this.hucre,
+    required this.skor,
+    required this.bitti,
+    this.sureDoldu = false,
+    this.siradaki,
+  });
 
   factory BingoHamleSonucu.fromJson(Map<String, dynamic> json) {
     return BingoHamleSonucu(
@@ -109,6 +131,7 @@ class BingoHamleSonucu {
       skor: (json['skor'] as num).toInt(),
       bitti: json['bitti'] == true,
       sureDoldu: json['sure_doldu'] == true,
+      siradaki: (json['siradaki'] as num?)?.toInt(),
     );
   }
 }

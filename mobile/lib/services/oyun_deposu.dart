@@ -76,7 +76,7 @@ abstract class OyunDeposu {
   // Kullanıcının bu karttaki hamleleri, sırayla. Uygulama yeniden açılınca kart bunlarla kurulur.
   Future<List<BingoHamlesi>> bingoHamleleri(String oyunId);
 
-  // Destedeki sira. oyuncuyu hucre kutusuna koyar; hucre null ise pas geçer
+  // Kullanıcının sira. hamlesi: sıradaki oyuncuyu hucre kutusuna koyar; hucre null ise pas geçer
   Future<BingoHamleSonucu> bingoHamle({required String oyunId, required int sira, int? hucre});
 
   // Oyunu o anki skorla bitirir, skoru döndürür
@@ -252,7 +252,7 @@ class SupabaseOyunDeposu implements OyunDeposu {
   Future<List<BingoHamlesi>> bingoHamleleri(String oyunId) async {
     final satirlar = await _supabase
         .from('bingo_hamleleri')
-        .select('sira, hucre, dogru')
+        .select('sira, oyuncu, hucre, dogru')
         .eq('kullanici_id', kullaniciId!)
         .eq('oyun_id', oyunId)
         .order('sira');

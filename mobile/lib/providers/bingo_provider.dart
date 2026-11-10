@@ -15,7 +15,9 @@ class BingoState {
   final BingoKarti? kart;
   final String? oyunId;
   final Map<int, BingoOyuncusu> hucreler; // Dolu kutular: kutu (0-11) -> oyuncu
-  final int oynanan; // Destede sırası geçmiş oyuncu sayısı (yerleşen ya da pas geçilen)
+  final int hamleSayisi; // Sunucuya kaydedilen hamle sayısı (yerleşen ya da pas geçilen oyuncular)
+  final int? siradakiSira; // Sıradaki oyuncunun destedeki sırası (1'den); kalmadıysa null
+  final Set<int> yerlesenler; // Kutuya yerleşmiş oyuncuların destedeki sıraları: bunlar bir daha gelmez
   final bool gonderiliyor; // Hamle ya da pes etme sunucuda işlenirken ikinci isteği engeller
   final String? hataMesaji; // durum 'hata' iken gösterilir
   final SonBingoHamlesi? sonHamle;
@@ -29,7 +31,9 @@ class BingoState {
     this.kart,
     this.oyunId,
     this.hucreler = const {},
-    this.oynanan = 0,
+    this.hamleSayisi = 0,
+    this.siradakiSira,
+    this.yerlesenler = const {},
     this.gonderiliyor = false,
     this.hataMesaji,
     this.sonHamle,
@@ -42,10 +46,12 @@ class BingoState {
   // Skor dolu kutu sayısıdır
   int get skor => hucreler.length;
 
-  // Sırası gelen oyuncu; deste bittiyse null
-  BingoOyuncusu? get siradaki => kart != null && oynanan < kart!.deste.length ? kart!.deste[oynanan] : null;
-
-  int get kalanOyuncu => (kart?.deste.length ?? 0) - oynanan;
+  // Sırası gelen oyuncu; oyuncu kalmadıysa null
+  BingoOyuncusu? get siradaki {
+    final sira = siradakiSira;
+    if (kart == null || sira == null || sira < 1 || sira > kart!.deste.length) return null;
+    return kart!.deste[sira - 1];
+  }
 
   // Sıradaki oyuncunun az önce yanlış konduğu kutu: kartta kırmızı gösterilir, oyuncu başka kutu deneyebilir
   int? get yanlisKutu {
@@ -59,7 +65,9 @@ class BingoState {
     BingoKarti? kart,
     String? oyunId,
     Map<int, BingoOyuncusu>? hucreler,
-    int? oynanan,
+    int? hamleSayisi,
+    int? Function()? siradakiSira,
+    Set<int>? yerlesenler,
     bool? gonderiliyor,
     String? hataMesaji,
     SonBingoHamlesi? sonHamle,
@@ -73,7 +81,9 @@ class BingoState {
       kart: kart ?? this.kart,
       oyunId: oyunId ?? this.oyunId,
       hucreler: hucreler ?? this.hucreler,
-      oynanan: oynanan ?? this.oynanan,
+      hamleSayisi: hamleSayisi ?? this.hamleSayisi,
+      siradakiSira: siradakiSira != null ? siradakiSira() : this.siradakiSira,
+      yerlesenler: yerlesenler ?? this.yerlesenler,
       gonderiliyor: gonderiliyor ?? this.gonderiliyor,
       hataMesaji: hataMesaji ?? this.hataMesaji,
       sonHamle: sonHamle ?? this.sonHamle,
@@ -87,9 +97,11 @@ class BingoState {
 
 // Bingo oyunu. Destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
 // Yanlış kutuya konan oyuncu gitmez, ceza da yoktur: başka kutu denenebilir. Oyuncu sadece doğru kutuya konunca
-// ya da pas geçilince sıradakine geçilir.
+// ya da pas geçilince sıradakine geçilir. Pas sınırsızdır: destede sıra döner, pas geçilen oyuncu tekrar gelir
+// (bingoSiradaki). Kutuya yerleşen oyuncu bir daha gelmez.
 // Hamleler sunucuda tutulduğu için yarıda bırakılan kart tekrar açılınca kaldığı yerden devam eder; skor istemciden alınmaz.
-// Oyun bütün kutular dolunca, deste bitince, pes edilince ya da süre dolunca biter.
+// Oyun bütün kutular dolunca, pes edilince ya da süre dolunca biter. Kalan oyuncuların hiçbiri boş kutulara uymuyorsa
+// sunucu oyunu bitirir.
 class BingoNotifier extends Notifier<BingoState> {
   final GunlukOyunSecimi secim;
 
@@ -150,11 +162,18 @@ class BingoNotifier extends Notifier<BingoState> {
       final hamleler = await _depo.bingoHamleleri(oyunId);
       if (!ref.mounted) return;
 
-      final hucreler = {
+      final yerlesenHamleler = [
         for (final h in hamleler)
-          if (h.dogru && h.hucre != null && h.sira <= kart.deste.length) h.hucre!: kart.deste[h.sira - 1],
-      };
-      var bitti = kayit['durum'] == 'tamamlandi' || hucreler.length >= kart.hucreSayisi || hamleler.length >= kart.deste.length;
+          if (h.dogru && h.hucre != null && h.oyuncu >= 1 && h.oyuncu <= kart.deste.length) h,
+      ];
+      final hucreler = {for (final h in yerlesenHamleler) h.hucre!: kart.deste[h.oyuncu - 1]};
+      final yerlesenler = {for (final h in yerlesenHamleler) h.oyuncu};
+      final siradakiSira = bingoSiradaki(
+        desteBoyutu: kart.deste.length,
+        yerlesenler: yerlesenler,
+        son: hamleler.isEmpty ? 0 : hamleler.last.oyuncu,
+      );
+      var bitti = kayit['durum'] == 'tamamlandi' || hucreler.length >= kart.hucreSayisi || siradakiSira == null;
 
       // Süre: yeni oyunda seçilen süre başlatılır, yarım kalan oyunda sunucudaki kalan süre okunur
       OyunSuresiDurumu? sure;
@@ -180,7 +199,9 @@ class BingoNotifier extends Notifier<BingoState> {
         kart: kart,
         oyunId: oyunId,
         hucreler: hucreler,
-        oynanan: hamleler.length,
+        hamleSayisi: hamleler.length,
+        siradakiSira: () => siradakiSira,
+        yerlesenler: yerlesenler,
         sureSaniye: sure?.toplam,
         bitisZamani: sure == null || sureDoldu ? null : DateTime.now().add(Duration(seconds: sure.kalan)),
         sureDoldu: sureDoldu,
@@ -203,12 +224,13 @@ class BingoNotifier extends Notifier<BingoState> {
 
   Future<String?> _hamle(int? hucre) async {
     final oyuncu = state.siradaki;
-    if (state.durum != BingoDurumu.oynaniyor || state.gonderiliyor || oyuncu == null) return null;
+    final oyuncuSira = state.siradakiSira;
+    if (state.durum != BingoDurumu.oynaniyor || state.gonderiliyor || oyuncu == null || oyuncuSira == null) return null;
     state = state.copyWith(gonderiliyor: true);
 
     BingoHamleSonucu sonuc;
     try {
-      sonuc = await _depo.bingoHamle(oyunId: state.oyunId!, sira: state.oynanan + 1, hucre: hucre);
+      sonuc = await _depo.bingoHamle(oyunId: state.oyunId!, sira: state.hamleSayisi + 1, hucre: hucre);
     } catch (_) {
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
@@ -217,14 +239,25 @@ class BingoNotifier extends Notifier<BingoState> {
     if (!ref.mounted) return null;
 
     final hucreler = {...state.hucreler};
-    if (sonuc.dogru && sonuc.hucre != null) hucreler[sonuc.hucre!] = oyuncu;
+    final yerlesenler = {...state.yerlesenler};
+    if (sonuc.dogru && sonuc.hucre != null) {
+      hucreler[sonuc.hucre!] = oyuncu;
+      yerlesenler.add(oyuncuSira);
+    }
     // Yanlış kutu hamle sayılmaz: oyuncu sırada kalır
-    final yanlisKutu = hucre != null && !sonuc.dogru;
+    final kaydedildi = !sonuc.sureDoldu && !(hucre != null && !sonuc.dogru);
+    // Sıradaki oyuncuyu sunucu söyler; söylemezse aynı kuralla burada bulunur
+    final siradakiSira = kaydedildi
+        ? sonuc.siradaki ??
+            bingoSiradaki(desteBoyutu: state.kart!.deste.length, yerlesenler: yerlesenler, son: oyuncuSira)
+        : oyuncuSira;
 
     state = state.copyWith(
       durum: sonuc.bitti ? BingoDurumu.bitti : BingoDurumu.oynaniyor,
       hucreler: hucreler,
-      oynanan: sonuc.sureDoldu || yanlisKutu ? state.oynanan : state.oynanan + 1,
+      yerlesenler: yerlesenler,
+      hamleSayisi: kaydedildi ? state.hamleSayisi + 1 : state.hamleSayisi,
+      siradakiSira: () => siradakiSira,
       sonHamle: sonuc.sureDoldu ? null : (oyuncu: oyuncu, hucre: hucre, dogru: sonuc.dogru),
       gonderiliyor: false,
       sureDoldu: sonuc.sureDoldu,
