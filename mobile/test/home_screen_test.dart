@@ -11,6 +11,7 @@ import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/izgara_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
+import 'package:mobile/widgets/izgara_zorluk_secimi.dart';
 
 import 'bonservis_test.dart' show sorular;
 import 'izgara_test.dart' show ornekTahta;
@@ -38,6 +39,13 @@ Future<void> anaMenuyuAc(
     child: MaterialApp(theme: uygulamaTemasi(), home: const HomeScreen()),
   ));
   await tester.pump();
+}
+
+// Oyuna ilk dokunuşta gelen kural sayfasını geçer
+Future<void> kurallariGec(WidgetTester tester) async {
+  expect(find.text('NASIL OYNANIR'), findsOneWidget);
+  await tester.tap(find.textContaining('ANLADIM'));
+  await tester.pumpAndSettle();
 }
 
 // Günlük şerit her saniye güncellenen bir zamanlayıcı kullanır: test bitmeden ekranı kapatıyoruz
@@ -81,6 +89,7 @@ void main() {
 
     await tester.tap(find.text('KESİŞİM'));
     await tester.pumpAndSettle();
+    await kurallariGec(tester);
 
     expect(find.text('1 · ZORLUK SEÇ'), findsOneWidget);
     expect(find.text('Sadece ünlü oyuncular'), findsOneWidget);
@@ -138,6 +147,7 @@ void main() {
 
     await tester.tap(find.text('IZGARA'));
     await tester.pumpAndSettle();
+    await kurallariGec(tester);
 
     expect(find.text('1 · ZORLUK SEÇ'), findsOneWidget);
     expect(find.text('KOLAY'), findsOneWidget);
@@ -174,6 +184,7 @@ void main() {
 
     await tester.tap(find.text('BONSERVİS'));
     await tester.pumpAndSettle();
+    await kurallariGec(tester);
     await tester.tap(find.text('KOLAY'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('∞'));
@@ -237,6 +248,7 @@ void main() {
 
     await tester.tap(find.text('IZGARA'));
     await tester.pumpAndSettle();
+    await kurallariGec(tester);
     await tester.tap(find.text('ZOR'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('← Zorluğu değiştir'));
@@ -306,6 +318,7 @@ void main() {
 
     await tester.tap(find.text('BİNGO'));
     await tester.pumpAndSettle();
+    await kurallariGec(tester);
     expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
     expect(find.text('∞'), findsOneWidget);
     expect(find.text('30'), findsNothing);
@@ -320,6 +333,50 @@ void main() {
     final ekran = tester.widget<BingoScreen>(find.byType(BingoScreen));
     expect(ekran.oyunTipi, 'bingo');
     expect(ekran.sure, 60);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('oyuna ilk dokunuşta önce kurallar ve puanlama gösterilir, kurallara geri dönülebilir', (tester) async {
+    await anaMenuyuAc(tester);
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('NASIL OYNANIR'), findsOneWidget);
+    expect(find.textContaining('5 soru var'), findsOneWidget);
+    expect(find.text('Her doğru cevap 2 puan. En fazla 10 puan.'), findsOneWidget);
+    expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
+
+    await tester.tap(find.text('ANLADIM · ZORLUK SEÇ'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 · ZORLUK SEÇ'), findsOneWidget);
+
+    await tester.tap(find.text('← Kurallara dön'));
+    await tester.pumpAndSettle();
+    expect(find.text('NASIL OYNANIR'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets("her oyunun önizlemesinde kendi kuralları var, Bingo'da süre seçimine geçilir", (tester) async {
+    await anaMenuyuAc(tester);
+
+    for (final (oyun, puan) in [
+      ('BONSERVİS', 'Her doğru tahmin 2 puan. En fazla 10 puan.'),
+      ('IZGARA', 'Her dolu kutu 1 puan. En fazla 9 puan.'),
+      ('BİNGO', 'Her dolu kutu 1 puan. En fazla 12 puan.'),
+    ]) {
+      await tester.tap(find.text(oyun).first);
+      await tester.pumpAndSettle();
+      expect(find.text('NASIL OYNANIR'), findsOneWidget);
+      expect(find.text(puan), findsOneWidget);
+      if (oyun == 'BİNGO') {
+        await tester.tap(find.text('ANLADIM · SÜRE SEÇ'));
+        await tester.pumpAndSettle();
+        expect(find.text('SÜRE SEÇ'), findsWidgets);
+      }
+      Navigator.of(tester.element(find.byType(ZorlukSureSecimSayfasi))).pop();
+      await tester.pumpAndSettle();
+    }
     await ekraniKapat(tester);
   });
 

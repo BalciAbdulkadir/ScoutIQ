@@ -63,6 +63,7 @@ class OyunKarti extends StatelessWidget {
           style: TextStyle(
             color: _yakinda ? Renkler.metinSoluk : Renkler.metinIkincil,
             fontSize: 12,
+            fontWeight: FontWeight.w500,
             height: 1.3,
           ),
         ),

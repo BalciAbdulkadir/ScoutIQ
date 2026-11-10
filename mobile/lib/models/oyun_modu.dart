@@ -19,6 +19,8 @@ class OyunModu {
   final List<String>? zorlukAciklamalari;
   // Oyun başlarken seçilebilen süreler
   final List<OyunSuresi> sureSecenekleri;
+  // Oyuna ilk dokunuşta gösterilen kurallar
+  final OyunOnizlemesi? onizleme;
 
   const OyunModu({
     this.tip,
@@ -32,6 +34,7 @@ class OyunModu {
     this.altTipler,
     this.zorlukAciklamalari,
     this.sureSecenekleri = OyunSuresi.values,
+    this.onizleme,
   });
 
   // Bu modun veritabanındaki günlük oyun tipleri
@@ -39,6 +42,15 @@ class OyunModu {
 
   // Zorluk seçilerek oynanan mod. Bu modlarda günde yalnızca bir zorluk oynanır.
   bool get zorluklu => altTipler != null;
+}
+
+// Oyun başlamadan gösterilen önizleme: oyunun ne olduğu, kuralları ve puanlaması
+class OyunOnizlemesi {
+  final String ozet;
+  final List<String> kurallar;
+  final String puanlama;
+
+  const OyunOnizlemesi({required this.ozet, required this.kurallar, required this.puanlama});
 }
 
 // Zorluklu oyunlarda altTipler sırasıyla zorlukların adı
@@ -77,6 +89,16 @@ const List<OyunModu> oyunModlari = [
     maksimumSkor: 10,
     altTipler: ['kesisim_kolay', 'kesisim_orta', 'kesisim_zor'],
     zorlukAciklamalari: _oyuncuZorluklari,
+    onizleme: OyunOnizlemesi(
+      ozet: 'Ekranda iki kulüp var. Kariyerinde bu iki kulübün ikisinde de forma giymiş bir oyuncu bul.',
+      kurallar: [
+        '5 soru var. Her soruda oyuncunun adını yaz ve listeden seç.',
+        'Birden fazla doğru cevap olabilir, herhangi biri kabul edilir.',
+        'Her soruda tek hakkın var. Doğru da bilsen yanlış da, sıradaki soruya geçilir.',
+        'Zorluk, sorulardaki oyuncuların ne kadar tanındığına göre değişir.',
+      ],
+      puanlama: 'Her doğru cevap 2 puan. En fazla 10 puan.',
+    ),
   ),
   OyunModu(
     tip: 'bonservis',
@@ -89,6 +111,16 @@ const List<OyunModu> oyunModlari = [
     maksimumSkor: 10, // 5 soru, her doğru 2 puan
     altTipler: ['bonservis_kolay', 'bonservis_orta', 'bonservis_zor'],
     zorlukAciklamalari: _oyuncuZorluklari,
+    onizleme: OyunOnizlemesi(
+      ozet: 'İki oyuncunun kariyerleri boyunca hakkında ödenen toplam bonservisi karşılaştır.',
+      kurallar: [
+        'Üstteki oyuncunun toplam bonservisi açıkça yazar.',
+        'Alttaki oyuncunun toplamı ondan daha fazla mı, daha az mı? Tahminini yap.',
+        '5 soru var. Yanlış tahminde oyun bitmez, sıradaki soruya geçilir.',
+        'Zorluk, sorulardaki oyuncuların ne kadar tanındığına göre değişir.',
+      ],
+      puanlama: 'Her doğru tahmin 2 puan. En fazla 10 puan.',
+    ),
   ),
   OyunModu(
     tip: 'izgara',
@@ -102,6 +134,17 @@ const List<OyunModu> oyunModlari = [
     // Her zorluk ayrı bir tahta; kullanıcı günde bunlardan yalnızca birini seçip oynar
     altTipler: ['izgara_kolay', 'izgara_orta', 'izgara_zor'],
     // Zorluk açıklamaları IzgaraZorlugu'nda
+    onizleme: OyunOnizlemesi(
+      ozet: '3x3 tahtada her kutu bir satır ve bir sütun başlığının kesiştiği yerdir. '
+          'Kutuya, iki başlığa da uyan bir oyuncu gerekir.',
+      kurallar: [
+        'Oyuncunun adını yaz ve listeden seç. Kutu seçmene gerek yok, doğru oyuncu uyduğu kutuya kendisi yerleşir.',
+        'Başlıklar kulüp ya da milli takım olabilir. Orta ve Zor tahtada milli takımlar da gelir.',
+        'Tahmin hakkın sınırsız. Aynı oyuncuyu iki kez kullanamazsın.',
+        'Oyun dokuz kutu dolunca, pes edince ya da süre bitince sona erer.',
+      ],
+      puanlama: 'Her dolu kutu 1 puan. En fazla 9 puan.',
+    ),
   ),
   OyunModu(
     tip: 'bingo',
@@ -114,5 +157,17 @@ const List<OyunModu> oyunModlari = [
     maksimumSkor: 12,
     // Zorluk modu yoktur: 12 kutulu tek kart, destede ünlü ve bilinen oyuncular. Kart her zaman doldurulabilir.
     sureSecenekleri: [OyunSuresi.suresiz, OyunSuresi.saniye60, OyunSuresi.saniye90],
+    onizleme: OyunOnizlemesi(
+      ozet: '12 kutulu bir kart var: kulüpler, milli takımlar, ligler ve başarılar. '
+          'Desteden oyuncular sırayla gelir, her birini uyduğu kutuya koy.',
+      kurallar: [
+        'Gelen oyuncuyu kariyerine uyan kutuya dokunarak yerleştir. Uyan kutu yoksa pas geç.',
+        'Yanlış kutuya dokunursan oyuncu gitmez, ceza da yok. Başka kutu deneyebilirsin.',
+        'Oyuncu sadece doğru kutuya konunca ya da pas geçince gider. Dolu kutuya oyuncu konmaz.',
+        'Destede 16 oyuncu var. Kart her zaman tamamen doldurulabilir.',
+        'Zorluk modu yok, herkes aynı kartı oynar. Oyun kart dolunca, deste bitince, pes edince ya da süre bitince sona erer.',
+      ],
+      puanlama: 'Her dolu kutu 1 puan. En fazla 12 puan.',
+    ),
   ),
 ];
