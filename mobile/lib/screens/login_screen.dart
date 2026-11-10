@@ -79,10 +79,7 @@ class _OrtaSaha extends StatelessWidget {
     return SizedBox(
       width: 220,
       height: 140,
-      child: CustomPaint(
-        painter: _OrtaSahaCizeri(),
-        child: const Center(child: TebesirIkonu(cizim: TebesirCizimi.kesisim, boyut: 40)),
-      ),
+      child: CustomPaint(painter: _OrtaSahaCizeri()),
     );
   }
 }

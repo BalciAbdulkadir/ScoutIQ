@@ -99,9 +99,10 @@ class _IkonCizeri extends CustomPainter {
         );
         canvas.drawCircle(const Offset(31.5, 31.5), 2.6, sari);
       case TebesirCizimi.bingo:
+        // Oyundaki kart gibi 4 satır, 3 sütun
         for (final x in [11.0, 22.0, 33.0]) {
-          for (final y in [11.0, 22.0, 33.0]) {
-            canvas.drawCircle(Offset(x, y), 3, beyaz);
+          for (final y in [7.0, 17.0, 27.0, 37.0]) {
+            canvas.drawCircle(Offset(x, y), 2.8, beyaz);
           }
         }
     }
