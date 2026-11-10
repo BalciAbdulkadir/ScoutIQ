@@ -44,6 +44,7 @@ Future<void> zorlukluOyunuAc(
           for (var i = 0; i < altTipler.length; i++) (ad: zorlukAdlari[i], aciklama: mod.zorlukAciklamalari?[i] ?? ''),
         ],
         sureler: mod.sureSecenekleri,
+        onizleme: mod.onizleme,
       ),
     );
     if (secim == null || !context.mounted) return;
@@ -88,6 +89,7 @@ Future<void> tekModluOyunuAc(
         oyunAdi: mod.baslik,
         cizim: mod.cizim ?? TebesirCizimi.kesisim,
         sureler: mod.sureSecenekleri,
+        onizleme: mod.onizleme,
       ),
     );
     if (secim == null || !context.mounted) return;
@@ -125,6 +127,7 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
         oyunAdi: 'Izgara',
         cizim: TebesirCizimi.izgara,
         zorluklar: [for (final z in IzgaraZorlugu.values) (ad: z.ad, aciklama: z.aciklama)],
+        onizleme: oyunModlari.firstWhere((m) => m.tip == 'izgara').onizleme,
       ),
     );
     if (secim == null || !context.mounted) return;
@@ -143,13 +146,14 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
 // Seçim sayfasının sonucu: zorluğun sırası (0 kolay, 1 orta, 2 zor; zorluksuz oyunda null) ve süre
 typedef ZorlukSureSecimi = ({int? zorluk, OyunSuresi sure});
 
-// Oyun başlamadan açılan alt sayfa. Zorluklu oyunda (Izgara) iki adımlıdır: önce 3 zorluktan biri,
-// sonra 4 süreden biri. Zorluksuz oyunda (Kesişim, Bonservis) sadece süre seçilir.
+// Oyun başlamadan açılan alt sayfa. Önizleme verildiyse önce oyunun kuralları gösterilir.
+// Zorluklu oyunda sonra 3 zorluktan biri, ardından süre seçilir. Zorluksuz oyunda (Bingo) sadece süre seçilir.
 class ZorlukSureSecimSayfasi extends StatefulWidget {
   final String oyunAdi;
   final TebesirCizimi cizim;
   final List<({String ad, String aciklama})>? zorluklar; // null: zorluksuz oyun
   final List<OyunSuresi> sureler; // Seçilebilen süreler
+  final OyunOnizlemesi? onizleme; // Doluysa sayfa kurallarla açılır
 
   const ZorlukSureSecimSayfasi({
     super.key,
@@ -157,6 +161,7 @@ class ZorlukSureSecimSayfasi extends StatefulWidget {
     required this.cizim,
     this.zorluklar,
     this.sureler = OyunSuresi.values,
+    this.onizleme,
   });
 
   @override
@@ -166,6 +171,7 @@ class ZorlukSureSecimSayfasi extends StatefulWidget {
 class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
   int? _zorluk;
   OyunSuresi? _sure;
+  late bool _onizlemede = widget.onizleme != null;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +187,11 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
           alignment: Alignment.topCenter,
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: zorluksuz || zorluk != null ? _sureAdimi(zorluk) : _zorlukAdimi(),
+            child: _onizlemede
+                ? _onizlemeAdimi(widget.onizleme!)
+                : zorluksuz || zorluk != null
+                    ? _sureAdimi(zorluk)
+                    : _zorlukAdimi(),
           ),
         ),
       ),
@@ -221,6 +231,98 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
         child: Text(Yazi.buyuk(metin), style: Yazi.etiket(renk: Renkler.vurgu)),
       );
 
+  // Seçim adımından kurallara geri dönüş
+  Widget _kurallaraDon() {
+    if (widget.onizleme == null) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton(
+        onPressed: () => setState(() => _onizlemede = true),
+        style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil, padding: EdgeInsets.zero),
+        child: const Text('← Kurallara dön'),
+      ),
+    );
+  }
+
+  // Oyunun önizlemesi: ne olduğu, numaralı kurallar ve puanlama. Uzun metin kaydırılır, buton hep altta durur.
+  Widget _onizlemeAdimi(OyunOnizlemesi onizleme) {
+    final zorluksuz = widget.zorluklar == null;
+    return ConstrainedBox(
+      key: const ValueKey('onizleme'),
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.78),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _baslik(aciklama: zorluksuz ? 'Tek mod · günde bir kart' : 'Kolay, Orta ya da Zor · günde bir zorluk'),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  Text(onizleme.ozet, style: const TextStyle(color: Renkler.metin, fontSize: 15, height: 1.45)),
+                  _adim('Nasıl oynanır'),
+                  for (final (i, kural) in onizleme.kurallar.indexed)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 26,
+                            child: Text('${i + 1}', style: Yazi.tebesir(20, renk: Renkler.vurgu)),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                kural,
+                                style: const TextStyle(color: Renkler.metinIkincil, fontSize: 14, height: 1.4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  TebesirKutusu(
+                    kesik: true,
+                    kenarRengi: Renkler.vurgu,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      children: [
+                        Text(Yazi.buyuk('Puan'), style: Yazi.etiket(renk: Renkler.vurgu)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            onizleme.puanlama,
+                            style: const TextStyle(color: Renkler.metin, fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Her oyun günde bir kez oynanır. Oyundan çıksan da kaldığın yerden devam edersin.',
+                    style: TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => setState(() => _onizlemede = false),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            child: Text(Yazi.buyuk(zorluksuz ? 'Anladım · süre seç' : 'Anladım · zorluk seç')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _zorlukAdimi() {
     final zorluklar = widget.zorluklar!;
     return Column(
@@ -229,6 +331,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _baslik(aciklama: 'Bugün yalnızca bir zorluk oynayabilirsin.'),
+        _kurallaraDon(),
         _adim('1 · Zorluk seç'),
         for (var i = 0; i < zorluklar.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
@@ -284,6 +387,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _baslik(aciklama: 'Süreyi seç, sonra başla.', secilenZorluk: zorlukAdi),
+        if (zorlukAdi == null) _kurallaraDon(),
         if (zorlukAdi != null)
           Align(
             alignment: Alignment.centerLeft,
