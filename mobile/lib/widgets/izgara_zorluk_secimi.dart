@@ -6,6 +6,7 @@ import '../providers/hub_provider.dart';
 import '../screens/izgara_screen.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import 'oyun_ornekleri.dart';
 import 'tebesir.dart';
 
 // Ana menüde Kesişim, Bonservis ya da Bingo kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipi ve süreyle
@@ -249,7 +250,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
     final zorluksuz = widget.zorluklar == null;
     return ConstrainedBox(
       key: const ValueKey('onizleme'),
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.78),
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -261,6 +262,8 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 16),
+                  OyunOrnegi(cizim: widget.cizim),
+                  const SizedBox(height: 14),
                   Text(onizleme.ozet, style: const TextStyle(color: Renkler.metin, fontSize: 15, height: 1.45)),
                   _adim('Nasıl oynanır'),
                   for (final (i, kural) in onizleme.kurallar.indexed)
