@@ -129,13 +129,6 @@ class BingoScreen extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Flexible(
-                child: Text(
-                  '${state.kalanOyuncu} oyuncu kaldı',
-                  overflow: TextOverflow.ellipsis,
-                  style: Yazi.tebesir(15, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400),
-                ),
-              ),
               const Spacer(),
               if (state.bitisZamani != null) ...[
                 SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),

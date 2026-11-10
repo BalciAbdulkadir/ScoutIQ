@@ -87,6 +87,8 @@ class SahteOyunDeposu implements OyunDeposu {
   // Bingo: destedeki sıra (1'den) -> oyuncunun uyduğu kutular. Listede olmayan oyuncu hiçbir kutuya uymaz.
   Map<int, List<int>> bingoEslesmeleri = {1: [0], 2: [5, 6]};
   int bingoDesteBoyutu = 16;
+  // Sunucunun hamleden sonra bildirdiği sıradaki oyuncu: false ise eski sunucu gibi göndermez, uygulama kendisi bulur
+  bool bingoSiradakiGonderir = true;
   int bingoKutuSayisi = 12;
   // Sunucudaki hamleler (uygulama yeniden açılınca okunur)
   List<BingoHamlesi> bingoHamleListesi = [];
@@ -262,7 +264,16 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<List<BingoHamlesi>> bingoHamleleri(String oyunId) async => List.of(bingoHamleListesi);
 
-  // 021_bingo_tek_mod.sql'deki bingo_hamle fonksiyonunun basit bir kopyası: yanlış kutu kaydedilmez, oyuncu sırada kalır
+  Set<int> get _bingoYerlesenler => {for (final h in bingoHamleListesi) if (h.dogru) h.oyuncu};
+
+  int? get _bingoSiradaki => bingoSiradaki(
+        desteBoyutu: bingoDesteBoyutu,
+        yerlesenler: _bingoYerlesenler,
+        son: bingoHamleListesi.isEmpty ? 0 : bingoHamleListesi.last.oyuncu,
+      );
+
+  // 023_bingo_sinirsiz_pas.sql'deki bingo_hamle fonksiyonunun basit bir kopyası: destede sıra döner, yanlış kutu
+  // kaydedilmez. Kalan oyuncuların hiçbiri boş kutulara uymuyorsa oyun biter.
   @override
   Future<BingoHamleSonucu> bingoHamle({required String oyunId, required int sira, int? hucre}) async {
     bingoHamleIstekleri.add((sira: sira, hucre: hucre));
@@ -271,12 +282,29 @@ class SahteOyunDeposu implements OyunDeposu {
       kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': 'tamamlandi'};
       return BingoHamleSonucu(dogru: false, skor: _bingoSkoru, bitti: true, sureDoldu: true);
     }
-    final dogru = hucre != null && (bingoEslesmeleri[sira] ?? const []).contains(hucre);
-    if (hucre != null && !dogru) return BingoHamleSonucu(dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: false);
-    bingoHamleListesi.add(BingoHamlesi(sira: sira, hucre: hucre, dogru: dogru));
-    final bitti = _bingoSkoru == bingoKutuSayisi || sira >= bingoDesteBoyutu;
+    if (sira != bingoHamleListesi.length + 1) throw Exception('Sıra hatalı');
+    final oyuncu = _bingoSiradaki!;
+    final dogru = hucre != null && (bingoEslesmeleri[oyuncu] ?? const []).contains(hucre);
+    if (hucre != null && !dogru) {
+      return BingoHamleSonucu(dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: false, siradaki: oyuncu);
+    }
+    bingoHamleListesi.add(BingoHamlesi(sira: sira, oyuncu: oyuncu, hucre: hucre, dogru: dogru));
+
+    final dolular = {for (final h in bingoHamleListesi) if (h.dogru) h.hucre};
+    final yerlesenler = _bingoYerlesenler;
+    final uyanVar = [
+      for (var o = 1; o <= bingoDesteBoyutu; o++)
+        if (!yerlesenler.contains(o)) ...(bingoEslesmeleri[o] ?? const <int>[]),
+    ].any((h) => !dolular.contains(h));
+    final bitti = _bingoSkoru == bingoKutuSayisi || !uyanVar;
     kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': bitti ? 'tamamlandi' : 'basladi'};
-    return BingoHamleSonucu(dogru: dogru, hucre: hucre, skor: _bingoSkoru, bitti: bitti);
+    return BingoHamleSonucu(
+      dogru: dogru,
+      hucre: hucre,
+      skor: _bingoSkoru,
+      bitti: bitti,
+      siradaki: bitti || !bingoSiradakiGonderir ? null : _bingoSiradaki,
+    );
   }
 
   @override

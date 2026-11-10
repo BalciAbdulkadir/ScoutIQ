@@ -80,20 +80,21 @@ public class BingoSoruSeciciTests
         foreach (var (tip, adet) in KartDagilimi)
             Assert.Equal(adet, kart.Hucreler.Count(h => h.Tip == tip));
 
-        // Deste: 16 farklı havuz oyuncusu, 8 ünlü ve 8 bilinen; az bilinen (diğer) oyuncu yok
+        // Deste: 32 farklı havuz oyuncusu, sadece ünlü ve bilinen; az bilinen (diğer) oyuncu yok
         Assert.Equal(DesteBoyutu, kart.Deste.Count);
         Assert.Equal(DesteBoyutu, kart.Deste.Distinct().Count());
         Assert.All(kart.Deste, o => Assert.True(veri.Kademeler.ContainsKey(o), $"Havuz dışı oyuncu destede: {o}"));
-        foreach (var kademe in Enum.GetValues<Kademe>())
-            Assert.Equal(DesteDagilimi.GetValueOrDefault(kademe), kart.Deste.Count(o => veri.Kademeler[o] == kademe));
+        Assert.All(kart.Deste, o => Assert.NotEqual(Kademe.Diger, veri.Kademeler[o]));
 
         // Eşleşmeler doğru: oyuncunun uyduğu bütün kutular, sadece onlar
         for (int i = 0; i < DesteBoyutu; i++)
         {
             var beklenen = Enumerable.Range(0, HucreSayisi).Where(h => veri.Kategoriler[kart.Hucreler[h]].Oyuncular.Contains(kart.Deste[i]));
             Assert.Equal(beklenen, kart.Eslesmeler[i]);
-            Assert.NotEmpty(kart.Eslesmeler[i]);
         }
+
+        // Kutuya uymayan oyuncu az: tam UymayanSayisi kadar
+        Assert.Equal(UymayanSayisi, kart.Eslesmeler.Count(e => e.Length == 0));
 
         // Kart doldurulabilir: her kutuya desteden ayrı bir oyuncu atanabilir
         Assert.True(TamEslesmeVar(kart), "Kart desteden doldurulamıyor");
@@ -169,7 +170,7 @@ public class BingoSoruSeciciTests
     public void Sec_BilinenOyuncuYetmezse_NullDoner()
     {
         var veri = ZenginVeri();
-        // Bilinen oyuncu kalmasın: deste 8 bilinen ister
+        // Bilinen oyuncu kalmasın: kartı dolduran oyuncuların 6'sı bilinen olmalı
         foreach (var id in veri.Kademeler.Where(k => k.Value == Kademe.Bilinen).Select(k => k.Key).ToList())
             veri.Kademeler.Remove(id);
 
@@ -193,6 +194,21 @@ public class BingoSoruSeciciTests
     {
         Assert.Equal(12, HucreSayisi);
         Assert.Equal(HucreSayisi, KartDagilimi.Values.Sum());
-        Assert.Equal(DesteBoyutu, DesteDagilimi.Values.Sum());
+        Assert.Equal(HucreSayisi, DesteDagilimi.Values.Sum());
+        Assert.Equal(32, DesteBoyutu);
+    }
+
+    [Fact]
+    public void Sec_KutuyaUymayanOyuncuYoksa_NullDoner()
+    {
+        // Her oyuncu her kategoriye uyar: kutuya uymayan oyuncu bulunamaz
+        var v = new TestVerisi();
+        var kategoriler = new List<Kategori>();
+        foreach (var (tip, adet) in KartDagilimi)
+            for (int i = 0; i < adet; i++) kategoriler.Add(v.Kategori(tip, $"{tip}{i}"));
+        v.OyuncuEkle(20, Kademe.Unlu, true, kategoriler.ToArray());
+        v.OyuncuEkle(20, Kademe.Bilinen, true, kategoriler.ToArray());
+
+        Assert.Null(v.Sec(1));
     }
 }

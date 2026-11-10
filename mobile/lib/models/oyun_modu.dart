@@ -163,9 +163,9 @@ const List<OyunModu> oyunModlari = [
       kurallar: [
         'Gelen oyuncuyu kariyerine uyan kutuya dokunarak yerleştir. Uyan kutu yoksa pas geç.',
         'Yanlış kutuya dokunursan oyuncu gitmez, ceza da yok. Başka kutu deneyebilirsin.',
-        'Oyuncu sadece doğru kutuya konunca ya da pas geçince gider. Dolu kutuya oyuncu konmaz.',
-        'Destede 16 oyuncu var. Kart her zaman tamamen doldurulabilir.',
-        'Zorluk modu yok, herkes aynı kartı oynar. Oyun kart dolunca, deste bitince, pes edince ya da süre bitince sona erer.',
+        'Pas sınırsız. Pas geçtiğin oyuncu sırası gelince tekrar gelir; kutuya yerleşen oyuncu bir daha gelmez.',
+        'Arada hiçbir kutuya uymayan oyuncular da gelir, onları pas geç. Kart her zaman tamamen doldurulabilir.',
+        'Zorluk modu yok, herkes aynı kartı oynar. Oyun kart dolunca, pes edince ya da süre bitince sona erer.',
       ],
       puanlama: 'Her dolu kutu 1 puan. En fazla 12 puan.',
     ),
