@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/izgara.dart';
+import '../models/oyuncu_oneri.dart';
 import '../providers/izgara_provider.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
@@ -146,7 +147,8 @@ class IzgaraScreen extends ConsumerWidget {
             renk: Renkler.izgara,
             gonderiliyor: state.gonderiliyor,
             ara: notifier.oyuncuAra,
-            gonder: notifier.tahminEt,
+            gonder: (oyuncu) => _tahminEt(ref, oyuncu),
+            kullanilanlar: {for (final o in state.hucreler.values) o.isim},
           ),
           const SizedBox(height: 12),
           _SonTahmin(sonuc: state.sonTahmin, tahta: state.tahta!),
@@ -155,6 +157,18 @@ class IzgaraScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  // Tahmini gönderir: tahtada zaten olan oyuncu sayılmaz, alan sessizce temizlenir
+  Future<TahminSonucu> _tahminEt(WidgetRef ref, OyuncuOneri oyuncu) async {
+    final hata = await ref.read(izgaraProvider(_acilis).notifier).tahminEt(oyuncu);
+    if (hata != null) throw TahminHatasi(hata);
+
+    return switch (ref.read(izgaraProvider(_acilis)).sonTahmin) {
+      IzgaraTahminSonucu(tekrar: true) || IzgaraTahminSonucu(sureDoldu: true) || null => TahminSonucu.notr,
+      IzgaraTahminSonucu(dogru: true) => TahminSonucu.dogru,
+      _ => TahminSonucu.yanlis,
+    };
   }
 
   Widget _bitis(BuildContext context, IzgaraState state) {
@@ -333,6 +347,9 @@ class IzgaraTahtasiGorunumu extends StatelessWidget {
                     _Hucre(
                       oyuncu: state.hucreler[s * izgaraBoyutu + t],
                       ornekCevap: state.ornekCevaplar[s * izgaraBoyutu + t],
+                      yeni: state.durum == IzgaraDurumu.oynaniyor &&
+                          state.sonTahmin?.dogru == true &&
+                          state.sonTahmin?.hucre == s * izgaraBoyutu + t,
                     ),
                 ],
                 hucre,
@@ -380,19 +397,34 @@ class _Hucre extends StatelessWidget {
   final IzgaraOyuncusu? oyuncu;
   final IzgaraOyuncusu? ornekCevap; // Oyun bitince boş kalan kutuda gösterilen doğru cevap
 
-  const _Hucre({this.oyuncu, this.ornekCevap});
+  final bool yeni; // Son doğru tahminle dolan kutu: kısa bir an sarı parlar ki oyuncu nereye yerleştiği görülsün
+
+  const _Hucre({this.oyuncu, this.ornekCevap, this.yeni = false});
 
   @override
   Widget build(BuildContext context) {
     final dolu = oyuncu != null;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      // Tahtaya tebeşirle çizilmiş kare: boşken soluk, dolunca tebeşir beyazı
-      decoration: BoxDecoration(
-        color: dolu ? Renkler.metin.withValues(alpha: 0.05) : null,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: dolu ? Renkler.metinIkincil : Renkler.kenar, width: 1.5),
+    return TweenAnimationBuilder<double>(
+      key: ValueKey((oyuncu?.isim, yeni)),
+      tween: Tween(begin: yeni ? 1 : 0, end: 0),
+      duration: const Duration(milliseconds: 1400),
+      curve: Curves.easeInCubic,
+      builder: (context, parlama, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        // Tahtaya tebeşirle çizilmiş kare: boşken soluk, dolunca tebeşir beyazı
+        decoration: BoxDecoration(
+          color: dolu ? Color.lerp(Renkler.metin.withValues(alpha: 0.05), Renkler.vurgu.withValues(alpha: 0.18), parlama) : null,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: dolu ? Color.lerp(Renkler.metinIkincil, Renkler.vurgu, parlama)! : Renkler.kenar,
+            width: 1.5 + parlama,
+          ),
+          boxShadow: parlama > 0
+              ? [BoxShadow(color: Renkler.vurgu.withValues(alpha: 0.45 * parlama), blurRadius: 14 * parlama)]
+              : null,
+        ),
+        child: child,
       ),
       child: LayoutBuilder(
         builder: (context, kisitlar) {

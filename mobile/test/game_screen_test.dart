@@ -9,7 +9,7 @@ import 'package:mobile/services/oyun_deposu.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
 
-// Arama, yazmanın bitmesini bu kadar bekler (game_screen.dart'taki zamanlayıcı)
+// Arama, yazmanın bitmesini en fazla bu kadar bekler (oyuncu_arama.dart'taki zamanlayıcı)
 const aramaBeklemesi = Duration(milliseconds: 300);
 
 Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
@@ -30,8 +30,15 @@ Future<void> yaz(WidgetTester tester, String metin) async {
   await tester.pump();
 }
 
-IconButton gonderButonu(WidgetTester tester) =>
-    tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send));
+final gonderButonu = find.widgetWithText(FilledButton, 'GÖNDER');
+
+// Seçili oyuncuyu gönderir ve alanın kısa geri bildirimi (yeşil / üstü çizili isim) bitene kadar bekler
+Future<void> gonder(WidgetTester tester) async {
+  await tester.tap(gonderButonu);
+  await tester.pumpAndSettle();
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets('soru, kulüp isimleri ve zorluk etiketiyle gösterilir', (tester) async {
@@ -106,26 +113,57 @@ void main() {
 
     await yaz(tester, 'xqz');
 
-    expect(find.text('Bu isimde oyuncu bulunamadı.'), findsOneWidget);
+    expect(find.textContaining('Bu isimde kimse yok.'), findsOneWidget);
   });
 
-  testWidgets('listeden seçilmeden gönder butonu kapalıdır', (tester) async {
+  testWidgets('listeden seçilmeden gönder butonu görünmez', (tester) async {
     await ekraniAc(tester);
 
     await yaz(tester, 'Arda Güler');
 
-    expect(gonderButonu(tester).onPressed, isNull);
+    expect(gonderButonu, findsNothing);
   });
 
-  testWidgets('listeden seçmeden klavyeden gönderilirse uyarı çıkar, cevap gönderilmez', (tester) async {
+  testWidgets('yazma alanında klavye düzeltmesi ve kelime önerileri kapalıdır', (tester) async {
+    await ekraniAc(tester);
+
+    final alan = tester.widget<TextField>(find.byType(TextField));
+    expect(alan.autocorrect, isFalse);
+    expect(alan.enableSuggestions, isFalse);
+  });
+
+  testWidgets('klavyedeki tuş listedeki ilk oyuncuyu seçer, cevabı göndermez', (tester) async {
     final depo = await ekraniAc(tester);
 
-    await yaz(tester, 'Arda Güler');
-    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await yaz(tester, 'ar');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
-    expect(find.text('Cevabını listeden seçmelisin.'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Arda Güler'), findsOneWidget);
+    expect(gonderButonu, findsOneWidget);
     expect(depo.cevapKontrolSayisi, 0);
+  });
+
+  testWidgets('liste boşken klavyedeki tuşa basılırsa alanın altında uyarı çıkar', (tester) async {
+    final depo = await ekraniAc(tester, (d) => d.oneriler = []);
+
+    await yaz(tester, 'xqz');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.text('Listeden bir oyuncu seç.'), findsOneWidget);
+    expect(depo.cevapKontrolSayisi, 0);
+  });
+
+  testWidgets('listede yazılan harfler vurgulanır', (tester) async {
+    await ekraniAc(tester);
+
+    await yaz(tester, 'ar');
+
+    final satir = tester.widget<Text>(find.text('Arda Güler'));
+    final parcalar = (satir.textSpan! as TextSpan).children!.cast<TextSpan>().map((p) => p.text).toList();
+    expect(parcalar, ['', 'Ar', 'da Güler']);
   });
 
   testWidgets('listeden seçilen oyuncu gönderilir ve sonuç gösterilir', (tester) async {
@@ -135,11 +173,12 @@ void main() {
     await tester.tap(find.text('Arda Güler'));
     await tester.pump();
 
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
-    expect(gonderButonu(tester).onPressed, isNotNull);
+    // Seçilen oyuncu etikete dönüşür, Gönder butonu çıkar
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Arda Güler'), findsOneWidget);
+    expect(tester.widget<FilledButton>(gonderButonu).onPressed, isNotNull);
 
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pumpAndSettle();
+    await gonder(tester);
 
     expect(depo.cevapKontrolSayisi, 1);
     expect(find.text('Doğru'), findsOneWidget);
@@ -147,18 +186,38 @@ void main() {
     expect(find.text('Soru 2/5'), findsOneWidget);
   });
 
-  testWidgets('seçimden sonra isim değiştirilirse seçim iptal olur', (tester) async {
+  testWidgets('seçim × ile kaldırılınca yazma alanı geri gelir', (tester) async {
     await ekraniAc(tester);
 
     await yaz(tester, 'ar');
     await tester.tap(find.text('Arda Güler'));
     await tester.pump();
-    expect(gonderButonu(tester).onPressed, isNotNull);
+    expect(gonderButonu, findsOneWidget);
 
-    await yaz(tester, 'Arda Güle');
+    await tester.tap(find.byTooltip('Seçimi kaldır'));
+    await tester.pump();
 
-    expect(find.byIcon(Icons.check_circle), findsNothing);
-    expect(gonderButonu(tester).onPressed, isNull);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(gonderButonu, findsNothing);
+  });
+
+  testWidgets('yanlış cevapta isim kısa bir an kalır, sonra alan boşalır', (tester) async {
+    final depo = await ekraniAc(tester);
+
+    await yaz(tester, 'ar');
+    await tester.tap(find.text('Mesut Özil'));
+    await tester.pump();
+    await tester.tap(gonderButonu);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(depo.cevapKontrolSayisi, 1);
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Yanlış'), findsOneWidget);
   });
 
   testWidgets('bitiş özetinde yanlış bilinen sorunun doğru cevabı gösterilir', (tester) async {
@@ -172,8 +231,7 @@ void main() {
       await yaz(tester, 'ar');
       await tester.tap(find.text(i == 1 ? 'Mesut Özil' : 'Arda Güler'));
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.send));
-      await tester.pumpAndSettle();
+      await gonder(tester);
     }
 
     expect(find.text('ÖZET'), findsOneWidget);

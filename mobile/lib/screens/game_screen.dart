@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/oyuncu_oneri.dart';
 import '../providers/game_provider.dart';
 import '../services/gunluk_oyun.dart' show GunlukOyunSecimi;
 import '../theme/renkler.dart';
@@ -116,13 +117,25 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             renk: Renkler.kesisim,
             gonderiliyor: state.gonderiliyor,
             ara: ref.read(gameProvider(_secim).notifier).oyuncuAra,
-            gonder: ref.read(gameProvider(_secim).notifier).makeGuess,
+            gonder: _tahminEt,
           ),
           const SizedBox(height: 16),
           _oncekiSonuc(state),
         ],
       ),
     );
+  }
+
+  // Cevabı gönderir; yeni bir soru sonucu eklendiyse onun doğru ya da yanlış olduğunu döndürür
+  Future<TahminSonucu> _tahminEt(OyuncuOneri oyuncu) async {
+    final notifier = ref.read(gameProvider(_secim).notifier);
+    final onceki = ref.read(gameProvider(_secim)).sonuclar.length;
+    final hata = await notifier.makeGuess(oyuncu);
+    if (hata != null) throw TahminHatasi(hata);
+
+    final sonuclar = ref.read(gameProvider(_secim)).sonuclar;
+    if (sonuclar.length <= onceki) return TahminSonucu.notr;
+    return sonuclar.last ? TahminSonucu.dogru : TahminSonucu.yanlis;
   }
 
   (String, Color)? _zorluk(String? zorluk) => switch (zorluk) {

@@ -346,7 +346,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Arda Güler'));
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.send));
+      await tester.tap(find.widgetWithText(FilledButton, 'GÖNDER'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
       expect(find.text('1 tahmin'), findsOneWidget);
@@ -354,6 +356,31 @@ void main() {
       // Sonuç satırında ve tahtadaki kutuda
       expect(find.text('Arda Güler'), findsOneWidget);
       expect(find.textContaining('Real Madrid × Fransa'), findsOneWidget);
+    });
+
+    testWidgets('tahtaya konmuş oyuncu listede soluk durur ve seçilemez', (tester) async {
+      await ekraniAc(tester);
+
+      await tester.enterText(find.byType(TextField), 'ar');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      await tester.tap(find.text('Arda Güler'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'GÖNDER'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'ar');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+
+      expect(find.text('TAHTADA'), findsOneWidget);
+      await tester.tap(find.text('TAHTADA'));
+      await tester.pump();
+      // Seçim olmadı: yazma alanı duruyor, Gönder çıkmadı
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'GÖNDER'), findsNothing);
     });
 
     testWidgets('pes etmek onay ister', (tester) async {
