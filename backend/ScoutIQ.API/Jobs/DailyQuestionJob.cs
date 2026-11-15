@@ -383,22 +383,96 @@ namespace ScoutIQ.API.Jobs
             var veri = await KesisimVerisiniOku();
             foreach (var zorluk in eksikler)
             {
+                // Kolay mod oyuncudan başlanarak kurulur (KolayKesisimSecici). Kurulamazsa eski mantığa düşülür:
+                // soru üretilmeyen gün olmasın.
+                if (zorluk == Zorluk.Kolay && await UretKolayKesisim(tarih, veri, kademeler)) continue;
+
                 var sorular = KesisimSorulariniSec(zorluk, veri, kademeler);
                 if (sorular == null) continue;
 
-                await OyunEkle("kesisim", zorluk, tarih, sorular.Select(s => new
-                {
-                    kulup_a = s.KulupA.Isim,
-                    kulup_b = s.KulupB.Isim,
-                    kulup_a_id = s.KulupA.Id,
-                    kulup_b_id = s.KulupB.Id,
-                    kulup_a_logo = s.KulupA.LogoUrl,
-                    kulup_b_logo = s.KulupB.LogoUrl,
-                    kademe = ZorlukDagilimi.Metin(s.Kademe),
-                    // Uygulamadaki soru etiketi: ünlü soru kolay, bilinen orta, diğer zor görünür
-                    zorluk = s.Kademe switch { Kademe.Unlu => "kolay", Kademe.Bilinen => "orta", _ => "zor" }
-                }).ToList());
+                await OyunEkle("kesisim", zorluk, tarih,
+                    sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB, s.Kademe)).ToList());
                 KesisimSorulariniYaz(sorular);
+            }
+        }
+
+        private static object KesisimSoruVerisi(Kulup kulupA, Kulup kulupB, Kademe kademe) => new
+        {
+            kulup_a = kulupA.Isim,
+            kulup_b = kulupB.Isim,
+            kulup_a_id = kulupA.Id,
+            kulup_b_id = kulupB.Id,
+            kulup_a_logo = kulupA.LogoUrl,
+            kulup_b_logo = kulupB.LogoUrl,
+            kademe = ZorlukDagilimi.Metin(kademe),
+            // Sorunun kendi kademesi: ünlü soru kolay, bilinen orta, diğer zor
+            zorluk = kademe switch { Kademe.Unlu => "kolay", Kademe.Bilinen => "orta", _ => "zor" }
+        };
+
+        // Kolay Kesişim'i hedef oyunculardan kurup ekler. Oyun eklendiyse true; geçmiş okunamadıysa ya da
+        // 5 soru kurulamadıysa false döner.
+        private async Task<bool> UretKolayKesisim(DateTime tarih, KesisimVerisi veri, Dictionary<string, Kademe> kademeler)
+        {
+            var sorular = await KolayKesisimSorulariniSec(tarih, veri, kademeler);
+            if (sorular == null) return false;
+
+            // Hedef oyuncu cevabı ele verir: soru verisine yazılmaz, uygulamaya kapalı kesisim_hedefleri tablosunda tutulur
+            var oyun = await OyunEkle("kesisim", Zorluk.Kolay, tarih,
+                sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB, Kademe.Unlu)).ToList());
+
+            // Hedefler yazılamazsa tekrar kuralları bu oyunu göremez: oyun silinir, bir sonraki çalıştırmada yeniden üretilir
+            try
+            {
+                await _supabaseClient.From<KesisimHedefi>().Insert(sorular.Select((s, i) =>
+                {
+                    var (a, b) = KolayKesisimSecici.Cift(s.KulupA.Id, s.KulupB.Id);
+                    return new KesisimHedefi { OyunId = oyun.Id, Sira = i + 1, Tarih = tarih, OyuncuId = s.HedefOyuncuId, KulupAId = a, KulupBId = b };
+                }).ToList());
+            }
+            catch
+            {
+                await _supabaseClient.From<GunlukOyun>().Where(g => g.Id == oyun.Id).Delete();
+                throw;
+            }
+
+            await KolayKesisimSorulariniYaz(sorular);
+            return true;
+        }
+
+        private async Task<List<KolayKesisimSecici.Soru>?> KolayKesisimSorulariniSec(
+            DateTime tarih, KesisimVerisi veri, Dictionary<string, Kademe> kademeler)
+        {
+            List<KolayKesisimSecici.Gecmis> gecmis;
+            try
+            {
+                gecmis = (await HepsiniOku<KesisimHedefi>("id, oyuncu_id, kulup_a_id, kulup_b_id, tarih", h => h.Id.ToString()))
+                    .Select(h => new KolayKesisimSecici.Gecmis(h.OyuncuId, h.KulupAId, h.KulupBId, h.Tarih.Date))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Uyarı: Kesişim hedefleri okunamadı (027_kesisim_hedefleri.sql çalıştırıldı mı?), kolay mod eski mantıkla kurulacak: {ex.Message}");
+                return null;
+            }
+
+            var sonuc = new KolayKesisimSecici().Sec(tarih, veri.Kulupler, veri.Kariyer, kademeler, gecmis);
+            Console.WriteLine($"Kesişim (Kolay): {sonuc.HedefSayisi} hedef oyuncu ({sonuc.KullanilmamisHedefSayisi} kullanılmamış), {sonuc.CiftSayisi} büyük kulüp çifti.");
+            foreach (var uyari in sonuc.Uyarilar)
+            {
+                Console.WriteLine($"Uyarı: {uyari}");
+            }
+            return sonuc.Sorular;
+        }
+
+        private async Task KolayKesisimSorulariniYaz(List<KolayKesisimSecici.Soru> sorular)
+        {
+            var idler = sorular.Select(s => s.HedefOyuncuId).Cast<object>().ToList();
+            var isimler = (await _supabaseClient.From<Oyuncu>().Select("id, isim").Filter("id", Operator.In, idler).Get()).Models
+                .ToDictionary(o => o.Id, o => o.Isim);
+            for (int i = 0; i < sorular.Count; i++)
+            {
+                var s = sorular[i];
+                Console.WriteLine($"   {i + 1}. {s.KulupA.Isim} x {s.KulupB.Isim} ({s.OrtakOyuncuSayisi} ortak oyuncu, hedef: {isimler.GetValueOrDefault(s.HedefOyuncuId, "?")})");
             }
         }
 
@@ -408,9 +482,19 @@ namespace ScoutIQ.API.Jobs
         {
             var kademeler = await KademeleriOku();
             var veri = await KesisimVerisiniOku(ayrintili: true);
+            DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
             foreach (var zorluk in Enum.GetValues<Zorluk>())
             {
                 Console.WriteLine($"\nKesişim ({zorluk}) önizleme (veritabanına yazılmadı):");
+                if (zorluk == Zorluk.Kolay)
+                {
+                    var kolay = await KolayKesisimSorulariniSec(bugun, veri, kademeler);
+                    if (kolay != null)
+                    {
+                        await KolayKesisimSorulariniYaz(kolay);
+                        continue;
+                    }
+                }
                 var sorular = KesisimSorulariniSec(zorluk, veri, kademeler);
                 if (sorular != null) KesisimSorulariniYaz(sorular);
             }
@@ -567,15 +651,16 @@ namespace ScoutIQ.API.Jobs
             return eksikler;
         }
 
-        private async Task OyunEkle(string oyun, Zorluk zorluk, DateTime tarih, object soruVerisi)
+        private async Task<GunlukOyun> OyunEkle(string oyun, Zorluk zorluk, DateTime tarih, object soruVerisi)
         {
-            await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+            var eklenen = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
             {
                 OyunTipi = ZorlukDagilimi.OyunTipi(oyun, zorluk),
                 Tarih = tarih,
                 SoruVerisi = soruVerisi
-            });
+            })).Models.First();
             Console.WriteLine($"Başarılı: {ZorlukDagilimi.OyunTipi(oyun, zorluk)} için {tarih:yyyy-MM-dd} tarihli oyun eklendi.");
+            return eklenen;
         }
 
         private async Task<bool> OyunVarMi(string oyunTipi, DateTime tarih)
