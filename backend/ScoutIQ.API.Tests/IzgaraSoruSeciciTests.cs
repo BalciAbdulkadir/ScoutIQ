@@ -15,17 +15,18 @@ public class IzgaraSoruSeciciTests
         public Dictionary<string, Kademe> Kademeler { get; } = new();
         private int _oyuncuNo;
 
-        public Kulup Kulup(string transfermarktId, string isim, string? lig = "XX")
+        public Kulup Kulup(string transfermarktId, string isim, string? kademe = KulupKademeleri.Buyuk)
         {
-            var kulup = new Kulup { Id = $"kulup-{transfermarktId}", TransfermarktId = transfermarktId, Isim = isim, Lig = lig };
+            var kulup = new Kulup { Id = $"kulup-{transfermarktId}", TransfermarktId = transfermarktId, Isim = isim, Lig = "XX", Kademe = kademe };
             Kulupler.Add(kulup);
             return kulup;
         }
 
         // Kulüpte ve (varsa) ikinci kulüpte ya da milli takımda oynamış "adet" kadar yeni oyuncu ekler.
-        // kademe null: soru havuzunda değil. macSayisi 0: kulüp kadrosunda olmuş ama maça çıkmamış.
+        // kademe null: soru havuzunda değil. macSayisi eşiğin (KariyerGecmisi.MinSoruMaci) altındaysa oyuncu
+        // kulüpte çok az oynamıştır: cevap olarak sayılır ama hücrenin kademesine girmez.
         public void OyuncuEkle(Kulup kulup, int adet, Kademe? kademe, Kulup? ikinciKulup = null, string? milliTmId = null,
-            string milliIsim = "", int macSayisi = 10)
+            string milliIsim = "", int macSayisi = 50)
         {
             for (int i = 0; i < adet; i++)
             {
@@ -38,7 +39,7 @@ public class IzgaraSoruSeciciTests
         }
 
         public HashSet<string> Oyunculari(Baslik baslik, bool sadeceOynayan = false) => baslik.Tip == BaslikTipi.Kulup
-            ? Kariyer.Where(k => k.KulupId == baslik.KulupId && (!sadeceOynayan || k.Oynadi)).Select(k => k.OyuncuId).ToHashSet()
+            ? Kariyer.Where(k => k.KulupId == baslik.KulupId && (!sadeceOynayan || k.SoruyaUygun)).Select(k => k.OyuncuId).ToHashSet()
             : MilliKariyer.Where(m => m.MilliTakimTmId == baslik.TmId).Select(m => m.OyuncuId).ToHashSet();
 
         public Izgara? Sec(int tohum, Zorluk zorluk) =>
@@ -55,7 +56,9 @@ public class IzgaraSoruSeciciTests
         _ => Kademe.Diger
     };
 
-    // Listedeki 10 kulüp birbirine ve 4 milli takıma 3'er ortak oyuncuyla bağlı. Tuzaklar da var.
+    private const string Napoli = "6195", Marsilya = "244", Villarreal = "1050";
+
+    // Listedeki 12 kulüp (10 büyük, 2 baş altı) birbirine ve 4 milli takıma 3'er ortak oyuncuyla bağlı. Tuzaklar da var.
     private static TestVerisi ZenginVeri()
     {
         var v = new TestVerisi();
@@ -63,7 +66,8 @@ public class IzgaraSoruSeciciTests
         {
             v.Kulup("141", "Galatasaray"), v.Kulup("36", "Fenerbahce"), v.Kulup("281", "Manchester City"),
             v.Kulup("418", "Real Madrid"), v.Kulup("131", "FC Barcelona"), v.Kulup("506", "Juventus FC"),
-            v.Kulup("5", "AC Milan"), v.Kulup("27", "FC Bayern Munich"), v.Kulup("6195", "SSC Napoli"), v.Kulup("244", "Olympique Marseille"),
+            v.Kulup("5", "AC Milan"), v.Kulup("27", "FC Bayern Munich"), v.Kulup("31", "Liverpool FC"), v.Kulup("11", "Arsenal FC"),
+            v.Kulup(Napoli, "SSC Napoli", KulupKademeleri.BasAlti), v.Kulup(Marsilya, "Olympique Marseille", KulupKademeleri.BasAlti),
         };
 
         void UcOyuncu(Kulup kulup, Kademe kademe, Kulup? ikinci = null, string? milli = null, string milliIsim = "")
@@ -79,8 +83,8 @@ public class IzgaraSoruSeciciTests
             for (int j = i + 1; j < kulupler.Length; j++)
             {
                 UcOyuncu(kulupler[i], CiftKademesi(i, j), kulupler[j]);
-                // Tuzak: maça çıkmamış ünlü oyuncu hücrenin kademesini yükseltmemeli (cevap olarak yine sayılır)
-                if ((i + j) % 3 == 0) v.OyuncuEkle(kulupler[i], 1, Kademe.Unlu, kulupler[j], macSayisi: 0);
+                // Tuzak: kulüpte çok az oynamış ünlü oyuncu hücrenin kademesini yükseltmemeli (cevap olarak yine sayılır)
+                if ((i + j) % 3 == 0) v.OyuncuEkle(kulupler[i], 1, Kademe.Unlu, kulupler[j], macSayisi: (i + j) % 2 == 0 ? 0 : KariyerGecmisi.MinSoruMaci - 1);
             }
         }
 
@@ -97,6 +101,11 @@ public class IzgaraSoruSeciciTests
         var parma = v.Kulup("130", "Parma Calcio 1913");
         foreach (var kulup in kulupler)
             v.OyuncuEkle(parma, 10, Kademe.Unlu, kulup);
+
+        // Tuzak: listede olan ama kademesi 'diger' olan kulüp de hiçbir modda başlık olmamalı
+        var villarreal = v.Kulup(Villarreal, "Villarreal CF", "diger");
+        foreach (var kulup in kulupler)
+            v.OyuncuEkle(villarreal, 10, Kademe.Unlu, kulup);
 
         return v;
     }
@@ -121,6 +130,11 @@ public class IzgaraSoruSeciciTests
         var basliklar = izgara.Satirlar.Concat(izgara.Sutunlar).ToList();
         Assert.Equal(basliklar.Count, basliklar.Select(b => b.TmId).Distinct().Count());
         Assert.All(basliklar.Where(b => b.Tip == BaslikTipi.Kulup), b => Assert.True(Kulupler.ContainsKey(b.TmId), $"Listede olmayan kulüp: {b.Isim}"));
+
+        // Kulüp kademeleri: 'diger' kulüp hiç çıkmaz, baş altı kulüp kolay tahtada çıkmaz
+        Assert.DoesNotContain(basliklar, b => b.TmId == Villarreal);
+        if (zorluk == Zorluk.Kolay)
+            Assert.DoesNotContain(basliklar, b => b.TmId is Napoli or Marsilya);
 
         // Hücre cevap sayıları ve kademeleri doğru, cevaplar yeterli
         for (int s = 0; s < Boyut; s++)
@@ -201,6 +215,37 @@ public class IzgaraSoruSeciciTests
             .ToHashSet();
 
         Assert.True(tahtalar.Count > 1, "Her gün aynı tahta seçiliyor");
+    }
+
+    [Fact]
+    public void Sec_BasAltiKulupler_OrtaVeZorTahtadaCikar()
+    {
+        var veri = ZenginVeri();
+
+        foreach (var zorluk in new[] { Zorluk.Orta, Zorluk.Zor })
+        {
+            var basAltiGorulen = Enumerable.Range(0, 40)
+                .Select(t => veri.Sec(t, zorluk)!)
+                .Any(i => i.Satirlar.Concat(i.Sutunlar).Any(b => b.TmId is Napoli or Marsilya));
+            Assert.True(basAltiGorulen, $"{zorluk} tahtada baş altı kulüp hiç çıkmadı");
+        }
+    }
+
+    [Fact]
+    public void Sec_KademesiOlmayanKulup_BaslikOlmaz()
+    {
+        var v = new TestVerisi();
+        // Kulüpler listede ama kademeleri boş (024 çalıştırılmamış gibi): tahta kurulamaz
+        var kulupler = new[]
+        {
+            v.Kulup("141", "Galatasaray", null), v.Kulup("36", "Fenerbahce", null), v.Kulup("281", "Manchester City", null),
+            v.Kulup("418", "Real Madrid", null), v.Kulup("131", "FC Barcelona", null), v.Kulup("506", "Juventus FC", null),
+        };
+        for (int i = 0; i < kulupler.Length; i++)
+            for (int j = i + 1; j < kulupler.Length; j++)
+                v.OyuncuEkle(kulupler[i], MinCevap, Kademe.Unlu, kulupler[j]);
+
+        Assert.Null(v.Sec(1, Zorluk.Kolay));
     }
 
     [Fact]

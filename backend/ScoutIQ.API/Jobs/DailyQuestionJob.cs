@@ -94,7 +94,7 @@ namespace ScoutIQ.API.Jobs
             }
 
             var adaylar = await BingoAdaylari();
-            var kart = new BingoSoruSecici().Sec(adaylar, kademeler);
+            var kart = new BingoSoruSecici().Sec(adaylar, kademeler, await BingoEkBilinenleri(kademeler));
             if (kart == null)
             {
                 Console.WriteLine("Uyarı: Bingo için kurallara uyan kart kurulamadı.");
@@ -132,15 +132,33 @@ namespace ScoutIQ.API.Jobs
         {
             var kademeler = await KademeleriOku();
             var adaylar = await BingoAdaylari();
+            var ekBilinenler = await BingoEkBilinenleri(kademeler);
             Console.WriteLine("\nBingo önizleme (veritabanına yazılmadı):");
-            var kart = new BingoSoruSecici().Sec(adaylar, kademeler);
+            var kart = new BingoSoruSecici().Sec(adaylar, kademeler, ekBilinenler);
             if (kart == null)
                 Console.WriteLine("   Kurallara uyan kart kurulamadı.");
             else
                 BingoKartiniYaz(kart, kademeler);
         }
 
-        // Bütün kategoriler, kendilerine uyan oyuncularla
+        // Desteye ek oyuncu olarak girebilen bilinen oyuncular: bilinirlik sırasında ilk EkOyuncuSiraSiniri oyuncunun
+        // içinde olup kademesi bilinen olanlar. Kademesi elle değiştirilmiş oyuncular da sırasına göre değerlendirilir.
+        private async Task<HashSet<string>> BingoEkBilinenleri(Dictionary<string, Kademe> kademeler)
+        {
+            var skorlar = await HepsiniOku<Oyuncu>("id, bilinirlik", o => o.Id,
+                s => s.Filter("bilinirlik", Operator.GreaterThanOrEqual, "0")); // skoru olanlar: soru havuzu
+            var ekBilinenler = skorlar
+                .OrderByDescending(o => o.Bilinirlik).ThenBy(o => o.Id, StringComparer.Ordinal)
+                .Take(BingoSoruSecici.EkOyuncuSiraSiniri)
+                .Where(o => kademeler.TryGetValue(o.Id, out var k) && k == Kademe.Bilinen)
+                .Select(o => o.Id)
+                .ToHashSet();
+            Console.WriteLine($"Bingo ek oyuncuları: ünlüler ve ilk {BingoSoruSecici.EkOyuncuSiraSiniri} sıradaki {ekBilinenler.Count} bilinen oyuncu.");
+            return ekBilinenler;
+        }
+
+        // Bütün kategoriler, kendilerine uyan oyuncularla. Kulüp ve ligde oyuncu, kulüpte yeterince maça çıkmışsa
+        // kartı kurarken kullanılır (KariyerGecmisi.SoruyaUygun); cevap olarak bütün kayıtlar kabul edilir.
         private async Task<List<BingoSoruSecici.Aday>> BingoAdaylari()
         {
             var kulupler = await KulupleriOku();
@@ -150,13 +168,16 @@ namespace ScoutIQ.API.Jobs
             var adaylar = new List<BingoSoruSecici.Aday>();
             var kulupKayitlari = kariyer.GroupBy(k => k.KulupId).ToDictionary(g => g.Key, g => g.ToList());
             (HashSet<string>, HashSet<string>) Oyunculari(IEnumerable<KariyerGecmisi> kayitlar) =>
-                (kayitlar.Select(k => k.OyuncuId).ToHashSet(), kayitlar.Where(k => k.Oynadi).Select(k => k.OyuncuId).ToHashSet());
+                (kayitlar.Select(k => k.OyuncuId).ToHashSet(), kayitlar.Where(k => k.SoruyaUygun).Select(k => k.OyuncuId).ToHashSet());
 
-            foreach (var kulup in kulupler.Where(k => KesisimSoruSecici.Kulupler.ContainsKey(k.TransfermarktId) && kulupKayitlari.ContainsKey(k.Id)))
+            // Büyük ve baş altı kulüpler; kartta baş altı kulüp sayısı sınırlıdır (BingoSoruSecici.MaxBasAltiKulup)
+            foreach (var kulup in kulupler.Where(k => KesisimSoruSecici.Kulupler.ContainsKey(k.TransfermarktId)
+                         && KulupKademeleri.BingodaCikar(k.Kademe) && kulupKayitlari.ContainsKey(k.Id)))
             {
                 var (hepsi, oynayanlar) = Oyunculari(kulupKayitlari[kulup.Id]);
                 adaylar.Add(new(new(BingoSoruSecici.KategoriTipi.Kulup, kulup.TransfermarktId,
-                    KesisimSoruSecici.Kulupler[kulup.TransfermarktId], kulup.Id, kulup.LogoUrl), hepsi, oynayanlar));
+                    KesisimSoruSecici.Kulupler[kulup.TransfermarktId], kulup.Id, kulup.LogoUrl,
+                    BasAlti: kulup.Kademe == KulupKademeleri.BasAlti), hepsi, oynayanlar));
             }
 
             foreach (var (kod, isim) in BingoSoruSecici.Ligler)
@@ -569,7 +590,7 @@ namespace ScoutIQ.API.Jobs
         }
 
         private async Task<List<Kulup>> KulupleriOku() =>
-            (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url").Get()).Models;
+            (await _supabaseClient.From<Kulup>().Select("id, isim, lig, transfermarkt_id, logo_url, kademe").Get()).Models;
 
         // Tablonun filtreye uyan bütün satırlarını okur. Supabase tek istekte en fazla 1000 satır döndürdüğü için satırlar
         // id sırasıyla, her istekte son okunan id'den sonrası istenerek parça parça okunur. Atlamalı (offset) sayfalama

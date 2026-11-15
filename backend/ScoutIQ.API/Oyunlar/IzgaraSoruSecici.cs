@@ -9,9 +9,10 @@ namespace ScoutIQ.API.Oyunlar
     // parametre olarak alır, böylece kurallar gerçek veri olmadan test edilebilir.
     //
     // 3 satır ve 3 sütun başlığı vardır; her hücrenin cevabı, satırdaki ve sütundaki başlığın ikisinde de oynamış bir oyuncudur.
-    // Kolay: sadece kulüpler. Orta: kulüpler + çok bilinen milli takımlardan 1-2 tanesi.
-    // Zor: kulüpler + diğer milli takımlardan 1-2 tanesi.
-    // Hücrenin kademesi, cevapları arasındaki en bilinen oyuncunun kademesidir. 9 hücrenin kademeleri modun dağılımına
+    // Kolay: sadece büyük kulüpler. Orta: büyük ve baş altı kulüpler + çok bilinen milli takımlardan 1-2 tanesi.
+    // Zor: büyük ve baş altı kulüpler + diğer milli takımlardan 1-2 tanesi. Kulübün kademesi veritabanından gelir (KulupKademeleri).
+    // Hücrenin kademesi, cevapları arasındaki en bilinen oyuncunun kademesidir; kulüplerde sadece o kulüpte en az
+    // KariyerGecmisi.MinSoruMaci maça çıkmış oyuncular sayılır. 9 hücrenin kademeleri modun dağılımına
     // tam uyar (ZorlukDagilimi): kolay 9 ünlü, orta 5 ünlü + 4 bilinen, zor 4 ünlü + 3 bilinen + 2 diğer hücre.
     // Milli takımlar hep aynı eksende olur: "Fransa x İspanya" gibi neredeyse çözümsüz hücre oluşmaz.
     // Oyun kuralları (oyuncu tekrarı yok, hücreye yerleştirme, süre) sunucuda, 011_izgara.sql ve 013_izgara_sure.sql'de.
@@ -24,7 +25,8 @@ namespace ScoutIQ.API.Oyunlar
 
         public const int MaxMilliTakim = 2;
 
-        // Başlık olabilecek kulüpler: Kesişim'in kulüpleri. Transfermarkt ID'si ile eşleştirilir.
+        // Başlık olabilecek kulüplerin ekranda görünen isimleri: Kesişim'in kulüpleri. Transfermarkt ID'si ile eşleştirilir.
+        // Bir kulübün hangi modda başlık olabileceğini kademesi belirler (KulupKademeleri.IzgaradaCikar).
         public static readonly IReadOnlyDictionary<string, string> Kulupler = KesisimSoruSecici.Kulupler;
 
         // Orta seviyenin milli takımları. Zor seviye bunların dışındaki milli takımları kullanır.
@@ -50,7 +52,7 @@ namespace ScoutIQ.API.Oyunlar
         // Gerçek veride zor tahtaların yaklaşık binde 3'ü dağılıma tam uyuyor; bu sınırla neredeyse her gün tahta bulunur.
         private const int MaxDeneme = 20000;
 
-        // Başlık: cevap olarak kabul edilen bütün oyuncular ve kademe hesabına giren, maça çıkmış oyuncular
+        // Başlık: cevap olarak kabul edilen bütün oyuncular ve kademe hesabına giren oyuncular (kulüpte yeterince maça çıkmış olanlar)
         private record Aday(Baslik Baslik, HashSet<string> Oyuncular, HashSet<string> Oynayanlar);
 
         private readonly Random _random;
@@ -71,12 +73,13 @@ namespace ScoutIQ.API.Oyunlar
         {
             var kayitlar = kariyer.ToList();
             var kulupOyunculari = kayitlar.GroupBy(k => k.KulupId).ToDictionary(g => g.Key, g => g.Select(k => k.OyuncuId).ToHashSet());
-            var kulupOynayanlari = kayitlar.Where(k => k.Oynadi).GroupBy(k => k.KulupId)
+            var kulupOynayanlari = kayitlar.Where(k => k.SoruyaUygun).GroupBy(k => k.KulupId)
                 .ToDictionary(g => g.Key, g => g.Select(k => k.OyuncuId).ToHashSet());
 
             // Sıralı tutulur ki aynı tohumla (seed) aynı tahta çıksın
             var kulupAdaylari = kulupler
                 .Where(k => Kulupler.ContainsKey(k.TransfermarktId) && kulupOyunculari.ContainsKey(k.Id))
+                .Where(k => KulupKademeleri.IzgaradaCikar(k.Kademe, zorluk))
                 .OrderBy(k => k.TransfermarktId, StringComparer.Ordinal)
                 .Select(k => new Aday(
                     new Baslik(BaslikTipi.Kulup, k.Id, k.TransfermarktId, Kulupler[k.TransfermarktId], k.LogoUrl),

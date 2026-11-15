@@ -26,5 +26,11 @@ namespace ScoutIQ.API.Models
         // Soru kademesi hesaplanırken sadece kulüpte gerçekten oynamış oyuncular sayılır.
         // Maç sayısı bilinmiyorsa oynamış kabul edilir. Cevap kontrolü ise bütün kariyer kayıtlarına bakar.
         public bool Oynadi => MacSayisi is null or > 0;
+
+        // Izgara ve Bingo'da oyuncu, kulübün sorusu olabilmek için o kulüpte en az bu kadar maça çıkmış olmalıdır:
+        // kiralık gelip birkaç maç oynamış bir yıldız kutunun çözümü sayılmaz. Cevap olarak yine kabul edilir.
+        public const int MinSoruMaci = 20;
+
+        public bool SoruyaUygun => MacSayisi >= MinSoruMaci;
     }
 }

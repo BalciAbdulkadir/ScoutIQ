@@ -26,5 +26,9 @@ namespace ScoutIQ.API.Models
         // Elle düzeltme: doluysa kademe yerine bu geçerlidir
         [Column("kademe_override")]
         public string? KademeOverride { get; set; }
+
+        // 0-1 arası bilinirlik skoru, sadece soru havuzundaki oyuncularda doludur (data_miner/kademeler.py)
+        [Column("bilinirlik")]
+        public float? Bilinirlik { get; set; }
     }
 }
