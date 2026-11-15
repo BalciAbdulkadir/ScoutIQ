@@ -63,7 +63,7 @@ const _oyuncuZorluklari = [
   'Ünlü, bilinen ve az bilinen oyuncular',
 ];
 
-// Oyun başlarken seçilen süre. Oyunların çoğunda dört seçenek de vardır; Bingo'da 30 saniye yoktur.
+// Oyun başlarken seçilen süre. Oyunların çoğunda dört seçenek de vardır; Bingo'da 30 saniye yoktur, Top 10 süresizdir.
 enum OyunSuresi {
   suresiz(null, 'Süresiz'),
   saniye30(30, '30 sn'),
@@ -76,7 +76,7 @@ enum OyunSuresi {
   const OyunSuresi(this.saniye, this.ad);
 }
 
-// Hub'da gösterilen modlar: Kesişim, Bonservis, Izgara ve Bingo.
+// Hub'da gösterilen modlar: Kesişim, Bonservis, Izgara, Bingo ve Top 10.
 const List<OyunModu> oyunModlari = [
   OyunModu(
     tip: 'kesisim',
@@ -168,6 +168,28 @@ const List<OyunModu> oyunModlari = [
         'Zorluk modu yok, herkes aynı kartı oynar. Oyun kart dolunca, pes edince ya da süre bitince sona erer.',
       ],
       puanlama: 'Her dolu kutu 1 puan. En fazla 12 puan.',
+    ),
+  ),
+  OyunModu(
+    tip: 'top10',
+    baslik: 'Top 10',
+    aciklama: 'Listedeki 10 oyuncuyu bul.',
+    ikon: Icons.format_list_numbered_rounded,
+    cizim: TebesirCizimi.top10,
+    renk: Renkler.top10,
+    durum: OyunDurumu.aktif,
+    maksimumSkor: 10,
+    // Zorluk modu ve süre yoktur: günde tek liste
+    sureSecenekleri: [OyunSuresi.suresiz],
+    onizleme: OyunOnizlemesi(
+      ozet: 'Ekranda bir liste başlığı var, ör. "Galatasaray\'ın en pahalı 10 transferi". Listedeki 10 oyuncuyu bul.',
+      kurallar: [
+        'Oyuncunun adını yaz ve listeden seç. Sırayı bilmen gerekmez, bulduğun oyuncu kendi sırasına yerleşir.',
+        'Her satırda ipucu olarak oyuncunun uyruğunun bayrağı açık.',
+        'Yanlış tahminin cezası yok. Daha önce denediğin oyuncu tekrar sayılmaz.',
+        'Zorluk modu ve süre yok, herkes aynı listeyi oynar. Oyun 10 oyuncu bulununca ya da pes edince sona erer.',
+      ],
+      puanlama: 'Her bulunan oyuncu 1 puan. En fazla 10 puan.',
     ),
   ),
 ];

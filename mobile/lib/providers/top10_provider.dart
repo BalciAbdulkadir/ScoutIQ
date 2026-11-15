@@ -1,0 +1,203 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/oyuncu_oneri.dart';
+import '../models/top10.dart';
+import '../providers/hub_provider.dart';
+import '../services/gunluk_oyun.dart';
+import '../services/oyun_deposu.dart';
+
+enum Top10Durumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
+
+class Top10State {
+  final Top10Durumu durum;
+  final Top10Sorusu? soru;
+  final String? oyunId;
+  final Map<int, Top10Oyuncusu> bulunanlar; // Bulunan satırlar: sıra (1-10) -> oyuncu
+  final Set<String> denenenler; // Doğru ya da yanlış denenmiş oyuncu isimleri
+  final bool gonderiliyor; // Tahmin ya da pes etme sunucuda işlenirken ikinci isteği engeller
+  final String? hataMesaji; // durum 'hata' iken gösterilir
+  final Top10TahminSonucu? sonTahmin; // Arama kutusunun altında gösterilen son tahminin sonucu
+  final Map<int, Top10Oyuncusu> cevaplar; // Oyun bitince bütün liste (bulunamayanlar dahil)
+
+  const Top10State({
+    this.durum = Top10Durumu.yukleniyor,
+    this.soru,
+    this.oyunId,
+    this.bulunanlar = const {},
+    this.denenenler = const {},
+    this.gonderiliyor = false,
+    this.hataMesaji,
+    this.sonTahmin,
+    this.cevaplar = const {},
+  });
+
+  // Her bulunan oyuncu 1 puan
+  int get skor => bulunanlar.length;
+
+  Top10State copyWith({
+    Top10Durumu? durum,
+    Top10Sorusu? soru,
+    String? oyunId,
+    Map<int, Top10Oyuncusu>? bulunanlar,
+    Set<String>? denenenler,
+    bool? gonderiliyor,
+    String? hataMesaji,
+    Top10TahminSonucu? sonTahmin,
+    Map<int, Top10Oyuncusu>? cevaplar,
+  }) {
+    return Top10State(
+      durum: durum ?? this.durum,
+      soru: soru ?? this.soru,
+      oyunId: oyunId ?? this.oyunId,
+      bulunanlar: bulunanlar ?? this.bulunanlar,
+      denenenler: denenenler ?? this.denenenler,
+      gonderiliyor: gonderiliyor ?? this.gonderiliyor,
+      hataMesaji: hataMesaji ?? this.hataMesaji,
+      sonTahmin: sonTahmin ?? this.sonTahmin,
+      cevaplar: cevaplar ?? this.cevaplar,
+    );
+  }
+}
+
+// Top 10 oyunu. Tahminler sunucuda tutulur: yarıda bırakılan oyun tekrar açılınca kaldığı yerden devam eder.
+// Can ve süre yoktur: oyun 10 oyuncu bulununca ya da pes edilince biter.
+class Top10Notifier extends Notifier<Top10State> {
+  final String oyunTipi;
+
+  Top10Notifier(this.oyunTipi);
+
+  late OyunDeposu _depo;
+
+  @override
+  Top10State build() {
+    _depo = ref.read(oyunDeposuProvider);
+    // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
+    Future.microtask(_yukle);
+    return const Top10State();
+  }
+
+  Future<void> _yukle() async {
+    try {
+      final kullaniciId = _depo.kullaniciId;
+      if (kullaniciId == null) {
+        state = state.copyWith(durum: Top10Durumu.hata, hataMesaji: oturumYokMesaji);
+        return;
+      }
+
+      String tarih;
+      try {
+        tarih = await _depo.oyunTarihi();
+      } catch (_) {
+        tarih = bugununTarihi();
+      }
+
+      final oyun = await _depo.gununOyunu(oyunTipi, tarih);
+      final soru = Top10Sorusu.oku(oyun?['soru_verisi']);
+      if (!ref.mounted) return;
+      if (oyun == null || soru == null) {
+        state = state.copyWith(durum: Top10Durumu.oyunYok);
+        return;
+      }
+      final oyunId = oyun['id'] as String;
+
+      // Kayıt yoksa oyun 'basladi' olarak açılır; varsa (devam eden ya da bitmiş) liste tahminlerden kurulur
+      var kayit = await _depo.oyunKaydi(kullaniciId, oyunTipi, tarih);
+      if (kayit == null) {
+        try {
+          await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: oyunTipi, tarih: tarih);
+          kayit = {'durum': 'basladi'};
+        } on KayitZatenVar {
+          // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
+          kayit = await _depo.oyunKaydi(kullaniciId, oyunTipi, tarih) ?? {'durum': 'basladi'};
+        }
+      }
+
+      final tahminler = await _depo.top10Tahminleri(oyunId);
+      if (!ref.mounted) return;
+      final bitti = kayit['durum'] == 'tamamlandi' || tahminler.where((t) => t.sira != null).length >= top10Boyu;
+
+      // Bulunanların değerleri (ve oyun bittiyse bütün liste) sunucudan gelir
+      final cevaplar = tahminler.any((t) => t.sira != null) || bitti ? await _depo.top10Cevaplar(oyunId) : <int, Top10Oyuncusu>{};
+      if (!ref.mounted) return;
+      final bulunanSiralar = {for (final t in tahminler) ?t.sira};
+
+      state = state.copyWith(
+        durum: bitti ? Top10Durumu.bitti : Top10Durumu.oynaniyor,
+        soru: soru,
+        oyunId: oyunId,
+        bulunanlar: {
+          for (final sira in bulunanSiralar)
+            if (cevaplar[sira] != null) sira: cevaplar[sira]!,
+        },
+        denenenler: {for (final t in tahminler) t.oyuncuIsim},
+        cevaplar: bitti ? cevaplar : const {},
+      );
+    } catch (_) {
+      if (!ref.mounted) return;
+      state = state.copyWith(durum: Top10Durumu.hata, hataMesaji: yuklemeHataMesaji);
+    }
+  }
+
+  Future<List<OyuncuOneri>> oyuncuAra(String metin) => _depo.oyuncuAra(metin);
+
+  // Seçilen oyuncuyu sunucuya gönderir. Hata olursa mesajını döndürür, başarılıysa null.
+  Future<String?> tahminEt(OyuncuOneri oyuncu) async {
+    if (state.durum != Top10Durumu.oynaniyor || state.gonderiliyor) return null;
+    state = state.copyWith(gonderiliyor: true);
+
+    Top10TahminSonucu sonuc;
+    try {
+      sonuc = await _depo.top10Tahmin(oyunId: state.oyunId!, oyuncuId: oyuncu.id);
+    } catch (_) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(gonderiliyor: false);
+      return gonderimHataMesaji;
+    }
+    if (!ref.mounted) return null;
+
+    final bulunanlar = {...state.bulunanlar};
+    if (sonuc.dogru && sonuc.sira != null) {
+      bulunanlar[sonuc.sira!] = Top10Oyuncusu(isim: sonuc.oyuncuIsim, fotoUrl: sonuc.fotoUrl ?? oyuncu.fotoUrl, deger: sonuc.deger);
+    }
+
+    state = state.copyWith(
+      durum: sonuc.bitti ? Top10Durumu.bitti : Top10Durumu.oynaniyor,
+      bulunanlar: bulunanlar,
+      denenenler: {...state.denenenler, sonuc.oyuncuIsim},
+      sonTahmin: sonuc,
+      gonderiliyor: false,
+    );
+
+    if (sonuc.bitti) await _cevaplariYukle();
+    return null;
+  }
+
+  // Oyunu o anki skorla bitirir
+  Future<String?> pesEt() async {
+    if (state.durum != Top10Durumu.oynaniyor || state.gonderiliyor) return null;
+    state = state.copyWith(gonderiliyor: true);
+
+    try {
+      await _depo.top10PesEt(state.oyunId!);
+    } catch (_) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(gonderiliyor: false);
+      return 'Bağlantı sorunu. İnternet bağlantını kontrol edip tekrar dene.';
+    }
+    if (!ref.mounted) return null;
+
+    state = state.copyWith(durum: Top10Durumu.bitti, gonderiliyor: false);
+    await _cevaplariYukle();
+    return null;
+  }
+
+  // Bütün liste oyun bitince açılır. Gelmezse bulunamayan satırlar boş kalır, hata kullanıcıya yansıtılmaz.
+  Future<void> _cevaplariYukle() async {
+    try {
+      final cevaplar = await _depo.top10Cevaplar(state.oyunId!);
+      if (!ref.mounted) return;
+      state = state.copyWith(cevaplar: cevaplar);
+    } catch (_) {}
+  }
+}
+
+final top10Provider = NotifierProvider.autoDispose.family<Top10Notifier, Top10State, String>(Top10Notifier.new);

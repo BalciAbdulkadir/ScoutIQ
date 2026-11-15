@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/bingo.dart';
 import '../models/izgara.dart';
 import '../models/oyuncu_oneri.dart';
+import '../models/top10.dart';
 
 // Aynı gün aynı oyun için kayıt zaten varsa (örneğin başka bir cihazda başlanmışsa) fırlatılır
 class KayitZatenVar implements Exception {}
@@ -84,6 +85,20 @@ abstract class OyunDeposu {
 
   // Bitmiş kartta boş kalan her kutu için desteden ona uyan bir oyuncu: kutu -> oyuncu
   Future<Map<int, BingoOyuncusu>> bingoOrnekCevaplar(String oyunId);
+
+  // Top 10: tahminler ve skor sunucuda tutulur (029_top10.sql)
+
+  // Kullanıcının bu sorudaki tahminleri. Uygulama yeniden açılınca liste bunlarla kurulur.
+  Future<List<Top10Tahmini>> top10Tahminleri(String oyunId);
+
+  // Oyuncu listedeyse kendi sırasına yerleşir
+  Future<Top10TahminSonucu> top10Tahmin({required String oyunId, required String oyuncuId});
+
+  // Oyunu o anki skorla bitirir, skoru döndürür
+  Future<int> top10PesEt(String oyunId);
+
+  // Listedeki oyuncular: sıra -> oyuncu. Oyun bitmediyse sadece bulunanlar, bittiyse hepsi döner.
+  Future<Map<int, Top10Oyuncusu>> top10Cevaplar(String oyunId);
 }
 
 class SupabaseOyunDeposu implements OyunDeposu {
@@ -280,7 +295,44 @@ class SupabaseOyunDeposu implements OyunDeposu {
           (satir['hucre'] as num).toInt(): BingoOyuncusu(isim: satir['oyuncu_isim'] as String, fotoUrl: satir['foto_url'] as String?),
     };
   }
+
+  @override
+  Future<List<Top10Tahmini>> top10Tahminleri(String oyunId) async {
+    final satirlar = await _supabase
+        .from('top10_tahminleri')
+        .select('oyuncu_isim, sira')
+        .eq('kullanici_id', kullaniciId!)
+        .eq('oyun_id', oyunId)
+        .order('olusturma_zamani');
+    return satirlar.map(Top10Tahmini.fromJson).toList();
+  }
+
+  @override
+  Future<Top10TahminSonucu> top10Tahmin({required String oyunId, required String oyuncuId}) async {
+    final sonuc = await _supabase.rpc('top10_tahmin', params: {'p_oyun_id': oyunId, 'p_oyuncu_id': oyuncuId});
+    return Top10TahminSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<int> top10PesEt(String oyunId) async {
+    final skor = await _supabase.rpc('top10_pes_et', params: {'p_oyun_id': oyunId});
+    return (skor as num).toInt();
+  }
+
+  @override
+  Future<Map<int, Top10Oyuncusu>> top10Cevaplar(String oyunId) async {
+    final satirlar = await _supabase.rpc('top10_cevaplar', params: {'p_oyun_id': oyunId}) as List<dynamic>;
+    return {
+      for (final satir in satirlar.cast<Map<String, dynamic>>())
+        (satir['sira'] as num).toInt(): Top10Oyuncusu(
+          isim: satir['oyuncu_isim'] as String,
+          fotoUrl: satir['foto_url'] as String?,
+          deger: satir['deger'] as String?,
+        ),
+    };
+  }
 }
+
 
 final oyunDeposuProvider = Provider<OyunDeposu>((ref) {
   return SupabaseOyunDeposu(Supabase.instance.client);

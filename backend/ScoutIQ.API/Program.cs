@@ -48,6 +48,13 @@ if (args.Contains("--izgara-onizleme"))
     return;
 }
 
+// "dotnet run -- --top10-onizleme" bugünün Top 10 sorusunu seçip ekrana basar, veritabanına yazmaz
+if (args.Contains("--top10-onizleme"))
+{
+    await app.Services.GetRequiredService<DailyQuestionJob>().Top10Onizleme();
+    return;
+}
+
 // 3. Zamanlayıcıyı yapılandıralım
 
 app.Services.UseScheduler(scheduler =>

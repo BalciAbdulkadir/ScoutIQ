@@ -24,6 +24,7 @@ class Renkler {
   static const Color bonservis = vurgu;
   static const Color izgara = vurgu;
   static const Color bingo = vurgu;
+  static const Color top10 = vurgu;
 
   // Zorluk etiketleri
   static const Color kolay = basari;

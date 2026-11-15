@@ -178,6 +178,9 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
   OyunSuresi? _sure;
   late bool _onizlemede = widget.onizleme != null;
 
+  // Zorluk yok ve tek süre seçeneği var: kurallardan sonra seçim adımı gösterilmez
+  bool get _secimsiz => widget.zorluklar == null && widget.sureler.length == 1;
+
   @override
   Widget build(BuildContext context) {
     final zorluk = _zorluk;
@@ -259,7 +262,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _baslik(aciklama: zorluksuz ? 'Tek mod · günde bir kart' : 'Kolay, Orta ya da Zor · günde bir zorluk'),
+          _baslik(aciklama: zorluksuz ? 'Tek mod · günde bir oyun' : 'Kolay, Orta ya da Zor · günde bir zorluk'),
           Flexible(
             child: SingleChildScrollView(
               child: Column(
@@ -321,9 +324,12 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
           ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: () => setState(() => _onizlemede = false),
+            // Zorluk yok ve tek süre seçeneği varsa (Top 10) seçilecek bir şey kalmaz: oyun hemen açılır
+            onPressed: _secimsiz
+                ? () => Navigator.pop(context, (zorluk: null, sure: widget.sureler.single))
+                : () => setState(() => _onizlemede = false),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-            child: Text(Yazi.buyuk(zorluksuz ? 'Anladım · süre seç' : 'Anladım · zorluk seç')),
+            child: Text(Yazi.buyuk(_secimsiz ? 'Anladım · başla' : zorluksuz ? 'Anladım · süre seç' : 'Anladım · zorluk seç')),
           ),
         ],
       ),

@@ -80,6 +80,182 @@ namespace ScoutIQ.API.Jobs
             {
                 Console.WriteLine($"Bingo: hata oluştu: {ex.Message}");
             }
+
+            try
+            {
+                await UretTop10Oyunu(bugun, kademeler);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Top 10: hata oluştu: {ex.Message}");
+            }
+        }
+
+        // ---------------- Top 10 ----------------
+
+        // Top 10'un zorluk modu yoktur: günde tek soru (oyun_tipi 'top10'). Cevap listesi soru verisine yazılmaz,
+        // uygulamaya kapalı top10_cevaplari tablosunda tutulur (029_top10.sql).
+        private const string Top10OyunTipi = "top10";
+
+        private async Task UretTop10Oyunu(DateTime tarih, Dictionary<string, Kademe> kademeler)
+        {
+            if (await OyunVarMi(Top10OyunTipi, tarih))
+            {
+                Console.WriteLine($"top10: {tarih:yyyy-MM-dd} için oyun zaten var, atlanıyor.");
+                return;
+            }
+
+            var veri = await Top10VerisiniOku();
+            var soru = await Top10SorusunuSec(tarih, veri, kademeler);
+            if (soru == null)
+            {
+                // Kurallara uyan soru yoksa boş ya da kurala uymayan soru yayınlanmaz
+                Console.WriteLine("HATA: Top 10 için kurallara uyan soru kurulamadı, bugün Top 10 yayınlanmadı.");
+                return;
+            }
+
+            var oyun = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+            {
+                OyunTipi = Top10OyunTipi,
+                Tarih = tarih,
+                SoruVerisi = Top10SoruVerisi(soru, veri)
+            })).Models.First();
+
+            // Cevaplar yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
+            try
+            {
+                await _supabaseClient.From<Top10Cevabi>().Insert(soru.Satirlar.Select(s => new Top10Cevabi
+                {
+                    OyunId = oyun.Id,
+                    Sira = s.Sira,
+                    OyuncuId = s.OyuncuId,
+                    OyuncuIsim = veri.Oyuncular[s.OyuncuId].Isim,
+                    Deger = s.Deger
+                }).ToList());
+                await _supabaseClient.From<Top10SorusuKaydi>().Insert(new Top10SorusuKaydi
+                {
+                    OyunId = oyun.Id,
+                    Tarih = tarih,
+                    Sablon = soru.Sablon,
+                    Anahtar = soru.Anahtar,
+                    Eksen = soru.Eksen
+                });
+            }
+            catch
+            {
+                await _supabaseClient.From<GunlukOyun>().Where(g => g.Id == oyun.Id).Delete();
+                throw;
+            }
+
+            Console.WriteLine($"Başarılı: top10 için {tarih:yyyy-MM-dd} tarihli soru eklendi.");
+            Top10Yaz(soru, veri, kademeler);
+        }
+
+        // Veritabanına yazmadan bugünün Top 10 sorusunu seçip ekrana basar:
+        // dotnet run -- --top10-onizleme
+        public async Task Top10Onizleme()
+        {
+            var kademeler = await KademeleriOku();
+            var veri = await Top10VerisiniOku();
+            DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
+            Console.WriteLine("\nTop 10 önizleme (veritabanına yazılmadı):");
+            var soru = await Top10SorusunuSec(bugun, veri, kademeler);
+            if (soru != null) Top10Yaz(soru, veri, kademeler);
+        }
+
+        private async Task<Top10SoruSecici.Soru?> Top10SorusunuSec(DateTime tarih, Top10SoruSecici.Veri veri, Dictionary<string, Kademe> kademeler)
+        {
+            // Tekrar ve çeşitlilik kuralları için son TekrarGunu günün soruları
+            var baslangic = tarih.AddDays(-Top10SoruSecici.TekrarGunu).ToString("yyyy-MM-dd");
+            var gecmis = new List<Top10SoruSecici.Gecmis>();
+            try
+            {
+                gecmis = (await HepsiniOku<Top10SorusuKaydi>("oyun_id, tarih, sablon, anahtar, eksen", g => g.OyunId,
+                        s => s.Filter("tarih", Operator.GreaterThanOrEqual, baslangic)))
+                    .Select(g => new Top10SoruSecici.Gecmis(g.Sablon, g.Anahtar, g.Eksen, g.Tarih.Date))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                // Tablo yoksa (029 çalıştırılmamışsa) önizleme yine çalışır; oyun üretimi cevapları yazarken durur
+                Console.WriteLine($"Uyarı: Önceki Top 10 soruları okunamadı (029_top10.sql çalıştırıldı mı?): {ex.Message}");
+            }
+
+            var sonuc = new Top10SoruSecici().Sec(tarih, veri, kademeler, gecmis);
+            Console.WriteLine($"Top 10: {veri.Transferler.Count} bedelli transfer, {veri.BallonDor.Count} Ballon d'Or satırı, " +
+                              $"son {Top10SoruSecici.TekrarGunu} günde {gecmis.Count} soru; {sonuc.DenenenSayisi} aday denendi.");
+            foreach (var uyari in sonuc.Uyarilar)
+            {
+                Console.WriteLine($"Uyarı: {uyari}");
+            }
+            return sonuc.Soru;
+        }
+
+        private async Task<Top10SoruSecici.Veri> Top10VerisiniOku()
+        {
+            var kulupler = await KulupleriOku();
+
+            // Kiralık ve bedelsiz transferler sayılmaz: sadece bedelli transferler okunur
+            var transferler = (await HepsiniOku<TransferKaydi>("id, oyuncu_id, eski_kulup_tm_id, yeni_kulup_tm_id, tarih, sezon, tip, bedel",
+                    t => t.Id, s => s.Filter("tip", Operator.Equals, "transfer").Filter("bedel", Operator.GreaterThan, "0")))
+                .Select(t => new Top10SoruSecici.Transfer(t.OyuncuId, t.EskiKulupTmId, t.YeniKulupTmId, t.Tarih, t.Sezon, t.Bedel ?? 0))
+                .ToList();
+
+            var oyuncular = (await HepsiniOku<Oyuncu>("id, isim, uyruk", o => o.Id))
+                .ToDictionary(o => o.Id, o => new Top10SoruSecici.OyuncuBilgisi(o.Isim, o.Uyruk));
+
+            // Ballon d'Or ve kulüp sayıları yoksa (028/029 çalıştırılmamışsa) o şablonlar atlanır, diğerleri üretilir
+            var ballonDor = new List<Top10SoruSecici.BallonDorSatiri>();
+            try
+            {
+                ballonDor = (await HepsiniOku<BallonDorSiralamasi>("id, yil, sira, oyuncu_id, puan, yuzde", b => b.Id.ToString()))
+                    .Select(b => new Top10SoruSecici.BallonDorSatiri(b.Yil, b.Sira, b.OyuncuId, b.Puan, b.Yuzde))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Uyarı: Ballon d'Or sıralamaları okunamadı (028_ballon_dor.sql çalıştırıldı mı?): {ex.Message}");
+            }
+
+            var kulupSayilari = new List<Top10SoruSecici.KulupSayisi>();
+            try
+            {
+                var cevap = await _supabaseClient.Rpc("top10_kulup_sayilari", new Dictionary<string, object> { ["p_adet"] = 30 });
+                using var json = System.Text.Json.JsonDocument.Parse(cevap.Content ?? "[]");
+                kulupSayilari = json.RootElement.EnumerateArray()
+                    .Select(j => new Top10SoruSecici.KulupSayisi(j.GetProperty("oyuncu_id").GetString()!, j.GetProperty("kulup_sayisi").GetInt32()))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Uyarı: Kulüp sayıları okunamadı (029_top10.sql çalıştırıldı mı?): {ex.Message}");
+            }
+
+            return new Top10SoruSecici.Veri(kulupler, transferler, oyuncular, ballonDor, kulupSayilari);
+        }
+
+        // Uygulama başlığı ve her satırın bayrağını gösterir; oyuncular ve değerler soru verisinde yoktur
+        private static object Top10SoruVerisi(Top10SoruSecici.Soru soru, Top10SoruSecici.Veri veri) => new
+        {
+            sablon = soru.Sablon,
+            baslik = soru.Baslik,
+            alt_baslik = soru.AltBaslik,
+            satirlar = soru.Satirlar.Select(s =>
+            {
+                var ulke = veri.Oyuncular[s.OyuncuId].Uyruk;
+                return new { sira = s.Sira, ulke, bayrak = ulke == null ? null : Logolar.Bayrak(ulke) };
+            }).ToList()
+        };
+
+        private static void Top10Yaz(Top10SoruSecici.Soru soru, Top10SoruSecici.Veri veri, Dictionary<string, Kademe> kademeler)
+        {
+            Console.WriteLine($"   [{soru.Sablon}] {soru.Baslik}" + (soru.AltBaslik == null ? "" : $" ({soru.AltBaslik})"));
+            foreach (var s in soru.Satirlar)
+            {
+                var oyuncu = veri.Oyuncular[s.OyuncuId];
+                var kademe = kademeler.TryGetValue(s.OyuncuId, out var k) ? ZorlukDagilimi.Metin(k) : "havuz dışı";
+                Console.WriteLine($"   {s.Sira,2}. {oyuncu.Isim} ({oyuncu.Uyruk}, {kademe}) - {s.Deger}");
+            }
         }
 
         // ---------------- Bingo ----------------

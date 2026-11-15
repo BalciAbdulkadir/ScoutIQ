@@ -77,15 +77,15 @@ void main() {
   testWidgets('günlük ilerleme bitirilen oyunları sayar, biten kutucukta skor yazar', (tester) async {
     await anaMenuyuAc(tester, oynananlar: {'kesisim_kolay': 6});
 
-    // Kesişim, Bonservis, Izgara ve Bingo: 4 günlük oyun (bir oyunun zorlukları tek oyun sayılır)
-    expect(find.text('1 / 4'), findsOneWidget);
+    // Kesişim, Bonservis, Izgara, Bingo ve Top 10: 5 günlük oyun (bir oyunun zorlukları tek oyun sayılır)
+    expect(find.text('1 / 5'), findsOneWidget);
     expect(find.text('6/10'), findsOneWidget);
     expect(find.text('KOLAY'), findsOneWidget); // Kesişim'de oynanan zorluk
-    expect(find.text('Oyna'), findsNWidgets(3)); // Bonservis, Izgara ve Bingo henüz oynanmadı
+    expect(find.text('Oyna'), findsNWidgets(4)); // Bonservis, Izgara, Bingo ve Top 10 henüz oynanmadı
     await ekraniKapat(tester);
   });
 
-  testWidgets("oyunlar kategorisiz tek ızgarada, zorluklu oyunlarda K O Z, Bingo'da tek mod yazar", (tester) async {
+  testWidgets("oyunlar kategorisiz tek ızgarada, zorluklu oyunlarda K O Z, Bingo ve Top 10'da tek mod yazar", (tester) async {
     await anaMenuyuAc(tester);
 
     expect(find.text('KESİŞİM'), findsOneWidget);
@@ -94,7 +94,7 @@ void main() {
     expect(find.text('K'), findsNWidgets(3));
     expect(find.text('O'), findsNWidgets(3));
     expect(find.text('Z'), findsNWidgets(3));
-    expect(find.text('TEK MOD'), findsOneWidget);
+    expect(find.text('TEK MOD'), findsNWidgets(2));
     await ekraniKapat(tester);
   });
 
@@ -151,8 +151,8 @@ void main() {
 
     expect(find.text('7/9'), findsOneWidget);
     expect(find.text('KOLAY'), findsOneWidget);
-    expect(find.text('1 / 4'), findsOneWidget);
-    expect(find.text('Oyna'), findsNWidgets(3));
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Oyna'), findsNWidgets(4));
     await ekraniKapat(tester);
   });
 
@@ -319,6 +319,7 @@ void main() {
       'bonservis_zor': 3,
       'izgara_orta': 4,
       'bingo': 12,
+      'top10': 7,
     });
 
     expect(find.text('Hepsi bitti'), findsOneWidget);

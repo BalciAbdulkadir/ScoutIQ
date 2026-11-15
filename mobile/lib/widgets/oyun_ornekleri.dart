@@ -27,6 +27,7 @@ class OyunOrnegi extends StatelessWidget {
             TebesirCizimi.bonservis => const _BonservisOrnegi(),
             TebesirCizimi.izgara => const _IzgaraOrnegi(),
             TebesirCizimi.bingo => const _BingoOrnegi(),
+            TebesirCizimi.top10 => const _Top10Ornegi(),
           },
         ],
       ),
@@ -311,6 +312,55 @@ class _OyuncuEtiketi extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Top 10: başlık ve ilk satırlar; bazıları bulunmuş, bayraklar ipucu
+class _Top10Ornegi extends StatelessWidget {
+  const _Top10Ornegi();
+
+  static const _satirlar = <(int, String, String?)>[
+    (1, 'gb-eng', null),
+    (2, 'br', 'Neymar'),
+    (3, 'fr', null),
+    (4, 'pt', 'Cristiano Ronaldo'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'PSG\'nin en pahalı 10 transferi',
+          style: TextStyle(color: Renkler.metin, fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        for (final (sira, bayrak, isim) in _satirlar)
+          Container(
+            height: 30,
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: isim == null ? null : Renkler.basari.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: isim == null ? Renkler.kenar : Renkler.basari.withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              children: [
+                SizedBox(width: 18, child: Text('$sira', style: Yazi.tebesir(13, renk: Renkler.vurgu))),
+                KulupLogosu(logoUrl: _bayrak(bayrak), boyut: 20, yedekIkon: Icons.flag_rounded),
+                const SizedBox(width: 8),
+                if (isim != null)
+                  Expanded(
+                    child: Text(isim, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Renkler.metin, fontSize: 12)),
+                  ),
+              ],
+            ),
+          ),
+        const Text('…', style: TextStyle(color: Renkler.metinSoluk, fontSize: 12)),
+      ],
     );
   }
 }

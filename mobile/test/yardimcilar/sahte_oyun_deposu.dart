@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:mobile/models/bingo.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
+import 'package:mobile/models/top10.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 
 // Testler için bellekte çalışan depo. Supabase'e bağlanmaz, yapılan çağrıları kaydeder.
@@ -100,6 +101,17 @@ class SahteOyunDeposu implements OyunDeposu {
   Map<int, BingoOyuncusu> bingoOrnekleri = {
     for (var i = 0; i < 12; i++) i: BingoOyuncusu(isim: 'Örnek Oyuncu $i'),
   };
+
+  // Top 10: listedeki oyuncular, sıra -> (oyuncu ID'si, oyuncu). Listede olmayan oyuncu yanlış sayılır.
+  Map<int, (String, Top10Oyuncusu)> top10Listesi = {
+    3: ('o-1', const Top10Oyuncusu(isim: 'Arda Güler', deger: '30 M€')),
+    for (var i = 1; i <= 10; i++)
+      if (i != 3) i: ('liste-$i', Top10Oyuncusu(isim: 'Liste Oyuncusu $i', deger: '${20 - i} M€')),
+  };
+  // Sunucudaki tahminler (uygulama yeniden açılınca okunur)
+  List<Top10Tahmini> top10TahminListesi = [];
+  bool top10TahminHataVerir = false;
+  int top10PesSayisi = 0;
 
   // Çağrı kayıtları
   int kayitAcSayisi = 0;
@@ -319,5 +331,50 @@ class SahteOyunDeposu implements OyunDeposu {
     if (kayit?['durum'] != 'tamamlandi') return {};
     final dolular = bingoHamleListesi.where((h) => h.dogru).map((h) => h.hucre).toSet();
     return {for (final e in bingoOrnekleri.entries) if (!dolular.contains(e.key)) e.key: e.value};
+  }
+
+  int get _top10Skoru => top10TahminListesi.where((t) => t.sira != null).length;
+
+  @override
+  Future<List<Top10Tahmini>> top10Tahminleri(String oyunId) async => List.of(top10TahminListesi);
+
+  // 029_top10.sql'deki top10_tahmin fonksiyonunun basit bir kopyası: isim eşleşmesi, tekrar sayılmaz, 10 bulununca biter
+  @override
+  Future<Top10TahminSonucu> top10Tahmin({required String oyunId, required String oyuncuId}) async {
+    if (top10TahminHataVerir) throw Exception('bağlantı yok');
+    final isim = oneriler.firstWhere((o) => o.id == oyuncuId, orElse: () => OyuncuOneri(id: oyuncuId, isim: oyuncuId)).isim;
+    if (top10TahminListesi.any((t) => t.oyuncuIsim == isim)) {
+      return Top10TahminSonucu(dogru: false, tekrar: true, oyuncuIsim: isim, skor: _top10Skoru, bitti: false);
+    }
+    final bulunan = top10Listesi.entries.where((e) => e.value.$2.isim == isim).map((e) => e.key).firstOrNull;
+    top10TahminListesi.add(Top10Tahmini(oyuncuIsim: isim, sira: bulunan));
+    final bitti = _top10Skoru == top10Boyu;
+    kayit = {...?kayit, 'skor': _top10Skoru, 'durum': bitti ? 'tamamlandi' : 'basladi'};
+    return Top10TahminSonucu(
+      dogru: bulunan != null,
+      sira: bulunan,
+      deger: bulunan == null ? null : top10Listesi[bulunan]!.$2.deger,
+      oyuncuIsim: isim,
+      skor: _top10Skoru,
+      bitti: bitti,
+    );
+  }
+
+  @override
+  Future<int> top10PesEt(String oyunId) async {
+    top10PesSayisi++;
+    kayit = {...?kayit, 'skor': _top10Skoru, 'durum': 'tamamlandi'};
+    return _top10Skoru;
+  }
+
+  // Oyun bitmediyse sadece bulunanlar, bittiyse bütün liste
+  @override
+  Future<Map<int, Top10Oyuncusu>> top10Cevaplar(String oyunId) async {
+    final bitti = kayit?['durum'] == 'tamamlandi';
+    final bulunanlar = {for (final t in top10TahminListesi) ?t.sira};
+    return {
+      for (final e in top10Listesi.entries)
+        if (bitti || bulunanlar.contains(e.key)) e.key: e.value.$2,
+    };
   }
 }
