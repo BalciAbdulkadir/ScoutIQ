@@ -10,18 +10,24 @@ public class BingoSoruSeciciTests
     {
         public Dictionary<Kategori, (HashSet<string> Oyuncular, HashSet<string> Oynayanlar)> Kategoriler { get; } = new();
         public Dictionary<string, Kademe> Kademeler { get; } = new();
+        // Desteye ek oyuncu olarak girebilen (üst sıralardaki) bilinen oyuncular
+        public HashSet<string> EkBilinenler { get; } = new();
         private int _oyuncuNo;
 
-        public Kategori Kategori(KategoriTipi tip, string anahtar)
+        public Kategori Kategori(KategoriTipi tip, string anahtar, bool basAlti = false)
         {
-            var k = new Kategori(tip, anahtar, $"{tip} {anahtar}");
+            var k = new Kategori(tip, anahtar, $"{tip} {anahtar}", BasAlti: basAlti);
             Kategoriler[k] = (new HashSet<string>(), new HashSet<string>());
             return k;
         }
 
         // Verilen kategorilerin hepsine uyan "adet" kadar yeni oyuncu ekler. kademe null: havuz dışı.
-        // oynadi false: kategoride kaydı var ama maça çıkmamış (sadece cevap olarak kabul edilir).
-        public void OyuncuEkle(int adet, Kademe? kademe, bool oynadi, params Kategori[] kategoriler)
+        // oynadi false: kategoride kaydı var ama yeterince maça çıkmamış (sadece cevap olarak kabul edilir).
+        // Bilinen oyuncular üst sıralardadır (ek oyuncu olabilir); altSira true ise değildir.
+        public void OyuncuEkle(int adet, Kademe? kademe, bool oynadi, params Kategori[] kategoriler) =>
+            OyuncuEkle(adet, kademe, oynadi, false, kategoriler);
+
+        public void OyuncuEkle(int adet, Kademe? kademe, bool oynadi, bool altSira, params Kategori[] kategoriler)
         {
             for (int i = 0; i < adet; i++)
             {
@@ -32,20 +38,23 @@ public class BingoSoruSeciciTests
                     if (oynadi) Kategoriler[k].Oynayanlar.Add(id);
                 }
                 if (kademe != null) Kademeler[id] = kademe.Value;
+                if (kademe == Kademe.Bilinen && !altSira) EkBilinenler.Add(id);
             }
         }
 
         public List<Aday> Adaylar() => Kategoriler.Select(k => new Aday(k.Key, k.Value.Oyuncular, k.Value.Oynayanlar)).ToList();
 
-        public BingoKarti? Sec(int tohum) => new BingoSoruSecici(new Random(tohum)).Sec(Adaylar(), Kademeler);
+        public BingoKarti? Sec(int tohum) => new BingoSoruSecici(new Random(tohum)).Sec(Adaylar(), Kademeler, EkBilinenler);
     }
 
-    // Her tipten fazlasıyla kategori; her kategoride her kademeden oyuncu, bazıları iki kategoriye birden uyar
+    // Her tipten fazlasıyla kategori (9 büyük, 4 baş altı kulüp); her kategoride her kademeden oyuncu,
+    // bazıları iki kategoriye birden uyar
     private static TestVerisi ZenginVeri()
     {
         var v = new TestVerisi();
         var kategoriler = new List<Kategori>();
         for (int i = 0; i < 9; i++) kategoriler.Add(v.Kategori(KategoriTipi.Kulup, $"k{i}"));
+        for (int i = 0; i < 4; i++) kategoriler.Add(v.Kategori(KategoriTipi.Kulup, $"basalti{i}", basAlti: true));
         for (int i = 0; i < 6; i++) kategoriler.Add(v.Kategori(KategoriTipi.Milli, $"m{i}"));
         for (int i = 0; i < 3; i++) kategoriler.Add(v.Kategori(KategoriTipi.Lig, $"l{i}"));
         for (int i = 0; i < 6; i++) kategoriler.Add(v.Kategori(KategoriTipi.Basari, $"b{i}"));
@@ -57,9 +66,10 @@ public class BingoSoruSeciciTests
                 v.OyuncuEkle(3, kademe, true, kategoriler[i]);
                 v.OyuncuEkle(1, kademe, true, kategoriler[i], kategoriler[(i + 5) % kategoriler.Count]);
             }
-            // Tuzaklar: havuz dışı oyuncu ve maça çıkmamış ünlü oyuncu desteye girmemeli
+            // Tuzaklar: havuz dışı oyuncu, yeterince maça çıkmamış ünlü oyuncu ve alt sıralardaki bilinen oyuncu desteye girmemeli
             v.OyuncuEkle(2, null, true, kategoriler[i]);
             v.OyuncuEkle(1, Kademe.Unlu, false, kategoriler[i]);
+            v.OyuncuEkle(3, Kademe.Bilinen, true, true, kategoriler[i]);
         }
         return v;
     }
@@ -80,11 +90,19 @@ public class BingoSoruSeciciTests
         foreach (var (tip, adet) in KartDagilimi)
             Assert.Equal(adet, kart.Hucreler.Count(h => h.Tip == tip));
 
-        // Deste: 32 farklı havuz oyuncusu, sadece ünlü ve bilinen; az bilinen (diğer) oyuncu yok
+        // Kulüpler: en fazla MaxBasAltiKulup baş altı kulüp, kalanı büyük kulüp
+        Assert.True(kart.Hucreler.Count(h => h.BasAlti) <= MaxBasAltiKulup, "Kartta fazla baş altı kulüp var");
+
+        // Deste: 32 farklı havuz oyuncusu, sadece ünlü ve üst sıralardaki bilinen; az bilinen (diğer) oyuncu yok
         Assert.Equal(DesteBoyutu, kart.Deste.Count);
         Assert.Equal(DesteBoyutu, kart.Deste.Distinct().Count());
         Assert.All(kart.Deste, o => Assert.True(veri.Kademeler.ContainsKey(o), $"Havuz dışı oyuncu destede: {o}"));
         Assert.All(kart.Deste, o => Assert.NotEqual(Kademe.Diger, veri.Kademeler[o]));
+        Assert.All(kart.Deste.Where(o => veri.Kademeler[o] == Kademe.Bilinen),
+            o => Assert.True(veri.EkBilinenler.Contains(o), $"Alt sıralardaki bilinen oyuncu destede: {o}"));
+
+        // Deste ünlü ağırlıklı: en az MinUnluSayisi (26) ünlü
+        Assert.True(kart.Deste.Count(o => veri.Kademeler[o] == Kademe.Unlu) >= MinUnluSayisi, "Destede yeterli ünlü yok");
 
         // Eşleşmeler doğru: oyuncunun uyduğu bütün kutular, sadece onlar
         for (int i = 0; i < DesteBoyutu; i++)
@@ -96,12 +114,13 @@ public class BingoSoruSeciciTests
         // Kutuya uymayan oyuncu az: tam UymayanSayisi kadar
         Assert.Equal(UymayanSayisi, kart.Eslesmeler.Count(e => e.Length == 0));
 
-        // Kart doldurulabilir: her kutuya desteden ayrı bir oyuncu atanabilir
+        // Kart doldurulabilir: her kutuya desteden ayrı bir oyuncu atanabilir, sadece ünlü oyuncularla bile
         Assert.True(TamEslesmeVar(kart), "Kart desteden doldurulamıyor");
+        Assert.True(TamEslesmeVar(kart, o => veri.Kademeler[kart.Deste[o]] == Kademe.Unlu), "Kart ünlü oyuncularla doldurulamıyor");
     }
 
     // Kutular ile oyuncular arasında herkese ayrı oyuncu düşen bir eşleşme var mı (artırımlı yol)
-    private static bool TamEslesmeVar(BingoKarti kart)
+    private static bool TamEslesmeVar(BingoKarti kart, Func<int, bool>? oyuncuFiltresi = null)
     {
         var kutununOyuncusu = new int?[HucreSayisi];
         bool Yerlestir(int oyuncu, HashSet<int> gezilen)
@@ -117,7 +136,8 @@ public class BingoSoruSeciciTests
             }
             return false;
         }
-        for (int o = 0; o < kart.Deste.Count; o++) Yerlestir(o, new HashSet<int>());
+        for (int o = 0; o < kart.Deste.Count; o++)
+            if (oyuncuFiltresi == null || oyuncuFiltresi(o)) Yerlestir(o, new HashSet<int>());
         return kutununOyuncusu.All(o => o != null);
     }
 
@@ -167,22 +187,36 @@ public class BingoSoruSeciciTests
     }
 
     [Fact]
-    public void Sec_BilinenOyuncuYetmezse_NullDoner()
+    public void Sec_BilinenOyuncuYoksa_DesteUnlulerdenKurulur()
     {
         var veri = ZenginVeri();
-        // Bilinen oyuncu kalmasın: kartı dolduran oyuncuların 6'sı bilinen olmalı
-        foreach (var id in veri.Kademeler.Where(k => k.Value == Kademe.Bilinen).Select(k => k.Key).ToList())
+        // Üst sıralarda bilinen oyuncu kalmasın: ek oyuncuların eksiği ünlülerden tamamlanır
+        veri.EkBilinenler.Clear();
+
+        var kart = veri.Sec(1);
+
+        Assert.NotNull(kart);
+        Assert.All(kart!.Deste, o => Assert.Equal(Kademe.Unlu, veri.Kademeler[o]));
+    }
+
+    [Fact]
+    public void Sec_UnluOyuncuYoksa_NullDoner()
+    {
+        var veri = ZenginVeri();
+        // Ünlü oyuncu kalmasın: kartı dolduran 12 oyuncunun hepsi ünlü olmalı
+        foreach (var id in veri.Kademeler.Where(k => k.Value == Kademe.Unlu).Select(k => k.Key).ToList())
             veri.Kademeler.Remove(id);
 
         Assert.Null(veri.Sec(1));
     }
 
     [Fact]
-    public void Sec_SadeceAzBilinenOyuncusuOlanKategori_KartaGirmez()
+    public void Sec_UnluOyuncusuOlmayanKategori_KartaGirmez()
     {
         var veri = ZenginVeri();
-        // Sadece az bilinen (diğer) oyuncuların oynadığı bir kulüp: hiçbir tohumda karta girmemeli
-        var gizli = veri.Kategori(KategoriTipi.Kulup, "sadece-diger");
+        // Sadece bilinen ve az bilinen oyuncuların oynadığı bir kulüp: hiçbir tohumda karta girmemeli
+        var gizli = veri.Kategori(KategoriTipi.Kulup, "unlusuz");
+        veri.OyuncuEkle(20, Kademe.Bilinen, true, gizli);
         veri.OyuncuEkle(20, Kademe.Diger, true, gizli);
 
         for (int tohum = 0; tohum < 40; tohum++)
@@ -190,12 +224,35 @@ public class BingoSoruSeciciTests
     }
 
     [Fact]
+    public void Sec_BasAltiKulup_BazenCikar_AmaEnFazlaBirTane()
+    {
+        var veri = ZenginVeri();
+
+        var sayilar = Enumerable.Range(0, 40).Select(t => veri.Sec(t)!.Hucreler.Count(h => h.BasAlti)).ToList();
+
+        Assert.Contains(sayilar, s => s == 0);
+        Assert.Contains(sayilar, s => s == MaxBasAltiKulup);
+        Assert.All(sayilar, s => Assert.True(s <= MaxBasAltiKulup));
+    }
+
+    [Fact]
+    public void Sec_BuyukKulupYetmezse_NullDoner()
+    {
+        var veri = ZenginVeri();
+        // 2 büyük kulüp kalsın: kart en az 3 büyük kulüp ister (4 kulübün en fazla 1'i baş altı)
+        foreach (var k in veri.Kategoriler.Keys.Where(k => k.Tip == KategoriTipi.Kulup && !k.BasAlti).Skip(2).ToList())
+            veri.Kategoriler.Remove(k);
+
+        Assert.Null(veri.Sec(1));
+    }
+
+    [Fact]
     public void KartDagilimi_OnIkiKutu()
     {
         Assert.Equal(12, HucreSayisi);
         Assert.Equal(HucreSayisi, KartDagilimi.Values.Sum());
-        Assert.Equal(HucreSayisi, DesteDagilimi.Values.Sum());
         Assert.Equal(32, DesteBoyutu);
+        Assert.Equal(26, MinUnluSayisi);
     }
 
     [Fact]

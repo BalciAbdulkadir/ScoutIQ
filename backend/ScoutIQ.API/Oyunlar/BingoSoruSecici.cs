@@ -10,10 +10,13 @@ namespace ScoutIQ.API.Oyunlar
     //
     // Kart 4 satır, 3 sütundur (12 kutu): 4 kulüp, 3 milli takım, 2 lig ve 3 başarı kategorisi. Deste 32 oyuncudur;
     // oyuncular sırayla gelir, kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer. Pas sınırsızdır: pas geçilen
-    // oyuncu destenin sonuna gider ve sırası gelince tekrar gelir. Destede sadece ünlü ve bilinen oyuncular vardır;
-    // kategoriler de bu oyuncuların kulüplerinden, milli takımlarından, liglerinden ve başarılarından kurulur.
-    // Deste: her kutuya ayrı bir oyuncu (12, DesteDagilimi: 6 ünlü, 6 bilinen; kart böylece her zaman doldurulabilir),
-    // en az bir kutuya uyan EkUyanSayisi oyuncu ve hiçbir kutuya uymayan UymayanSayisi oyuncu. Hepsi karıştırılır.
+    // oyuncu destenin sonuna gider ve sırası gelince tekrar gelir.
+    // Kulüp kategorileri büyük kulüplerdir; kartta en fazla MaxBasAltiKulup baş altı kulüp olur.
+    // Deste ünlü ağırlıklıdır: her kutuya ayrı bir ünlü oyuncu (12; kart böylece her zaman doldurulabilir),
+    // en az bir kutuya uyan EkUyanSayisi oyuncu ve hiçbir kutuya uymayan UymayanSayisi oyuncu. Ek oyuncuların çoğu
+    // ünlüdür (EkUyanUnluSayisi, UymayanUnluSayisi); kalanı bilinen kademesinin üst sıralarındandır (EkOyuncuSiraSiniri).
+    // Kulüp ve lig kategorilerinde oyuncu, kulüpte en az KariyerGecmisi.MinSoruMaci maça çıkmışsa desteye girer.
+    // Hepsi karıştırılır.
     // Oyun kuralları (sıra, yanlış kutu, pas, süre) sunucuda: 020_bingo.sql, 021_bingo_tek_mod.sql, 023_bingo_sinirsiz_pas.sql.
     public class BingoSoruSecici
     {
@@ -25,13 +28,17 @@ namespace ScoutIQ.API.Oyunlar
         public const int UymayanSayisi = 4; // Destenin sekizde biri: kutuya uymayan oyuncu az gelir
         public const int DesteBoyutu = HucreSayisi + EkUyanSayisi + UymayanSayisi;
 
-        // Desteye girebilen kademeler ve kartı dolduran 12 oyuncunun kademeleri, toplamı HucreSayisi.
-        // Ek oyuncular bu kademelerden rastgele seçilir.
-        public static readonly IReadOnlyDictionary<Kademe, int> DesteDagilimi = new Dictionary<Kademe, int>
-        {
-            [Kademe.Unlu] = 6,
-            [Kademe.Bilinen] = 6,
-        };
+        // Ek oyuncuların ünlü olanları; kalanı bilinen kademesinin üst sıralarındandır. Destede toplam 26 ünlü, 6 bilinen olur.
+        // Yeterli ünlü (ya da bilinen) yoksa eksik diğerinden tamamlanır.
+        public const int EkUyanUnluSayisi = 11;
+        public const int UymayanUnluSayisi = 3;
+        public const int MinUnluSayisi = HucreSayisi + EkUyanUnluSayisi + UymayanUnluSayisi;
+
+        // Desteye girebilen bilinen oyuncular: bilinirlik sırasında ilk bu kadar oyuncunun içinde olanlar (ilk 500 ünlüdür)
+        public const int EkOyuncuSiraSiniri = 800;
+
+        // Karttaki 4 kulübün en fazla bu kadarı baş altı kulüptür, kalanı büyük kulüptür
+        public const int MaxBasAltiKulup = 1;
 
         public enum KategoriTipi { Kulup, Milli, Lig, Basari }
 
@@ -71,10 +78,12 @@ namespace ScoutIQ.API.Oyunlar
 
         // Anahtar: kulüp ve milli takımda Transfermarkt ID'si, ligde lig kodu, başarıda Basarilar'daki anahtar.
         // KulupId sadece kulüpte doludur. LogoUrl: kulüp logosu, bayrak, lig ya da kupa logosu (Logolar); uygulamaya taşınır.
-        public record Kategori(KategoriTipi Tip, string Anahtar, string Isim, string? KulupId = null, string? LogoUrl = null);
+        // BasAlti: baş altı kulüp (kartta sayısı sınırlıdır); diğer kategorilerde false.
+        public record Kategori(KategoriTipi Tip, string Anahtar, string Isim, string? KulupId = null, string? LogoUrl = null,
+            bool BasAlti = false);
 
         // Oyuncular: kategoriye uyan bütün oyuncular (cevap olarak kabul edilenler).
-        // Oynayanlar: kartı kurarken kullanılanlar; kulüp ve ligde sadece gerçekten maça çıkmış oyuncular.
+        // Oynayanlar: kartı kurarken kullanılanlar; kulüp ve ligde sadece kulüpte yeterince maça çıkmış oyuncular.
         public record Aday(Kategori Kategori, HashSet<string> Oyuncular, HashSet<string> Oynayanlar);
 
         // Deste: oyuncu ID'leri, geliş sırasıyla. Eslesmeler[i]: destedeki i. oyuncunun uyduğu kutular (0-11).
@@ -90,36 +99,35 @@ namespace ScoutIQ.API.Oyunlar
             _random = random ?? new Random();
         }
 
-        // Kurallara uyan bir kart ya da bulunamazsa null
-        public BingoKarti? Sec(IEnumerable<Aday> adayListesi, IReadOnlyDictionary<string, Kademe> tumKademeler)
+        // Kurallara uyan bir kart ya da bulunamazsa null.
+        // ekBilinenler: desteye ek oyuncu olarak girebilen bilinen oyuncular (bilinirlik sırası EkOyuncuSiraSiniri içinde olanlar).
+        public BingoKarti? Sec(IEnumerable<Aday> adayListesi, IReadOnlyDictionary<string, Kademe> kademeler,
+            IReadOnlySet<string> ekBilinenler)
         {
-            // Sadece ünlü ve bilinen oyuncular: kategoriler de deste de onlardan kurulur
-            var kademeler = tumKademeler.Where(k => DesteDagilimi.ContainsKey(k.Value)).ToDictionary(k => k.Key, k => k.Value);
+            bool Unlu(string o) => kademeler.TryGetValue(o, out var k) && k == Kademe.Unlu;
+            bool EkBilinen(string o) => ekBilinenler.Contains(o) && kademeler.TryGetValue(o, out var k) && k == Kademe.Bilinen;
 
-            // Sıralı tutulur ki aynı tohumla (seed) aynı kart çıksın. Ünlü ya da bilinen oyuncusu olmayan kategori kullanılamaz.
+            // Sıralı tutulur ki aynı tohumla (seed) aynı kart çıksın. Ünlü oyuncusu olmayan kategori kullanılamaz.
             var adaylar = adayListesi
-                .Where(a => a.Oynayanlar.Any(kademeler.ContainsKey))
+                .Where(a => a.Oynayanlar.Any(Unlu))
                 .OrderBy(a => a.Kategori.Tip).ThenBy(a => a.Kategori.Anahtar, StringComparer.Ordinal)
                 .ToList();
             var tipler = KartDagilimi.ToDictionary(k => k.Key, k => adaylar.Where(a => a.Kategori.Tip == k.Key).ToList());
             if (KartDagilimi.Any(k => tipler[k.Key].Count < k.Value)) return null;
+            if (tipler[KategoriTipi.Kulup].Count(a => !a.Kategori.BasAlti) < KartDagilimi[KategoriTipi.Kulup] - MaxBasAltiKulup) return null;
 
-            // Her kategorinin kademeye göre oyuncuları, sıralı
-            var kademeOyunculari = adaylar.ToDictionary(
-                a => a,
-                a => DesteDagilimi.Keys.ToDictionary(
-                    k => k,
-                    k => a.Oynayanlar.Where(o => kademeler.TryGetValue(o, out var ok) && ok == k).OrderBy(o => o, StringComparer.Ordinal).ToList()));
+            // Her kategorinin desteye girebilen oyuncuları, sıralı
+            List<string> Sirali(IEnumerable<string> oyuncular) => oyuncular.OrderBy(o => o, StringComparer.Ordinal).ToList();
+            var unluler = adaylar.ToDictionary(a => a, a => Sirali(a.Oynayanlar.Where(Unlu)));
+            var bilinenler = adaylar.ToDictionary(a => a, a => Sirali(a.Oynayanlar.Where(EkBilinen)));
 
-            var kademeSirasi = DesteDagilimi.OrderBy(d => d.Key).SelectMany(d => Enumerable.Repeat(d.Key, d.Value)).ToList();
-
-            // Kutuya uymayan oyuncu adayları: bir kategoride maça çıkmış bütün ünlü ve bilinen oyuncular
-            var havuz = adaylar.SelectMany(a => a.Oynayanlar).Where(kademeler.ContainsKey).Distinct()
-                .OrderBy(o => o, StringComparer.Ordinal).ToList();
+            // Kutuya uymayan oyuncu adayları: bir kategoride yer alan, desteye girebilen bütün oyuncular
+            var havuzUnlu = Sirali(unluler.Values.SelectMany(o => o).Distinct());
+            var havuzBilinen = Sirali(bilinenler.Values.SelectMany(o => o).Distinct());
 
             for (int deneme = 0; deneme < MaxDeneme; deneme++)
             {
-                var kart = Dene(tipler, kademeOyunculari, kademeSirasi, havuz);
+                var kart = Dene(tipler, unluler, bilinenler, havuzUnlu, havuzBilinen);
                 if (kart != null) return kart;
             }
             return null;
@@ -127,49 +135,56 @@ namespace ScoutIQ.API.Oyunlar
 
         private BingoKarti? Dene(
             Dictionary<KategoriTipi, List<Aday>> tipler,
-            Dictionary<Aday, Dictionary<Kademe, List<string>>> kademeOyunculari,
-            List<Kademe> kademeSirasi,
-            List<string> havuz)
+            Dictionary<Aday, List<string>> unluler,
+            Dictionary<Aday, List<string>> bilinenler,
+            List<string> havuzUnlu,
+            List<string> havuzBilinen)
         {
-            var hucreler = KartDagilimi.SelectMany(k => RastgeleSec(tipler[k.Key], k.Value)).ToList();
+            var hucreler = KartDagilimi.SelectMany(k => k.Key == KategoriTipi.Kulup
+                ? KulupleriSec(tipler[k.Key], k.Value)
+                : RastgeleSec(tipler[k.Key], k.Value)).ToList();
+            if (hucreler.Count < HucreSayisi) return null;
             Karistir(hucreler);
-
-            var kademeler = kademeSirasi.ToList();
-            Karistir(kademeler);
 
             var kullanilan = new HashSet<string>();
             var deste = new List<string>();
 
-            // Her kutuya, kutunun kademesinden ve kutuya uyan ayrı bir oyuncu: kart böylece her zaman doldurulabilir
-            for (int i = 0; i < HucreSayisi; i++)
+            // Adaylardan "adet" oyuncu ekler; yetmezse eksik kalan sayıyı döndürür
+            int Ekle(List<string> oyuncuAdaylari, int adet)
             {
-                var oyuncu = RastgeleOyuncu(kademeOyunculari[hucreler[i]][kademeler[i]], kullanilan);
-                if (oyuncu == null) return null;
-                kullanilan.Add(oyuncu);
-                deste.Add(oyuncu);
+                for (; adet > 0; adet--)
+                {
+                    var oyuncu = RastgeleOyuncu(oyuncuAdaylari, kullanilan);
+                    if (oyuncu == null) break;
+                    kullanilan.Add(oyuncu);
+                    deste.Add(oyuncu);
+                }
+                return adet;
+            }
+
+            // Önce ünlülerden istenen kadar, kalanı bilinenlerden alınır; biri yetmezse eksik diğerinden tamamlanır
+            bool EkOyuncular(List<string> unluAdaylari, List<string> bilinenAdaylari, int adet, int unluAdedi)
+            {
+                int eksik = Ekle(unluAdaylari, unluAdedi);
+                eksik = Ekle(bilinenAdaylari, adet - unluAdedi + eksik);
+                return Ekle(unluAdaylari, eksik) == 0;
+            }
+
+            // Her kutuya, kutuya uyan ayrı bir ünlü oyuncu: kart böylece her zaman doldurulabilir
+            foreach (var hucre in hucreler)
+            {
+                if (Ekle(unluler[hucre], 1) != 0) return null;
             }
 
             // Ek oyuncular en az bir kutuya uyar
-            var havuzKumesi = havuz.ToHashSet();
-            var uyanlar = hucreler.SelectMany(h => h.Oynayanlar).Where(havuzKumesi.Contains).Distinct()
-                .OrderBy(o => o, StringComparer.Ordinal).ToList();
-            for (int i = 0; i < EkUyanSayisi; i++)
-            {
-                var oyuncu = RastgeleOyuncu(uyanlar, kullanilan);
-                if (oyuncu == null) return null;
-                kullanilan.Add(oyuncu);
-                deste.Add(oyuncu);
-            }
+            List<string> Uyanlar(Dictionary<Aday, List<string>> oyuncular) =>
+                hucreler.SelectMany(h => oyuncular[h]).Distinct().OrderBy(o => o, StringComparer.Ordinal).ToList();
+            if (!EkOyuncular(Uyanlar(unluler), Uyanlar(bilinenler), EkUyanSayisi, EkUyanUnluSayisi)) return null;
 
-            // Hiçbir kutuya uymayan oyuncular: kabul edilen cevaplara (Oyuncular) bakılır, maça çıkmamış olsa da uyan sayılır
-            var uymayanlar = havuz.Where(o => !hucreler.Any(h => h.Oyuncular.Contains(o))).ToList();
-            for (int i = 0; i < UymayanSayisi; i++)
-            {
-                var oyuncu = RastgeleOyuncu(uymayanlar, kullanilan);
-                if (oyuncu == null) return null;
-                kullanilan.Add(oyuncu);
-                deste.Add(oyuncu);
-            }
+            // Hiçbir kutuya uymayan oyuncular: kabul edilen cevaplara (Oyuncular) bakılır, yeterince maça çıkmamış olsa da uyan sayılır
+            bool Uymaz(string o) => !hucreler.Any(h => h.Oyuncular.Contains(o));
+            if (!EkOyuncular(havuzUnlu.Where(Uymaz).ToList(), havuzBilinen.Where(Uymaz).ToList(), UymayanSayisi, UymayanUnluSayisi))
+                return null;
 
             Karistir(deste);
             var eslesmeler = deste
@@ -183,6 +198,15 @@ namespace ScoutIQ.API.Oyunlar
         {
             var bos = adaylar.Where(o => !kullanilan.Contains(o)).ToList();
             return bos.Count == 0 ? null : bos[_random.Next(bos.Count)];
+        }
+
+        // Kartın kulüpleri: en fazla MaxBasAltiKulup baş altı kulüp, kalanı büyük kulüp
+        private List<Aday> KulupleriSec(List<Aday> kulupler, int adet)
+        {
+            var basAltilar = kulupler.Where(k => k.Kategori.BasAlti).ToList();
+            var buyukler = kulupler.Where(k => !k.Kategori.BasAlti).ToList();
+            int basAltiAdedi = _random.Next(Math.Min(MaxBasAltiKulup, basAltilar.Count) + 1);
+            return RastgeleSec(buyukler, adet - basAltiAdedi).Concat(RastgeleSec(basAltilar, basAltiAdedi)).ToList();
         }
 
         private List<T> RastgeleSec<T>(List<T> liste, int adet)

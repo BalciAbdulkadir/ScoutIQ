@@ -21,5 +21,10 @@ namespace ScoutIQ.API.Models
 
         [Column("logo_url")]
         public string? LogoUrl { get; set; }
+
+        // Kulübün kademesi: 'buyuk', 'bas_alti', 'diger' ya da null (024_kulup_kademeleri.sql).
+        // Izgara ve Bingo'da hangi kulüplerin başlık olacağını belirler (Oyunlar/KulupKademeleri.cs).
+        [Column("kademe")]
+        public string? Kademe { get; set; }
     }
 }
