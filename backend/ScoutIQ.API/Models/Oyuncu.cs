@@ -30,5 +30,9 @@ namespace ScoutIQ.API.Models
         // 0-1 arası bilinirlik skoru, sadece soru havuzundaki oyuncularda doludur (data_miner/kademeler.py)
         [Column("bilinirlik")]
         public float? Bilinirlik { get; set; }
+
+        // Transfermarkt'taki İngilizce ülke adı (ör. "Spain"); çifte uyrukta birincil uyruk
+        [Column("uyruk")]
+        public string? Uyruk { get; set; }
     }
 }

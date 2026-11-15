@@ -7,7 +7,7 @@ import '../theme/yazi.dart';
 // Taktik tahtasının tebeşir parçaları: oyun çizimleri, çentikler, skor damgası, kesik çizgiler.
 
 // Her oyunun ana menüdeki kendi tebeşir çizimi
-enum TebesirCizimi { kesisim, bonservis, izgara, bingo }
+enum TebesirCizimi { kesisim, bonservis, izgara, bingo, top10 }
 
 class TebesirIkonu extends StatelessWidget {
   final TebesirCizimi cizim;
@@ -103,6 +103,18 @@ class _IkonCizeri extends CustomPainter {
         for (final x in [11.0, 22.0, 33.0]) {
           for (final y in [7.0, 17.0, 27.0, 37.0]) {
             canvas.drawCircle(Offset(x, y), 2.8, beyaz);
+          }
+        }
+      case TebesirCizimi.top10:
+        // Sıralı liste: solda sıra çizgileri (sarı), sağda satırlar; ilk iki satır dolu, kalanlar boş
+        for (final (i, y) in [9.0, 17.0, 25.0, 33.0].indexed) {
+          canvas.drawLine(Offset(7, y), Offset(10, y), sari);
+          if (i < 2) {
+            canvas.drawLine(Offset(15, y), Offset(37, y), beyaz);
+          } else {
+            for (var x = 15.0; x < 37; x += 5) {
+              canvas.drawLine(Offset(x, y), Offset(math.min(x + 2, 37), y), beyaz);
+            }
           }
         }
     }
