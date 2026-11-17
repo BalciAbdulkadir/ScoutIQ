@@ -17,7 +17,8 @@ class TahminHatasi {
   const TahminHatasi(this.mesaj);
 }
 
-// Oyuncu yazma alanı ve altındaki öneri listesi. Kesişim ve Izgara ortak kullanır.
+// Oyuncu yazma alanı ve altındaki öneri listesi. Kesişim, Izgara ve Top 10 ortak kullanır; her oyunda oyun tablosunun
+// altında durur.
 // Tahtaya çekilmiş tebeşir çizgisi üstüne el yazısıyla yazılır; cevap sadece listeden seçilir.
 // Seçilen oyuncu fotoğraflı bir etikete dönüşür, Gönder butonuyla gönderilir (yanlış satıra dokunmak tahmin harcamasın).
 class OyuncuArama extends StatefulWidget {

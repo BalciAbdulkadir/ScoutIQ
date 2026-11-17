@@ -142,6 +142,9 @@ class IzgaraScreen extends ConsumerWidget {
                 ? null
                 : SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),
           ),
+          const SizedBox(height: 16),
+          IzgaraTahtasiGorunumu(state: state),
+          // Yazma alanı tahtanın altında; odaklanınca alan ekranın üstüne kayar, öneriler klavyenin üstünde kalır
           const SizedBox(height: 20),
           OyuncuArama(
             renk: Renkler.izgara,
@@ -152,8 +155,6 @@ class IzgaraScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           _SonTahmin(sonuc: state.sonTahmin, tahta: state.tahta!),
-          const SizedBox(height: 16),
-          IzgaraTahtasiGorunumu(state: state),
         ],
       ),
     );

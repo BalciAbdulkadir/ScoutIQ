@@ -263,6 +263,11 @@ void main() {
         d.top10TahminListesi = [const Top10Tahmini(oyuncuIsim: 'Mesut Özil')];
       });
 
+      // Canlar listenin altında, yazma alanının üstünde
+      await tester.scrollUntilVisible(find.byType(Top10Canlari), 200);
+      final canlar = tester.getTopLeft(find.byType(Top10Canlari)).dy;
+      expect(canlar, greaterThan(tester.getTopLeft(find.text('10')).dy));
+      expect(canlar, lessThan(tester.getTopLeft(find.byType(TextField)).dy));
       expect(find.byIcon(Icons.favorite_rounded), findsNWidgets(2));
       expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
       expect(find.bySemanticsLabel('2 can kaldı'), findsOneWidget);
