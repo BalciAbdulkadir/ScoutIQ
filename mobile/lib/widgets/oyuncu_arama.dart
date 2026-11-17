@@ -355,21 +355,11 @@ class _OyuncuAramaState extends State<OyuncuArama> with SingleTickerProviderStat
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ClipOval(
-                    child: SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        child: OyuncuFotografi(
-                          isim: oyuncu.isim,
-                          fotoUrl: oyuncu.fotoUrl,
-                          boyut: 32,
-                          harfRengi: renk,
-                        ),
-                      ),
-                    ),
+                  OyuncuFotografi.yuvarlak(
+                    isim: oyuncu.isim,
+                    fotoUrl: oyuncu.fotoUrl,
+                    boyut: 32,
+                    harfRengi: renk,
                   ),
                   const SizedBox(width: 10),
                   Flexible(
