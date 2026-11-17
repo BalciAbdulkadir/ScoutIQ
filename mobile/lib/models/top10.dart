@@ -2,6 +2,8 @@
 // Cevaplar soru verisinde yoktur; tahminler sunucuda kontrol edilir, liste oyun bitince açılır.
 
 const top10Boyu = 10;
+// Can sayısı: listede olmayan oyuncuyu tahmin etmek bir can götürür, canlar bitince oyun biter (031_top10_can.sql)
+const top10Can = 3;
 
 // Listedeki bir satırın ipucu: oyuncunun uyruğunun bayrağı
 class Top10Satiri {
@@ -73,6 +75,7 @@ class Top10TahminSonucu {
   final String oyuncuIsim;
   final String? fotoUrl;
   final int skor;
+  final int? kalanCan; // 031'den önceki sunucu göndermez: o zaman uygulama kendisi hesaplar
   final bool bitti;
 
   const Top10TahminSonucu({
@@ -83,6 +86,7 @@ class Top10TahminSonucu {
     required this.oyuncuIsim,
     this.fotoUrl,
     required this.skor,
+    this.kalanCan,
     required this.bitti,
   });
 
@@ -95,6 +99,7 @@ class Top10TahminSonucu {
       oyuncuIsim: json['oyuncu_isim'] as String,
       fotoUrl: json['foto_url'] as String?,
       skor: (json['skor'] as num).toInt(),
+      kalanCan: (json['kalan_can'] as num?)?.toInt(),
       bitti: json['bitti'] == true,
     );
   }

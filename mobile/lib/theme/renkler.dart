@@ -18,6 +18,7 @@ class Renkler {
 
   static const Color basari = Color(0xFF9BE3A8); // Doğru
   static const Color hata = Color(0xFFF19A86); // Yanlış
+  static const Color can = Color(0xFFE5484D); // Can kalpleri (Top 10): tebeşir tonlarından ayrışan kırmızı
 
   // Oyun modlarının vurgusu. Hepsi aynı tebeşir sarısı: modları renk değil kendi tebeşir çizimleri ayırır.
   static const Color kesisim = vurgu;

@@ -82,18 +82,33 @@ void main() {
       expect(durum(c).sonTahmin?.dogru, isTrue);
     });
 
-    test('yanlış tahminin cezası yok, oyun sürer', () async {
+    test('oyun 3 canla başlar', () async {
+      final (c, _) = await oyunuAc();
+
+      expect(durum(c).kalanCan, 3);
+    });
+
+    test('yanlış tahmin bir can götürür, oyun sürer', () async {
       final (c, _) = await oyunuAc();
 
       await notifier(c).tahminEt(mesut);
 
       expect(durum(c).durum, Top10Durumu.oynaniyor);
       expect(durum(c).skor, 0);
+      expect(durum(c).kalanCan, 2);
       expect(durum(c).sonTahmin?.dogru, isFalse);
       expect(durum(c).denenenler, contains('Mesut Özil'));
     });
 
-    test('daha önce denenen oyuncu tekrar sayılmaz', () async {
+    test('doğru tahmin can götürmez', () async {
+      final (c, _) = await oyunuAc();
+
+      await notifier(c).tahminEt(arda);
+
+      expect(durum(c).kalanCan, 3);
+    });
+
+    test('daha önce denenen oyuncu tekrar sayılmaz, can da götürmez', () async {
       final (c, depo) = await oyunuAc();
 
       await notifier(c).tahminEt(mesut);
@@ -101,6 +116,40 @@ void main() {
 
       expect(durum(c).sonTahmin?.tekrar, isTrue);
       expect(depo.top10TahminListesi, hasLength(1));
+      expect(durum(c).kalanCan, 2);
+    });
+
+    test('üçüncü yanlış tahminde oyun o anki skorla biter ve liste açılır', () async {
+      final (c, depo) = await oyunuAc((d) => d.oneriler = [
+            ...d.oneriler,
+            const OyuncuOneri(id: 'o-3', isim: 'Hakan Şükür'),
+            const OyuncuOneri(id: 'o-4', isim: 'Emre Belözoğlu'),
+          ]);
+
+      await notifier(c).tahminEt(arda);
+      await notifier(c).tahminEt(mesut);
+      await notifier(c).tahminEt(const OyuncuOneri(id: 'o-3', isim: 'Hakan Şükür'));
+      expect(durum(c).durum, Top10Durumu.oynaniyor);
+      await notifier(c).tahminEt(const OyuncuOneri(id: 'o-4', isim: 'Emre Belözoğlu'));
+
+      expect(durum(c).durum, Top10Durumu.bitti);
+      expect(durum(c).kalanCan, 0);
+      expect(durum(c).skor, 1);
+      expect(depo.kayit?['durum'], 'tamamlandi');
+      expect(durum(c).cevaplar, hasLength(10));
+    });
+
+    test('yarım kalan oyunda canlar yanlış tahminlerden hesaplanır', () async {
+      final (c, _) = await oyunuAc((d) {
+        d.kayit = {'skor': 0, 'durum': 'basladi'};
+        d.top10TahminListesi = [
+          const Top10Tahmini(oyuncuIsim: 'Mesut Özil'),
+          const Top10Tahmini(oyuncuIsim: 'Hakan Şükür'),
+        ];
+      });
+
+      expect(durum(c).durum, Top10Durumu.oynaniyor);
+      expect(durum(c).kalanCan, 1);
     });
 
     test('10 oyuncu bulununca oyun biter', () async {
@@ -206,6 +255,22 @@ void main() {
       expect(find.text('Liste Oyuncusu 10'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('Ana menüye dön'), 200);
       expect(find.text('Ana menüye dön'), findsOneWidget);
+    });
+
+    testWidgets('canlar kırmızı kalplerle gösterilir, giden can boş kalp olur', (tester) async {
+      await ekraniAc(tester, (d) {
+        d.kayit = {'skor': 0, 'durum': 'basladi'};
+        d.top10TahminListesi = [const Top10Tahmini(oyuncuIsim: 'Mesut Özil')];
+      });
+
+      // Canlar listenin altında, yazma alanının üstünde
+      await tester.scrollUntilVisible(find.byType(Top10Canlari), 200);
+      final canlar = tester.getTopLeft(find.byType(Top10Canlari)).dy;
+      expect(canlar, greaterThan(tester.getTopLeft(find.text('10')).dy));
+      expect(canlar, lessThan(tester.getTopLeft(find.byType(TextField)).dy));
+      expect(find.byIcon(Icons.favorite_rounded), findsNWidgets(2));
+      expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+      expect(find.bySemanticsLabel('2 can kaldı'), findsOneWidget);
     });
 
     testWidgets('pes et onay sorar, vazgeçince oyun sürer', (tester) async {
