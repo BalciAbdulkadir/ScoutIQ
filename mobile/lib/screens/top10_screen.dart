@@ -119,7 +119,10 @@ class Top10Screen extends ConsumerWidget {
             Text('${state.skor}/$top10Boyu', style: Yazi.tebesir(16)),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        Top10Listesi(state: state),
+        // Canlar listeyle yazma alanının arasında; yazma alanı listenin altında
+        const SizedBox(height: 14),
         Top10Canlari(kalan: state.kalanCan),
         const SizedBox(height: 6),
         OyuncuArama(
@@ -132,8 +135,6 @@ class Top10Screen extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         _SonTahmin(sonuc: state.sonTahmin),
-        const SizedBox(height: 16),
-        Top10Listesi(state: state),
       ],
     );
   }
