@@ -13,7 +13,8 @@ const dogruOyuncu = OyuncuOneri(id: 'o-1', isim: 'Arda Güler');
 const yanlisOyuncu = OyuncuOneri(id: 'o-2', isim: 'Mesut Özil');
 
 Map<String, dynamic> kulup(String isim) => {'tip': 'kulup', 'id': 'k-$isim', 'tm_id': '1', 'isim': isim, 'logo': null};
-Map<String, dynamic> milli(String tmId, String isim) => {'tip': 'milli', 'tm_id': tmId, 'isim': isim};
+Map<String, dynamic> milli(String tmId, String isim) =>
+    {'tip': 'milli', 'tm_id': tmId, 'isim': isim, 'logo': 'https://flagcdn.com/w160/es.png'};
 
 // Satırlar: Galatasaray, Real Madrid, Fenerbahçe; sütunlar: Türkiye, Fransa, Juventus
 final ornekTahta = {
@@ -57,11 +58,11 @@ void main() {
       expect(tahta.sutunu(5).isim, 'Juventus');
     });
 
-    test('milli takımlar federasyon armasıyla, kulüpler kendi logosuyla gösterilir', () {
+    test('milli takımlar bayrakla (federasyon arması değil), kulüpler kendi logosuyla gösterilir', () {
       final tahta = IzgaraTahtasi.oku(ornekTahta)!;
 
       expect(tahta.sutunlar[1].milli, isTrue);
-      expect(tahta.sutunlar[1].logoUrl, endsWith('/3377.png'));
+      expect(tahta.sutunlar[1].logoUrl, 'https://flagcdn.com/w160/es.png');
       expect(tahta.satirlar[0].milli, isFalse);
       expect(tahta.satirlar[0].logoUrl, isNull);
     });
