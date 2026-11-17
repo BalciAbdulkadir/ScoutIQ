@@ -320,11 +320,13 @@ class _OyuncuEtiketi extends StatelessWidget {
 class _Top10Ornegi extends StatelessWidget {
   const _Top10Ornegi();
 
+  // Gerçek liste (veritabanından, 2010'dan bugüne): 1. Neymar 222 mn €, 2. Kylian Mbappé 180, 3. Randal Kolo Muani 95,
+  // 4. Khvicha Kvaratskhelia 80
   static const _satirlar = <(int, String, String?)>[
-    (1, 'gb-eng', null),
-    (2, 'br', 'Neymar'),
+    (1, 'br', 'Neymar'),
+    (2, 'fr', null),
     (3, 'fr', null),
-    (4, 'pt', 'Cristiano Ronaldo'),
+    (4, 'ge', 'Kvaratskhelia'),
   ];
 
   @override
