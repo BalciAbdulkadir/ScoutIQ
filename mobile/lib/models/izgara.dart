@@ -42,16 +42,11 @@ class IzgaraBasligi {
   const IzgaraBasligi({required this.milli, required this.isim, this.logoUrl});
 
   factory IzgaraBasligi.fromJson(Map<String, dynamic> json) {
-    final milli = json['tip'] == 'milli';
-    final tmId = json['tm_id'] as String?;
     return IzgaraBasligi(
-      milli: milli,
+      milli: json['tip'] == 'milli',
       isim: json['isim'] as String? ?? '—',
-      // Milli takımların logosu tahtada yok; Transfermarkt'taki federasyon arması kullanılır.
-      // Bulunamazsa uygulamada bayrak ikonu gösterilir.
-      logoUrl: milli
-          ? (tmId == null ? null : 'https://tmssl.akamaized.net/images/wappen/head/$tmId.png')
-          : json['logo'] as String?,
+      // Kulüpte kulüp logosu, milli takımda ülkenin bayrağı (federasyon arması değil). Yoksa uygulamada simge gösterilir.
+      logoUrl: json['logo'] as String?,
     );
   }
 }

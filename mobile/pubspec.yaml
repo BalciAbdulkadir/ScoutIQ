@@ -78,6 +78,8 @@ flutter:
   # Tebeşirle çizilmiş FootyLore logosu (zemini şeffaf)
   assets:
     - assets/images/footylore_logo.png
+    # Artık olmayan ülkelerin bayrakları (flagcdn'de yok). Wikimedia Commons'tan; kamu malı.
+    - assets/bayraklar/
 
   # Taktik tahtası teması: başlıklar Big Shoulders Display, tebeşir yazısı Kalam, gövde Instrument Sans.
   # Hepsi SIL Open Font License ile dağıtılır (assets/fonts/OFL.txt).

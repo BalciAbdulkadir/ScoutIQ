@@ -29,10 +29,24 @@ namespace ScoutIQ.API.Oyunlar
             _ => null
         };
 
-        // Transfermarkt'taki İngilizce milli takım ismi -> bayrak. Artık olmayan ülkelerin (Sovyetler Birliği,
-        // Yugoslavya ...) güncel bayrağı olmadığı için null döner, uygulama bayrak simgesi gösterir.
-        public static string? Bayrak(string milliTakimIsim) =>
-            UlkeKodlari.TryGetValue(milliTakimIsim, out var kod) ? $"https://flagcdn.com/w160/{kod}.png" : null;
+        // Transfermarkt'taki İngilizce milli takım ismi ya da oyuncunun uyruğu -> bayrak.
+        // Artık olmayan ülkelerin (Yugoslavya, Sovyetler Birliği ...) bayrakları flagcdn'de olmadığı için uygulamanın
+        // içinde durur: "asset:" ile başlayan adres uygulamadaki dosyadır. Listede olmayan ülke için null döner,
+        // uygulama bayrak simgesi gösterir.
+        public static string? Bayrak(string ulke)
+        {
+            if (UlkeKodlari.TryGetValue(ulke, out var kod)) return $"https://flagcdn.com/w160/{kod}.png";
+            if (EskiUlkeler.TryGetValue(ulke, out var dosya)) return $"asset:assets/bayraklar/{dosya}.png";
+            return null;
+        }
+
+        // Artık olmayan ülkeler -> uygulamadaki bayrak dosyası (mobile/assets/bayraklar)
+        private static readonly IReadOnlyDictionary<string, string> EskiUlkeler = new Dictionary<string, string>
+        {
+            ["Yugoslavia"] = "yugoslavya", ["Serbia and Montenegro"] = "sirbistan_karadag", ["East Germany"] = "dogu_almanya",
+            ["Soviet Union (-1991)"] = "sovyetler_birligi", ["Soviet Union Olympia (-1991)"] = "sovyetler_birligi",
+            ["Soviet Union B (-1991)"] = "sovyetler_birligi", ["Netherlands Antilles"] = "hollanda_antilleri", ["Zaire"] = "zaire",
+        };
 
         // ISO 3166 ülke kodları (flagcdn.com); İngiltere, İskoçya, Galler ve Kuzey İrlanda'nın kendi kodları var.
         // Olimpiyat, B ve genç takımlar ülkenin bayrağını kullanır.
@@ -78,6 +92,13 @@ namespace ScoutIQ.API.Oyunlar
             ["United Arab Emirates"] = "ae", ["United States"] = "us", ["Uruguay"] = "uy", ["Uruguay Olympia"] = "uy",
             ["Uzbekistan"] = "uz", ["Venezuela"] = "ve", ["Wales"] = "gb-wls", ["Yemen"] = "ye", ["Zambia"] = "zm",
             ["Zimbabwe"] = "zw",
+            // Oyuncuların uyruğu (oyuncular.uyruk) bazı ülkelerde milli takım isminden farklı yazılır
+            ["Türkiye"] = "tr", ["Ireland"] = "ie", ["Cote d'Ivoire"] = "ci", ["Czech Republic"] = "cz", ["DR Congo"] = "cd",
+            ["Congo"] = "cg", ["Korea, South"] = "kr", ["Korea, North"] = "kp", ["Curacao"] = "cw", ["St. Kitts & Nevis"] = "kn",
+            ["St. Lucia"] = "lc", ["Sao Tome and Principe"] = "st", ["Turks- and Caicosinseln"] = "tc", ["Monaco"] = "mc",
+            ["Macao"] = "mo", ["Hongkong"] = "hk",
+            // Çekoslovakya'nın bayrağı Çekya'nınkiyle aynı
+            ["Czechoslovakia (-1993)"] = "cz",
         };
     }
 }
