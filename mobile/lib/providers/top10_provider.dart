@@ -13,6 +13,7 @@ class Top10State {
   final String? oyunId;
   final Map<int, Top10Oyuncusu> bulunanlar; // Bulunan satırlar: sıra (1-10) -> oyuncu
   final Set<String> denenenler; // Doğru ya da yanlış denenmiş oyuncu isimleri
+  final int yanlisSayisi; // Listede olmayan oyuncu tahminleri; her biri bir can götürür
   final bool gonderiliyor; // Tahmin ya da pes etme sunucuda işlenirken ikinci isteği engeller
   final String? hataMesaji; // durum 'hata' iken gösterilir
   final Top10TahminSonucu? sonTahmin; // Arama kutusunun altında gösterilen son tahminin sonucu
@@ -24,6 +25,7 @@ class Top10State {
     this.oyunId,
     this.bulunanlar = const {},
     this.denenenler = const {},
+    this.yanlisSayisi = 0,
     this.gonderiliyor = false,
     this.hataMesaji,
     this.sonTahmin,
@@ -33,12 +35,15 @@ class Top10State {
   // Her bulunan oyuncu 1 puan
   int get skor => bulunanlar.length;
 
+  int get kalanCan => (top10Can - yanlisSayisi).clamp(0, top10Can);
+
   Top10State copyWith({
     Top10Durumu? durum,
     Top10Sorusu? soru,
     String? oyunId,
     Map<int, Top10Oyuncusu>? bulunanlar,
     Set<String>? denenenler,
+    int? yanlisSayisi,
     bool? gonderiliyor,
     String? hataMesaji,
     Top10TahminSonucu? sonTahmin,
@@ -50,6 +55,7 @@ class Top10State {
       oyunId: oyunId ?? this.oyunId,
       bulunanlar: bulunanlar ?? this.bulunanlar,
       denenenler: denenenler ?? this.denenenler,
+      yanlisSayisi: yanlisSayisi ?? this.yanlisSayisi,
       gonderiliyor: gonderiliyor ?? this.gonderiliyor,
       hataMesaji: hataMesaji ?? this.hataMesaji,
       sonTahmin: sonTahmin ?? this.sonTahmin,
@@ -59,7 +65,8 @@ class Top10State {
 }
 
 // Top 10 oyunu. Tahminler sunucuda tutulur: yarıda bırakılan oyun tekrar açılınca kaldığı yerden devam eder.
-// Can ve süre yoktur: oyun 10 oyuncu bulununca ya da pes edilince biter.
+// Süre yoktur. 3 can vardır: listede olmayan oyuncuyu tahmin etmek bir can götürür.
+// Oyun 10 oyuncu bulununca, canlar bitince ya da pes edilince biter. Canlar sunucuda, yanlış tahminlerden hesaplanır.
 class Top10Notifier extends Notifier<Top10State> {
   final String oyunTipi;
 
@@ -113,7 +120,10 @@ class Top10Notifier extends Notifier<Top10State> {
 
       final tahminler = await _depo.top10Tahminleri(oyunId);
       if (!ref.mounted) return;
-      final bitti = kayit['durum'] == 'tamamlandi' || tahminler.where((t) => t.sira != null).length >= top10Boyu;
+      final yanlisSayisi = tahminler.where((t) => t.sira == null).length;
+      final bitti = kayit['durum'] == 'tamamlandi' ||
+          tahminler.where((t) => t.sira != null).length >= top10Boyu ||
+          yanlisSayisi >= top10Can;
 
       // Bulunanların değerleri (ve oyun bittiyse bütün liste) sunucudan gelir
       final cevaplar = tahminler.any((t) => t.sira != null) || bitti ? await _depo.top10Cevaplar(oyunId) : <int, Top10Oyuncusu>{};
@@ -129,6 +139,7 @@ class Top10Notifier extends Notifier<Top10State> {
             if (cevaplar[sira] != null) sira: cevaplar[sira]!,
         },
         denenenler: {for (final t in tahminler) t.oyuncuIsim},
+        yanlisSayisi: yanlisSayisi,
         cevaplar: bitti ? cevaplar : const {},
       );
     } catch (_) {
@@ -159,10 +170,16 @@ class Top10Notifier extends Notifier<Top10State> {
       bulunanlar[sonuc.sira!] = Top10Oyuncusu(isim: sonuc.oyuncuIsim, fotoUrl: sonuc.fotoUrl ?? oyuncu.fotoUrl, deger: sonuc.deger);
     }
 
+    // Kalan can sunucudan gelir; göndermeyen eski sunucuda yanlış tahmin burada sayılır
+    final yanlisSayisi = sonuc.kalanCan != null
+        ? top10Can - sonuc.kalanCan!
+        : state.yanlisSayisi + (!sonuc.dogru && !sonuc.tekrar ? 1 : 0);
+
     state = state.copyWith(
       durum: sonuc.bitti ? Top10Durumu.bitti : Top10Durumu.oynaniyor,
       bulunanlar: bulunanlar,
       denenenler: {...state.denenenler, sonuc.oyuncuIsim},
+      yanlisSayisi: yanlisSayisi,
       sonTahmin: sonuc,
       gonderiliyor: false,
     );
