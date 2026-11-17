@@ -338,17 +338,21 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<List<Top10Tahmini>> top10Tahminleri(String oyunId) async => List.of(top10TahminListesi);
 
-  // 029_top10.sql'deki top10_tahmin fonksiyonunun basit bir kopyası: isim eşleşmesi, tekrar sayılmaz, 10 bulununca biter
+  int get _top10KalanCan => top10Can - top10TahminListesi.where((t) => t.sira == null).length;
+
+  // 031_top10_can.sql'deki top10_tahmin fonksiyonunun basit bir kopyası: isim eşleşmesi, tekrar sayılmaz ve can götürmez,
+  // yanlış tahmin bir can götürür; 10 bulununca ya da canlar bitince biter
   @override
   Future<Top10TahminSonucu> top10Tahmin({required String oyunId, required String oyuncuId}) async {
     if (top10TahminHataVerir) throw Exception('bağlantı yok');
     final isim = oneriler.firstWhere((o) => o.id == oyuncuId, orElse: () => OyuncuOneri(id: oyuncuId, isim: oyuncuId)).isim;
     if (top10TahminListesi.any((t) => t.oyuncuIsim == isim)) {
-      return Top10TahminSonucu(dogru: false, tekrar: true, oyuncuIsim: isim, skor: _top10Skoru, bitti: false);
+      return Top10TahminSonucu(
+          dogru: false, tekrar: true, oyuncuIsim: isim, skor: _top10Skoru, kalanCan: _top10KalanCan, bitti: false);
     }
     final bulunan = top10Listesi.entries.where((e) => e.value.$2.isim == isim).map((e) => e.key).firstOrNull;
     top10TahminListesi.add(Top10Tahmini(oyuncuIsim: isim, sira: bulunan));
-    final bitti = _top10Skoru == top10Boyu;
+    final bitti = _top10Skoru == top10Boyu || _top10KalanCan <= 0;
     kayit = {...?kayit, 'skor': _top10Skoru, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return Top10TahminSonucu(
       dogru: bulunan != null,
@@ -356,6 +360,7 @@ class SahteOyunDeposu implements OyunDeposu {
       deger: bulunan == null ? null : top10Listesi[bulunan]!.$2.deger,
       oyuncuIsim: isim,
       skor: _top10Skoru,
+      kalanCan: _top10KalanCan,
       bitti: bitti,
     );
   }

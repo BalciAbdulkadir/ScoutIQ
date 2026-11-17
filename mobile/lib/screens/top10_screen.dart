@@ -119,7 +119,9 @@ class Top10Screen extends ConsumerWidget {
             Text('${state.skor}/$top10Boyu', style: Yazi.tebesir(16)),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
+        Top10Canlari(kalan: state.kalanCan),
+        const SizedBox(height: 6),
         OyuncuArama(
           renk: Renkler.top10,
           gonderiliyor: state.gonderiliyor,
@@ -177,7 +179,9 @@ class Top10Screen extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          tam ? 'Yeni liste gece yarısı açılıyor.' : 'Bulamadığın oyuncular kırmızıyla gösteriliyor.',
+          tam
+              ? 'Yeni liste gece yarısı açılıyor.'
+              : '${state.kalanCan == 0 ? 'Canların bitti. ' : ''}Bulamadığın oyuncular kırmızıyla gösteriliyor.',
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 14),
         ),
@@ -217,6 +221,39 @@ class _Baslik extends StatelessWidget {
   }
 }
 
+// Kalan canlar: dolu kırmızı kalpler, giden can boş kalp. Can gidince kalp kısa bir an küçülüp boşalır.
+class Top10Canlari extends StatelessWidget {
+  final int kalan;
+
+  const Top10Canlari({super.key, required this.kalan});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$kalan can kaldı',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < top10Can; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animasyon) => ScaleTransition(scale: animasyon, child: child),
+                child: Icon(
+                  i < kalan ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  key: ValueKey(i < kalan),
+                  color: i < kalan ? Renkler.can : Renkler.can.withValues(alpha: 0.4),
+                  size: 30,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 // Son tahminin sonucu: "Doğru · Arda Güler → 3. sıra"
 class _SonTahmin extends StatelessWidget {
   final Top10TahminSonucu? sonuc;
@@ -228,7 +265,8 @@ class _SonTahmin extends StatelessWidget {
     final s = sonuc;
     if (s == null) {
       return const Text(
-        'Listedeki oyuncuları bul. Her satırda oyuncunun uyruğunun bayrağı var; bulduğun oyuncu kendi sırasına yerleşir.',
+        'Listedeki oyuncuları bul. Her satırda oyuncunun uyruğunun bayrağı var; bulduğun oyuncu kendi sırasına yerleşir. '
+        'Listede olmayan oyuncu bir can götürür.',
         style: TextStyle(color: Renkler.metinSoluk, fontSize: 13, height: 1.4),
       );
     }
@@ -236,7 +274,7 @@ class _SonTahmin extends StatelessWidget {
     final (ikon, renk, baslik, ayrinti) = switch (s) {
       Top10TahminSonucu(tekrar: true) => (Icons.info_rounded, Renkler.orta, 'Zaten denedin', '${s.oyuncuIsim} daha önce denendi'),
       Top10TahminSonucu(dogru: true, sira: final sira?) => (Icons.check_circle_rounded, Renkler.basari, 'Doğru', '${s.oyuncuIsim} → $sira. sıra'),
-      _ => (Icons.cancel_rounded, Renkler.hata, 'Listede değil', '${s.oyuncuIsim} bu listede yok'),
+      _ => (Icons.cancel_rounded, Renkler.hata, 'Listede değil', '${s.oyuncuIsim} bu listede yok · bir can gitti'),
     };
 
     return AnimatedSwitcher(

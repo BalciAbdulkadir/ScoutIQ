@@ -186,8 +186,8 @@ const List<OyunModu> oyunModlari = [
       kurallar: [
         'Oyuncunun adını yaz ve listeden seç. Sırayı bilmen gerekmez, bulduğun oyuncu kendi sırasına yerleşir.',
         'Her satırda ipucu olarak oyuncunun uyruğunun bayrağı açık.',
-        'Yanlış tahminin cezası yok. Daha önce denediğin oyuncu tekrar sayılmaz.',
-        'Zorluk modu ve süre yok, herkes aynı listeyi oynar. Oyun 10 oyuncu bulununca ya da pes edince sona erer.',
+        '3 canın var. Listede olmayan oyuncu bir can götürür; daha önce denediğin oyuncu sayılmaz, can da götürmez.',
+        'Zorluk modu ve süre yok, herkes aynı listeyi oynar. Oyun 10 oyuncu bulununca, canların bitince ya da pes edince sona erer.',
       ],
       puanlama: 'Her bulunan oyuncu 1 puan. En fazla 10 puan.',
     ),
