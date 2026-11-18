@@ -11,6 +11,7 @@ import '../widgets/bonservis_oyuncu_karti.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/tebesir.dart';
+import '../widgets/oyun_kurallari.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
@@ -69,7 +70,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final durum = ref.watch(bonservisProvider(_secim));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('BONSERVİS')),
+      appBar: AppBar(title: const Text('BONSERVİS'), actions: const [KurallarDugmesi(oyun: 'bonservis'), SizedBox(width: 4)]),
       body: TahtaZemini(child: SafeArea(child: _govde(durum))),
     );
   }

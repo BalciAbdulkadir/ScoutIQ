@@ -6,7 +6,7 @@ import '../providers/hub_provider.dart';
 import '../screens/izgara_screen.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
-import 'oyun_ornekleri.dart';
+import 'oyun_kurallari.dart';
 import 'tebesir.dart';
 
 // Ana menüde Kesişim, Bonservis ya da Bingo kutucuğuna dokununca çağrılır. ekran, seçilen zorluğun oyun tipi ve süreyle
@@ -264,63 +264,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
         children: [
           _baslik(aciklama: zorluksuz ? 'Tek mod · günde bir oyun' : 'Kolay, Orta ya da Zor · günde bir zorluk'),
           Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 16),
-                  OyunOrnegi(cizim: widget.cizim),
-                  const SizedBox(height: 14),
-                  Text(onizleme.ozet, style: const TextStyle(color: Renkler.metin, fontSize: 15, height: 1.45)),
-                  _adim('Nasıl oynanır'),
-                  for (final (i, kural) in onizleme.kurallar.indexed)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 26,
-                            child: Text('${i + 1}', style: Yazi.tebesir(20, renk: Renkler.vurgu)),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                kural,
-                                style: const TextStyle(color: Renkler.metinIkincil, fontSize: 14, height: 1.4),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 6),
-                  TebesirKutusu(
-                    kesik: true,
-                    kenarRengi: Renkler.vurgu,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    child: Row(
-                      children: [
-                        Text(Yazi.buyuk('Puan'), style: Yazi.etiket(renk: Renkler.vurgu)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            onizleme.puanlama,
-                            style: const TextStyle(color: Renkler.metin, fontSize: 14, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Her oyun günde bir kez oynanır. Oyundan çıksan da kaldığın yerden devam edersin.',
-                    style: TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
-                  ),
-                ],
-              ),
-            ),
+            child: SingleChildScrollView(child: OyunKurallari(onizleme: onizleme, cizim: widget.cizim)),
           ),
           const SizedBox(height: 16),
           FilledButton(
