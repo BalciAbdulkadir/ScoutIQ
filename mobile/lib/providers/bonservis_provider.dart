@@ -72,6 +72,8 @@ class BonservisState {
 // Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 // Her zorluk ayrı bir günlük oyundur: bonservis_kolay, bonservis_orta ya da bonservis_zor.
+// Tahmin sunucuda kontrol edilir; skor ve ilerleme sunucuda yazılır. Tahmin edilen oyuncunun bedeli soruyla gelmez,
+// tahminden sonra sunucudan gelir (033_skor_sunucuda.sql).
 class BonservisNotifier extends Notifier<BonservisState> {
   static const puan = 2;
 
@@ -85,6 +87,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
   int? get sure => secim.sure;
 
   late OyunDeposu _depo;
+  String? _oyunId;
 
   @override
   BonservisState build() {
@@ -108,9 +111,15 @@ class BonservisNotifier extends Notifier<BonservisState> {
         BaskaZorlukOynandi() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: baskaZorlukMesaji),
       };
       if (acilis is Oynanabilir) {
+        _oyunId = acilis.oyunId;
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
         final sureDoldu = acilis.kalanSaniye != null && acilis.kalanSaniye! <= 0;
-        if (sureDoldu || state.sonuclar.length >= state.sorular.length) await _kapat(sureDoldu: sureDoldu);
+        if (sureDoldu || state.sonuclar.length >= state.sorular.length) {
+          await _kapat(sureDoldu: sureDoldu);
+        } else if (state.sonuclar.isNotEmpty) {
+          // Yarım kalan oyunda cevaplanmış soruların bedelleri bitiş özeti için
+          await _bedelleriYukle();
+        }
       }
     } catch (e) {
       if (!ref.mounted) return;
@@ -137,44 +146,44 @@ class BonservisNotifier extends Notifier<BonservisState> {
     );
   }
 
-  // Rakibin bedeli için tahmin. Hata olursa mesajını döndürür, başarılıysa null.
+  // Rakibin bedeli için tahmin; sunucu kontrol edip skoru yazar ve bedeli döndürür.
+  // Hata olursa mesajını döndürür, başarılıysa null.
   Future<String?> tahminEt({required bool dahaFazla}) async {
     final soru = state.soru;
     if (!state.tahminEdilebilir || soru == null) return null;
-
-    final userId = _depo.kullaniciId;
-    if (userId == null) return oturumYokMesaji;
+    if (_depo.kullaniciId == null) return oturumYokMesaji;
 
     state = state.copyWith(gonderiliyor: true);
 
-    final dogru = dahaFazla == soru.rakipDahaPahali;
-    final yeniSkor = dogru ? state.skor + puan : state.skor;
-    final bitti = state.sonSoru;
-
     try {
-      // Skoru her tahminden sonra kaydediyoruz, oyun bittiyse kaydı kilitliyoruz
-      final yazildi = await _depo.skorYaz(
-        kullaniciId: userId,
-        oyunTipi: _oyunTipi,
-        tarih: state.tarih!,
-        skor: yeniSkor,
-        bitti: bitti,
-        ilerleme: _ilerleme([...state.sonuclar, dogru]),
-      );
+      final sonuc = await _depo.bonservisTahmin(oyunId: _oyunId!, soruIndex: state.soruIndex, dahaFazla: dahaFazla);
       if (!ref.mounted) return null;
 
-      if (!yazildi) {
-        // Kayıt başka bir yerden kapatılmış: oyun artık oynanamaz
-        state = state.copyWith(durum: BonservisDurumu.zatenOynandi, gonderiliyor: false);
+      if (sonuc.sureDoldu) {
+        // Süre sunucuda dolmuştu: tahmin sayılmadı, oyun o anki skorla bitti
+        state = state.copyWith(durum: BonservisDurumu.bitti, sureDoldu: true, skor: sonuc.skor, gonderiliyor: false);
+        await _bedelleriYukle();
         return null;
       }
 
+      final bedel = sonuc.rakipBonservis;
       state = state.copyWith(
-        skor: yeniSkor,
-        sonuclar: [...state.sonuclar, dogru],
-        sonCevapDogru: dogru,
+        sorular: bedel == null
+            ? null
+            : [
+                for (var i = 0; i < state.sorular.length; i++)
+                  i == state.soruIndex ? state.sorular[i].rakipBedeliyle(bedel) : state.sorular[i],
+              ],
+        skor: sonuc.skor,
+        sonuclar: [...state.sonuclar, sonuc.dogru],
+        sonCevapDogru: sonuc.dogru,
         gonderiliyor: false,
       );
+      return null;
+    } on OyunAcikDegil {
+      // Kayıt başka bir yerden kapatılmış: oyun artık oynanamaz
+      if (!ref.mounted) return null;
+      state = state.copyWith(durum: BonservisDurumu.zatenOynandi, gonderiliyor: false);
       return null;
     } catch (e) {
       if (!ref.mounted) return null;
@@ -202,34 +211,37 @@ class BonservisNotifier extends Notifier<BonservisState> {
     await _kapat(sureDoldu: true);
   }
 
-  // Sunucuya yazılan ilerleme: cevaplanan her soru için doğru mu
-  static List<Map<String, dynamic>> _ilerleme(List<bool> sonuclar) => [
-        for (final dogru in sonuclar) {'dogru': dogru},
-      ];
-
-  // Kaydı o anki skorla kilitler ve bitiş ekranını açar
+  // Kaydı o anki skorla kapatır (skor sunucuda kalır) ve bitiş ekranını açar
   Future<void> _kapat({required bool sureDoldu}) async {
-    final userId = _depo.kullaniciId;
     state = state.copyWith(gonderiliyor: true);
 
-    if (userId != null) {
+    if (_depo.kullaniciId != null && _oyunId != null) {
       try {
-        // Son sorunun cevabı verildiyse kayıt zaten kilitlidir, yazılmaz; sorun değil
-        await _depo.skorYaz(
-          kullaniciId: userId,
-          oyunTipi: _oyunTipi,
-          tarih: state.tarih!,
-          skor: state.skor,
-          bitti: true,
-          ilerleme: _ilerleme(state.sonuclar),
-        );
+        // Son sorunun cevabı verildiyse kayıt zaten kapalıdır; sunucu bir şey yapmaz
+        await _depo.oyunuBitir(_oyunId!);
       } catch (_) {
-        // Kayıt kapatılamazsa açık kalır; süre sunucuda da dolduğu için skor sonradan değiştirilemez
+        // Kayıt kapatılamazsa açık kalır; süre sunucuda da dolduğu için sonradan tahmin kabul edilmez
       }
     }
     if (!ref.mounted) return;
 
-    state = state.copyWith(durum: BonservisDurumu.bitti, sureDoldu: sureDoldu);
+    state = state.copyWith(durum: BonservisDurumu.bitti, sureDoldu: sureDoldu, gonderiliyor: false);
+    await _bedelleriYukle();
+  }
+
+  // Sağdaki oyuncuların bedelleri sunucudan: cevaplananlarınki, oyun bittiyse hepsi (bitiş özeti için).
+  // Bedeller özete ek bilgidir: gelmezse "?" kalır, hata kullanıcıya yansıtılmaz.
+  Future<void> _bedelleriYukle() async {
+    final oyunId = _oyunId;
+    if (oyunId == null) return;
+    try {
+      final bedeller = await _depo.bonservisBedelleri(oyunId);
+      if (!ref.mounted || bedeller.isEmpty) return;
+      state = state.copyWith(sorular: [
+        for (var i = 0; i < state.sorular.length; i++)
+          bedeller[i] != null ? state.sorular[i].rakipBedeliyle(bedeller[i]!) : state.sorular[i],
+      ]);
+    } catch (_) {}
   }
 }
 

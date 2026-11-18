@@ -99,6 +99,88 @@ void main() {
     });
   });
 
+  group('Bedel sunucuda', () {
+    // Yeni sorularda sağdaki oyuncunun bedeli soru verisinde yoktur, sunucudaki bonservis_cevaplari'ndadır
+    SahteOyunDeposu yeniUsul(SahteOyunDeposu d) => d
+      ..oyun = {
+        'id': 'oyun-b',
+        'soru_verisi': [for (final s in sorular) Map.of(s)..remove('oyuncu_b_bonservis')],
+      }
+      ..bonservisCevaplari = {
+        for (var i = 0; i < sorular.length; i++) i: sorular[i]['oyuncu_b_bonservis'] as int,
+      };
+
+    test('sağdaki oyuncunun bedeli soruyla gelmez, ekranda "?" yazar', () {
+      final okunan = bonservisSorulariniOku([Map.of(sorular.first)..remove('oyuncu_b_bonservis')]);
+
+      expect(okunan.single.referans.toplamBonservis, 50000000);
+      expect(okunan.single.rakip.toplamBonservis, isNull);
+      expect(okunan.single.rakipDahaPahali, isNull);
+      expect(bonservisMetni(null), '? M€');
+    });
+
+    test('tahminden önce bedel bilinmez, tahminden sonra sunucudan gelir', () async {
+      final (c, depo) = await oyunuBaslat(yeniUsul);
+
+      expect(durum(c).soru!.rakip.toplamBonservis, isNull);
+      await notifier(c).tahminEt(dahaFazla: true);
+
+      expect(durum(c).sonCevapDogru, isTrue);
+      expect(durum(c).soru!.rakip.toplamBonservis, 70000000);
+      expect(durum(c).soru!.fark, 20000000);
+      expect(durum(c).skor, 2);
+      expect(depo.yazilanSkorlar.single, (skor: 2, bitti: false));
+    });
+
+    test('süre sunucuda dolduysa tahmin sayılmaz, oyun biter ve bütün bedeller özette görünür', () async {
+      final (c, depo) = await oyunuBaslat(yeniUsul);
+      await notifier(c).tahminEt(dahaFazla: true);
+      notifier(c).devamEt();
+      depo.oyunSureKalan = 0;
+
+      await notifier(c).tahminEt(dahaFazla: false);
+
+      expect(durum(c).durum, BonservisDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).skor, 2);
+      expect(durum(c).sonuclar, [true]);
+      expect(durum(c).sorular.map((s) => s.rakip.toplamBonservis), [70, 40, 100, 50, 145].map((m) => m * 1000000));
+    });
+
+    test('süre dolunca oyun kapatılır, cevaplanmayan soruların bedelleri de yüklenir', () async {
+      final (c, depo) = await oyunuBaslat(yeniUsul, 30);
+
+      await notifier(c).sureDoldu();
+
+      expect(depo.oyunuBitirSayisi, 1);
+      expect(depo.kayit?['durum'], 'tamamlandi');
+      expect(durum(c).sorular.every((s) => s.rakip.toplamBonservis != null), isTrue);
+    });
+
+    test('yarım kalan oyunda cevaplanmış soruların bedelleri yüklenir, sıradakinin bedeli gizli kalır', () async {
+      final (c, _) = await oyunuBaslat((d) {
+        yeniUsul(d);
+        d.kayit = {'skor': 2, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': true},
+        ];
+      });
+
+      expect(durum(c).soruIndex, 1);
+      expect(durum(c).sorular[0].rakip.toplamBonservis, 70000000);
+      expect(durum(c).soru!.rakip.toplamBonservis, isNull);
+    });
+
+    test('kayıt başka yerde kapatıldıysa oyun "bugün oynandı" olur', () async {
+      final (c, depo) = await oyunuBaslat(yeniUsul);
+      depo.kayit = {'skor': 0, 'durum': 'tamamlandi'};
+
+      await notifier(c).tahminEt(dahaFazla: true);
+
+      expect(durum(c).durum, BonservisDurumu.zatenOynandi);
+    });
+  });
+
   group('Oyun akışı', () {
     test('oyun açılınca kayıt "basladi" olarak atılır', () async {
       final (c, depo) = await oyunuBaslat();
@@ -318,6 +400,33 @@ void main() {
       expect(find.text('Soru 2/5'), findsOneWidget);
       expect(find.text('Dumfries'), findsOneWidget);
       expect(find.text('Daha fazla'), findsOneWidget);
+    });
+
+    testWidgets('bedeli soruyla gelmeyen rakipte "?" yazar, tahminden sonra sunucudan gelen bedel açılır', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+
+      final depo = bonservisDeposu()
+        ..oyun = {
+          'id': 'oyun-b',
+          'soru_verisi': [for (final s in sorular) Map.of(s)..remove('oyuncu_b_bonservis')],
+        }
+        ..bonservisCevaplari = {0: 70000000, 1: 40000000, 2: 100000000, 3: 50000000, 4: 145000000};
+      await tester.pumpWidget(ProviderScope(
+        overrides: [oyunDeposuProvider.overrideWithValue(depo)],
+        child: const MaterialApp(home: BonservisScreen(oyunTipi: testOyunTipi)),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('? M€'), findsOneWidget);
+      expect(find.text('70 M€'), findsNothing);
+
+      await tahminEt(tester, 'Daha fazla');
+
+      expect(find.text('Doğru'), findsOneWidget);
+      expect(find.text('70 M€'), findsOneWidget);
+      expect(find.textContaining('20 M€ daha pahalı'), findsOneWidget);
     });
 
     testWidgets('doğru cevap "Daha Az" ise "Daha Az" doğru sayılır', (tester) async {

@@ -64,7 +64,9 @@ class BonservisOyuncuKarti extends StatelessWidget {
     // Bedel tahtaya tebeşirle yazılır
     final stil = Yazi.tebesir(30);
 
-    if (!bedelGorunur) {
+    // Tahmin edilen oyuncunun bedeli tahminden sonra sunucudan gelir; gelene kadar "?" kalır
+    final bedel = oyuncu.toplamBonservis;
+    if (!bedelGorunur || bedel == null) {
       return Text('? M€', style: stil.copyWith(color: Renkler.metinSoluk));
     }
 
@@ -75,17 +77,17 @@ class BonservisOyuncuKarti extends StatelessWidget {
     };
 
     if (!bedelAnimasyonlu) {
-      return Text(bonservisMetni(oyuncu.toplamBonservis), style: stil.copyWith(color: renk));
+      return Text(bonservisMetni(bedel), style: stil.copyWith(color: renk));
     }
 
     // Bedel sıfırdan gerçek değerine sayarak yükselir
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: oyuncu.toplamBonservis.toDouble()),
+      tween: Tween(begin: 0, end: bedel.toDouble()),
       duration: const Duration(milliseconds: 800),
       curve: Curves.easeOutCubic,
       builder: (context, deger, _) {
         // Ara değerler tam milyona yuvarlanır, son karede gerçek değer gösterilir
-        final gosterilen = deger >= oyuncu.toplamBonservis ? oyuncu.toplamBonservis : (deger / 1000000).round() * 1000000;
+        final gosterilen = deger >= bedel ? bedel : (deger / 1000000).round() * 1000000;
         return Text(bonservisMetni(gosterilen), style: stil.copyWith(color: renk));
       },
     );
