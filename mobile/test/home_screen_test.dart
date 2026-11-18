@@ -9,6 +9,7 @@ import 'package:mobile/screens/bonservis_screen.dart';
 import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/izgara_screen.dart';
+import 'package:mobile/screens/profil_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
 import 'package:mobile/widgets/izgara_zorluk_secimi.dart';
@@ -428,20 +429,18 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('çıkış onay sorar, vazgeçince oturum açık kalır', (tester) async {
+  testWidgets('profil fotoğrafına dokununca hesap sayfası açılır, geri dönülebilir', (tester) async {
     await anaMenuyuAc(tester);
 
     await tester.tap(find.byTooltip('Hesap'));
     await tester.pumpAndSettle();
+    expect(find.byType(ProfilScreen), findsOneWidget);
     expect(find.text('test@ornek.com'), findsOneWidget);
+    expect(find.text('Hesabımı sil'), findsOneWidget);
 
-    await tester.tap(find.text('Çıkış yap'));
+    await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('Çıkış yapılsın mı?'), findsOneWidget);
-
-    await tester.tap(find.text('Vazgeç'));
-    await tester.pumpAndSettle();
-    expect(find.text('Çıkış yapılsın mı?'), findsNothing);
+    expect(find.byType(ProfilScreen), findsNothing);
     expect(find.text('Merhaba, Celal'), findsOneWidget);
     await ekraniKapat(tester);
   });
