@@ -81,7 +81,7 @@ final kullaniciProvider = Provider<KullaniciBilgisi?>((ref) {
   );
 });
 
-// Seri: art arda en az bir oyun bitirilen gün sayısı (034_seri.sql). Bugün oynanmadıysa dünden geriye sayılır.
+// Seri: art arda en az bir oyun bitirilen gün sayısı (035_seri.sql). Bugün oynanmadıysa dünden geriye sayılır.
 // Bugünkü sonuçlar yenilenince (oyundan dönünce) seri de yenilenir. Okunamazsa (fonksiyon yoksa, bağlantı yoksa) 0.
 final seriProvider = FutureProvider.autoDispose<int>((ref) async {
   ref.watch(bugunProvider);
