@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyuncu_oneri.dart';
 import '../services/gunluk_oyun.dart';
+import '../services/analitik.dart';
 import '../services/oyun_deposu.dart';
 
 class GameState {
@@ -87,11 +88,30 @@ class GameNotifier extends Notifier<GameState> {
 
   late OyunDeposu _depo;
 
+  // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
+  late OyunOlaylari _olaylar;
+  bool _oynaniyor = false;
+
+  void _olaylariDinle() {
+    _olaylar = OyunOlaylari(ref.read(analitikProvider), secim.oyunTipi);
+    listenSelf((onceki, simdiki) {
+      _oynaniyor = simdiki.status == 'playing';
+      // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
+      if (onceki != null && onceki.status == 'playing' && simdiki.status == 'completed') {
+        _olaylar.bitti(skor: simdiki.score, sebep: simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+      }
+    });
+    ref.onDispose(() {
+      if (_oynaniyor) _olaylar.yaridaBirakildi();
+    });
+  }
+
   @override
   GameState build() {
     _depo = ref.read(oyunDeposuProvider);
     // Veriyi build bittikten sonra yüklüyoruz: _initGame state'i hemen değiştirirse (örneğin oturum yoksa)
     // build'in döndürdüğü başlangıç durumu o değişikliğin üzerine yazmasın
+    _olaylariDinle();
     Future.microtask(_initGame);
     return GameState();
   }
@@ -121,6 +141,7 @@ class GameNotifier extends Notifier<GameState> {
         BaskaZorlukOynandi() => state.copyWith(status: 'error', hataMesaji: baskaZorlukMesaji),
       };
       if (acilis is Oynanabilir) {
+        if (acilis.yeni) _olaylar.basladi(sure: sure);
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
         final sureDoldu = acilis.kalanSaniye != null && acilis.kalanSaniye! <= 0;
         if (sureDoldu || state.sonuclar.length >= state.questions.length) {

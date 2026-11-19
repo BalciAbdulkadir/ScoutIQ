@@ -3,6 +3,7 @@ import '../models/bingo.dart';
 import '../models/izgara.dart' show OyunSuresiDurumu;
 import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
+import '../services/analitik.dart';
 import '../services/oyun_deposu.dart';
 
 enum BingoDurumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
@@ -109,10 +110,30 @@ class BingoNotifier extends Notifier<BingoState> {
 
   late OyunDeposu _depo;
 
+  // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
+  late OyunOlaylari _olaylar;
+  bool _oynaniyor = false;
+  bool _pesEdildi = false;
+
+  void _olaylariDinle() {
+    _olaylar = OyunOlaylari(ref.read(analitikProvider), secim.oyunTipi);
+    listenSelf((onceki, simdiki) {
+      _oynaniyor = simdiki.durum == BingoDurumu.oynaniyor;
+      // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
+      if (onceki != null && onceki.durum == BingoDurumu.oynaniyor && simdiki.durum == BingoDurumu.bitti) {
+        _olaylar.bitti(skor: simdiki.skor, sebep: _pesEdildi ? BitisSebebi.pes : simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+      }
+    });
+    ref.onDispose(() {
+      if (_oynaniyor) _olaylar.yaridaBirakildi();
+    });
+  }
+
   @override
   BingoState build() {
     _depo = ref.read(oyunDeposuProvider);
     // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
+    _olaylariDinle();
     Future.microtask(_yukle);
     return const BingoState();
   }
@@ -149,6 +170,7 @@ class BingoNotifier extends Notifier<BingoState> {
           await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: secim.oyunTipi, tarih: tarih);
           kayit = {'durum': 'basladi'};
           yeni = true;
+          _olaylar.basladi(sure: secim.sure);
         } on KayitZatenVar {
           // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
           kayit = await _depo.oyunKaydi(kullaniciId, secim.oyunTipi, tarih) ?? {'durum': 'basladi'};
@@ -271,6 +293,7 @@ class BingoNotifier extends Notifier<BingoState> {
   Future<String?> pesEt() async {
     if (state.durum != BingoDurumu.oynaniyor || state.gonderiliyor) return null;
     state = state.copyWith(gonderiliyor: true);
+    _pesEdildi = true;
 
     try {
       await _depo.bingoPesEt(state.oyunId!);

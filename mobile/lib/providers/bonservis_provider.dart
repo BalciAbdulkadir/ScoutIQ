@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bonservis_sorusu.dart';
 import '../services/gunluk_oyun.dart';
+import '../services/analitik.dart';
 import '../services/oyun_deposu.dart';
 
 enum BonservisDurumu { yukleniyor, oynaniyor, bitti, zatenOynandi, oyunYok, hata }
@@ -87,12 +88,31 @@ class BonservisNotifier extends Notifier<BonservisState> {
   int? get sure => secim.sure;
 
   late OyunDeposu _depo;
+
+  // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
+  late OyunOlaylari _olaylar;
+  bool _oynaniyor = false;
+
+  void _olaylariDinle() {
+    _olaylar = OyunOlaylari(ref.read(analitikProvider), secim.oyunTipi);
+    listenSelf((onceki, simdiki) {
+      _oynaniyor = simdiki.durum == BonservisDurumu.oynaniyor;
+      // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
+      if (onceki != null && onceki.durum == BonservisDurumu.oynaniyor && simdiki.durum == BonservisDurumu.bitti) {
+        _olaylar.bitti(skor: simdiki.skor, sebep: simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+      }
+    });
+    ref.onDispose(() {
+      if (_oynaniyor) _olaylar.yaridaBirakildi();
+    });
+  }
   String? _oyunId;
 
   @override
   BonservisState build() {
     _depo = ref.read(oyunDeposuProvider);
     // Veriyi build bittikten sonra yüklüyoruz, build'in başlangıç durumu sonucun üzerine yazmasın
+    _olaylariDinle();
     Future.microtask(_yukle);
     return const BonservisState();
   }
@@ -112,6 +132,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
       };
       if (acilis is Oynanabilir) {
         _oyunId = acilis.oyunId;
+        if (acilis.yeni) _olaylar.basladi(sure: sure);
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
         final sureDoldu = acilis.kalanSaniye != null && acilis.kalanSaniye! <= 0;
         if (sureDoldu || state.sonuclar.length >= state.sorular.length) {

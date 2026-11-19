@@ -3,6 +3,7 @@ import '../models/oyuncu_oneri.dart';
 import '../models/top10.dart';
 import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
+import '../services/analitik.dart';
 import '../services/oyun_deposu.dart';
 
 enum Top10Durumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
@@ -74,10 +75,30 @@ class Top10Notifier extends Notifier<Top10State> {
 
   late OyunDeposu _depo;
 
+  // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
+  late OyunOlaylari _olaylar;
+  bool _oynaniyor = false;
+  bool _pesEdildi = false;
+
+  void _olaylariDinle() {
+    _olaylar = OyunOlaylari(ref.read(analitikProvider), oyunTipi);
+    listenSelf((onceki, simdiki) {
+      _oynaniyor = simdiki.durum == Top10Durumu.oynaniyor;
+      // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
+      if (onceki != null && onceki.durum == Top10Durumu.oynaniyor && simdiki.durum == Top10Durumu.bitti) {
+        _olaylar.bitti(skor: simdiki.skor, sebep: _pesEdildi ? BitisSebebi.pes : simdiki.kalanCan == 0 ? BitisSebebi.canBitti : BitisSebebi.tamamlandi);
+      }
+    });
+    ref.onDispose(() {
+      if (_oynaniyor) _olaylar.yaridaBirakildi();
+    });
+  }
+
   @override
   Top10State build() {
     _depo = ref.read(oyunDeposuProvider);
     // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
+    _olaylariDinle();
     Future.microtask(_yukle);
     return const Top10State();
   }
@@ -112,6 +133,7 @@ class Top10Notifier extends Notifier<Top10State> {
         try {
           await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: oyunTipi, tarih: tarih);
           kayit = {'durum': 'basladi'};
+          _olaylar.basladi();
         } on KayitZatenVar {
           // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
           kayit = await _depo.oyunKaydi(kullaniciId, oyunTipi, tarih) ?? {'durum': 'basladi'};
@@ -192,6 +214,7 @@ class Top10Notifier extends Notifier<Top10State> {
   Future<String?> pesEt() async {
     if (state.durum != Top10Durumu.oynaniyor || state.gonderiliyor) return null;
     state = state.copyWith(gonderiliyor: true);
+    _pesEdildi = true;
 
     try {
       await _depo.top10PesEt(state.oyunId!);

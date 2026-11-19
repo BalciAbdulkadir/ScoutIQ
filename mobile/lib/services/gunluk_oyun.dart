@@ -22,8 +22,10 @@ class Oynanabilir extends OyunAcilisi {
   final int skor; // Yarım kalan oyunda o ana kadarki skor
   final List<Map<String, dynamic>> ilerleme; // Cevaplanan sorular, sırayla: {'dogru': bool, 'cevap': String?}
   final int? kalanSaniye; // Süreli oyunda sunucuya göre kalan süre (0: dolmuş); süresizse null
+  final bool yeni; // Kayıt şimdi açıldı: oyun yeni başladı (yarım kalan oyun değil)
 
-  Oynanabilir(this.oyunId, this.sorular, this.tarih, {this.skor = 0, this.ilerleme = const [], this.kalanSaniye});
+  Oynanabilir(this.oyunId, this.sorular, this.tarih,
+      {this.skor = 0, this.ilerleme = const [], this.kalanSaniye, this.yeni = false});
 }
 
 // Bugün bitirilmiş
@@ -105,5 +107,6 @@ Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi, {int? sure})
     skor: _skor(kayit),
     ilerleme: _ilerleme(kayit),
     kalanSaniye: sureDurumu?.kalan,
+    yeni: yeni,
   );
 }
