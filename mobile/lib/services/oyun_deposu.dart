@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/bingo.dart';
+import '../models/bonservis_sorusu.dart';
+import '../models/kesisim.dart';
 import '../models/izgara.dart';
 import '../models/oyuncu_oneri.dart';
 import '../models/top10.dart';
@@ -10,6 +12,9 @@ class KayitZatenVar implements Exception {}
 
 // Kullanıcı bu oyunun bugün başka bir zorluğuna başlamış: her oyunda günde tek zorluk oynanır (019_zorluk_modlari.sql)
 class BaskaModOynandi implements Exception {}
+
+// Cevap gönderilen oyunun kaydı açık değil (başka bir cihazda bitirilmiş ya da kapatılmış)
+class OyunAcikDegil implements Exception {}
 
 // Oyunların veritabanı işlemleri. Oyun mantığı bu arayüz üzerinden çalışır,
 // böylece testlerde Supabase yerine sahte bir depo verilebilir.
@@ -30,22 +35,24 @@ abstract class OyunDeposu {
 
   Future<List<OyuncuOneri>> oyuncuAra(String metin);
 
-  Future<bool> kesisimCevapKontrol({required String oyunId, required int soruIndex, required String oyuncuId});
+  // Kesişim ve Bonservis: cevap sunucuda kontrol edilir, skor ve ilerleme sunucuda yazılır (033_skor_sunucuda.sql).
+  // Kayıt açık değilse OyunAcikDegil fırlatır.
+
+  // Seçilen oyuncuyu soru index'indeki sorunun cevabı olarak gönderir. Son soruda kayıt kapanır.
+  Future<KesisimCevapSonucu> kesisimCevap({required String oyunId, required int soruIndex, required String oyuncuId});
+
+  // Bonservis tahmini: sağdaki oyuncunun bedeli soldakinden daha fazla mı. Bedel tahminden sonra döner.
+  Future<BonservisTahminSonucu> bonservisTahmin({required String oyunId, required int soruIndex, required bool dahaFazla});
+
+  // Sağdaki oyuncuların bedelleri: soru index'i -> bedel. Cevaplanan sorularınkiler; oyun bittiyse hepsi.
+  Future<Map<int, int>> bonservisBedelleri(String oyunId);
+
+  // Kesişim ve Bonservis: süre dolunca oyunu o anki skorla kapatır, skora dokunmaz
+  Future<void> oyunuBitir(String oyunId);
 
   // Bitmiş bir Kesişim oyununun her sorusu için örnek bir doğru cevap: soru index'i -> oyuncu adı.
   // Sunucu sadece oyunu bitirmiş kullanıcıya cevap döndürür.
   Future<Map<int, String>> kesisimOrnekCevaplar(String oyunId);
-
-  // 'basladi' durumundaki kaydın skorunu ve ilerlemesini (cevaplanan sorular) yazar, bittiyse kilitler.
-  // Güncellenecek kayıt yoksa (başka yerden kapatılmışsa) false döner.
-  Future<bool> skorYaz({
-    required String kullaniciId,
-    required String oyunTipi,
-    required String tarih,
-    required int skor,
-    required bool bitti,
-    List<Map<String, dynamic>>? ilerleme,
-  });
 
   // Kesişim ve Bonservis: süreyi başlatır (sure doluysa) ve oyunun süre durumunu döndürür; süresiz oyunda null.
   // Süre zaten başlatılmışsa yeni süre yok sayılır (018_oyun_devam.sql).
@@ -165,14 +172,49 @@ class SupabaseOyunDeposu implements OyunDeposu {
         .toList();
   }
 
+  // Sunucu fonksiyonunu çağırır; kayıt açık değilse OyunAcikDegil fırlatır
+  Future<dynamic> _oyunRpc(String fonksiyon, Map<String, dynamic> parametreler) async {
+    try {
+      return await _supabase.rpc(fonksiyon, params: parametreler);
+    } on PostgrestException catch (e) {
+      if (e.message.contains('Oyun açık değil')) throw OyunAcikDegil();
+      rethrow;
+    }
+  }
+
   @override
-  Future<bool> kesisimCevapKontrol({required String oyunId, required int soruIndex, required String oyuncuId}) async {
-    final dogruMu = await _supabase.rpc('kesisim_cevap_kontrol', params: {
+  Future<KesisimCevapSonucu> kesisimCevap({required String oyunId, required int soruIndex, required String oyuncuId}) async {
+    final sonuc = await _oyunRpc('kesisim_cevap', {
       'p_oyun_id': oyunId,
       'p_soru_index': soruIndex,
       'p_oyuncu_id': oyuncuId,
     });
-    return dogruMu == true;
+    return KesisimCevapSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<BonservisTahminSonucu> bonservisTahmin({required String oyunId, required int soruIndex, required bool dahaFazla}) async {
+    final sonuc = await _oyunRpc('bonservis_tahmin', {
+      'p_oyun_id': oyunId,
+      'p_soru_index': soruIndex,
+      'p_daha_fazla': dahaFazla,
+    });
+    return BonservisTahminSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Map<int, int>> bonservisBedelleri(String oyunId) async {
+    final satirlar = await _supabase.rpc('bonservis_bedelleri', params: {'p_oyun_id': oyunId}) as List<dynamic>;
+    return {
+      for (final satir in satirlar.cast<Map<String, dynamic>>())
+        if (satir['rakip_bonservis'] != null)
+          (satir['soru_index'] as num).toInt(): (satir['rakip_bonservis'] as num).toInt(),
+    };
+  }
+
+  @override
+  Future<void> oyunuBitir(String oyunId) async {
+    await _supabase.rpc('oyunu_bitir', params: {'p_oyun_id': oyunId});
   }
 
   @override
@@ -182,26 +224,6 @@ class SupabaseOyunDeposu implements OyunDeposu {
       for (final satir in satirlar.cast<Map<String, dynamic>>())
         if (satir['oyuncu_isim'] != null) (satir['soru_index'] as num).toInt(): satir['oyuncu_isim'] as String,
     };
-  }
-
-  @override
-  Future<bool> skorYaz({
-    required String kullaniciId,
-    required String oyunTipi,
-    required String tarih,
-    required int skor,
-    required bool bitti,
-    List<Map<String, dynamic>>? ilerleme,
-  }) async {
-    final guncellenen = await _supabase
-        .from('kullanici_oyun_gecmisi')
-        .update({'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi', 'ilerleme': ?ilerleme})
-        .eq('kullanici_id', kullaniciId)
-        .eq('oyun_tipi', oyunTipi)
-        .eq('tarih', tarih)
-        .eq('durum', 'basladi')
-        .select('skor');
-    return guncellenen.isNotEmpty;
   }
 
   @override

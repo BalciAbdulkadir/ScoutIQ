@@ -25,6 +25,37 @@ public class BonservisSoruSeciciTests
     private static List<Aday> KarisikHavuz() =>
         Enumerable.Range(0, 120).Select(i => Oyuncu(i, 6 + i * 3 / 2, (Kademe)(i % 3))).ToList();
 
+    // Uygulamaya giden soru verisi tahmin edilen bedeli ele vermez: sadece soldaki oyuncunun bedeli vardır
+    [Fact]
+    public void Soru_verisinde_sagdaki_oyuncunun_bedeli_yok()
+    {
+        var sorular = new BonservisSoruSecici(new Random(7)).Sec(Zorluk.Kolay, GenisHavuz())!;
+
+        var json = System.Text.Json.JsonSerializer.Serialize(SoruVerisi(sorular));
+        using var belge = System.Text.Json.JsonDocument.Parse(json);
+
+        Assert.Equal(sorular.Count, belge.RootElement.GetArrayLength());
+        foreach (var (soru, i) in belge.RootElement.EnumerateArray().Select((s, i) => (s, i)))
+        {
+            Assert.False(soru.TryGetProperty("oyuncu_b_bonservis", out _));
+            Assert.Equal(sorular[i].Sol.ToplamBonservis, soru.GetProperty("oyuncu_a_bonservis").GetInt64());
+            Assert.Equal(sorular[i].Sag.Id, soru.GetProperty("oyuncu_b_id").GetString());
+            Assert.DoesNotContain(sorular[i].Sag.ToplamBonservis.ToString(), soru.GetRawText());
+        }
+    }
+
+    // Sağdaki oyuncuların bedelleri ayrı tabloya soru sırasıyla gider
+    [Fact]
+    public void Cevaplar_sagdaki_oyuncularin_bedelleri_soru_sirasiyla()
+    {
+        var sorular = new BonservisSoruSecici(new Random(7)).Sec(Zorluk.Kolay, GenisHavuz())!;
+
+        var cevaplar = Cevaplar(sorular);
+
+        Assert.Equal(Enumerable.Range(0, sorular.Count), cevaplar.Select(c => c.SoruIndex));
+        Assert.Equal(sorular.Select(s => s.Sag.ToplamBonservis), cevaplar.Select(c => c.RakipBonservis));
+    }
+
     public static IEnumerable<object[]> TohumVeZorluklar() =>
         from tohum in new[] { 1, 2, 3, 42, 2026 }
         from zorluk in Enum.GetValues<Zorluk>()

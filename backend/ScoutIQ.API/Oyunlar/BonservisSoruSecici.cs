@@ -44,6 +44,28 @@ namespace ScoutIQ.API.Oyunlar
         public record Aday(string Id, string Isim, long ToplamBonservis, Kademe Kademe, string? FotoUrl = null);
 
         // Sol ve Sag ekrandaki yerlerdir; doğru cevabın hangi tarafta olacağı rastgeledir
+        // Uygulamaya giden soru verisi. Soldaki oyuncunun bedeli ekranda baştan görünür, yazılır. Sağdaki oyuncunun
+        // bedeli cevabı ele verir: soru verisine yazılmaz, uygulamaya kapalı bonservis_cevaplari tablosuna gider
+        // (Cevaplar); tahmini sunucu kontrol eder, bedel tahminden sonra döner (033_skor_sunucuda.sql).
+        public static List<object> SoruVerisi(IEnumerable<BonservisSorusu> sorular) => sorular.Select(s => (object)new
+        {
+            oyuncu_a = s.Sol.Isim,
+            oyuncu_b = s.Sag.Isim,
+            oyuncu_a_id = s.Sol.Id,
+            oyuncu_b_id = s.Sag.Id,
+            oyuncu_a_bonservis = s.Sol.ToplamBonservis,
+            oyuncu_a_foto = s.Sol.FotoUrl,
+            oyuncu_b_foto = s.Sag.FotoUrl,
+            oyuncu_a_kademe = ZorlukDagilimi.Metin(s.Sol.Kademe),
+            oyuncu_b_kademe = ZorlukDagilimi.Metin(s.Sag.Kademe)
+        }).ToList();
+
+        public record Cevap(int SoruIndex, long RakipBonservis);
+
+        // Sağdaki oyuncuların bedelleri, soru verisindeki sırayla (index 0'dan başlar)
+        public static List<Cevap> Cevaplar(IEnumerable<BonservisSorusu> sorular) =>
+            sorular.Select((s, i) => new Cevap(i, s.Sag.ToplamBonservis)).ToList();
+
         public record BonservisSorusu(Aday Sol, Aday Sag)
         {
             public Aday Dogru => Sol.ToplamBonservis > Sag.ToplamBonservis ? Sol : Sag;

@@ -233,6 +233,40 @@ void main() {
       expect(depo.yazilanSkorlar.last, (skor: 6, bitti: true));
     });
 
+    test('skor sunucudan gelir, uygulama kendisi hesaplamaz', () async {
+      final (c, depo) = await oyunuBaslat((d) => d.kayit = {'skor': 0, 'durum': 'basladi'});
+      // Sunucudaki skor uygulamanın bildiğinden farklı (ör. başka cihazda yazılmış): sunucununki geçerli
+      depo.kayit = {'skor': 4, 'durum': 'basladi'};
+
+      await notifier(c).makeGuess(dogruOyuncu);
+
+      expect(durum(c).score, 6);
+    });
+
+    test('süre sunucuda dolduysa cevap sayılmaz, oyun o anki skorla biter', () async {
+      final (c, depo) = await oyunuBaslat();
+      await notifier(c).makeGuess(dogruOyuncu);
+      depo.oyunSureKalan = 0;
+
+      await notifier(c).makeGuess(dogruOyuncu);
+
+      expect(durum(c).status, 'completed');
+      expect(durum(c).sureDoldu, isTrue);
+      expect(durum(c).score, 2);
+      expect(durum(c).sonuclar, [true]);
+      expect(depo.kayit?['durum'], 'tamamlandi');
+    });
+
+    test('kayıt başka yerde kapatıldıysa oyun "bugün oynandı" olur', () async {
+      final (c, depo) = await oyunuBaslat();
+      depo.kayit = {'skor': 2, 'durum': 'tamamlandi'};
+
+      final hata = await notifier(c).makeGuess(dogruOyuncu);
+
+      expect(hata, isNull);
+      expect(durum(c).status, 'already_played');
+    });
+
     test('cevap gönderilemezse hata döner, soru ilerlemez ve tekrar denenebilir', () async {
       final (c, depo) = await oyunuBaslat((d) => d.cevapKontrolHataVerir = true);
 
