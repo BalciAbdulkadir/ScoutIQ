@@ -72,11 +72,10 @@ class GameState {
 }
 
 // Kesişim oyunu. Her zorluk ayrı bir günlük oyundur: kesisim_kolay, kesisim_orta ya da kesisim_zor.
+// Cevap sunucuda kontrol edilir; skor (doğru cevap 2 puan) ve ilerleme sunucuda yazılır (033_skor_sunucuda.sql).
 // Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 class GameNotifier extends Notifier<GameState> {
-  static const _puan = 2;
-
   final GunlukOyunSecimi secim;
 
   GameNotifier(this.secim);
@@ -167,54 +166,43 @@ class GameNotifier extends Notifier<GameState> {
   // Cevap kutusunun altındaki öneri listesi. Tüm oyuncular arasında arar, doğru cevabı ele vermez.
   Future<List<OyuncuOneri>> oyuncuAra(String metin) => _depo.oyuncuAra(metin);
 
-  // Seçilen oyuncuyu sunucuda kontrol ettirir. Hata olursa mesajını döndürür, başarılıysa null.
+  // Seçilen oyuncuyu sunucuya gönderir; sunucu cevabı kontrol edip skoru yazar.
+  // Hata olursa mesajını döndürür, başarılıysa null.
   Future<String?> makeGuess(OyuncuOneri oyuncu) async {
     if (state.status != 'playing' || state.questions.isEmpty || state.gonderiliyor) return null;
-
-    final userId = _depo.kullaniciId;
-    if (userId == null) return oturumYokMesaji;
+    if (_depo.kullaniciId == null) return oturumYokMesaji;
 
     state = state.copyWith(gonderiliyor: true);
 
     try {
-      final isCorrect = await _depo.kesisimCevapKontrol(
+      final sonuc = await _depo.kesisimCevap(
         oyunId: state.gameId!,
         soruIndex: state.currentIndex,
         oyuncuId: oyuncu.id,
       );
       if (!ref.mounted) return null;
 
-      final newScore = isCorrect ? state.score + _puan : state.score;
-      final nextIndex = state.currentIndex + 1;
-      final bitti = nextIndex >= state.questions.length;
-
-      // Skoru her cevaptan sonra kaydediyoruz, son soruda kaydı kilitliyoruz
-      final yazildi = await _depo.skorYaz(
-        kullaniciId: userId,
-        oyunTipi: _oyunTipi,
-        tarih: state.tarih!,
-        skor: newScore,
-        bitti: bitti,
-        ilerleme: _ilerleme([...state.sonuclar, isCorrect], [...state.cevaplar, oyuncu.isim]),
-      );
-      if (!ref.mounted) return null;
-
-      if (!yazildi) {
-        // Kayıt başka bir yerden kapatılmış: oyun artık oynanamaz
-        state = state.copyWith(status: 'already_played', gonderiliyor: false);
-        return null;
+      if (sonuc.sureDoldu) {
+        // Süre sunucuda dolmuştu: cevap sayılmadı, oyun o anki skorla bitti
+        state = state.copyWith(status: 'completed', sureDoldu: true, score: sonuc.skor, gonderiliyor: true);
+      } else {
+        final bitti = sonuc.bitti || state.currentIndex + 1 >= state.questions.length;
+        state = state.copyWith(
+          status: bitti ? 'completed' : 'playing',
+          currentIndex: bitti ? state.currentIndex : state.currentIndex + 1,
+          score: sonuc.skor,
+          lastGuessStatus: sonuc.dogru ? 'correct' : 'wrong',
+          sonuclar: [...state.sonuclar, sonuc.dogru],
+          cevaplar: [...state.cevaplar, oyuncu.isim],
+          // Oyun bittiyse kilit açılmıyor: son soruda ikinci gönderim mümkün olmasın
+          gonderiliyor: bitti,
+        );
       }
-
-      state = state.copyWith(
-        status: bitti ? 'completed' : 'playing',
-        currentIndex: bitti ? state.currentIndex : nextIndex,
-        score: newScore,
-        lastGuessStatus: isCorrect ? 'correct' : 'wrong',
-        sonuclar: [...state.sonuclar, isCorrect],
-        cevaplar: [...state.cevaplar, oyuncu.isim],
-        // Oyun bittiyse kilit açılmıyor: son soruda ikinci gönderim mümkün olmasın
-        gonderiliyor: bitti,
-      );
+    } on OyunAcikDegil {
+      // Kayıt başka bir yerden kapatılmış: oyun artık oynanamaz
+      if (!ref.mounted) return null;
+      state = state.copyWith(status: 'already_played', gonderiliyor: false);
+      return null;
     } catch (e) {
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
@@ -233,28 +221,15 @@ class GameNotifier extends Notifier<GameState> {
     await _kapat(sureDoldu: true);
   }
 
-  // Sunucuya yazılan ilerleme: cevaplanan her soru için doğru mu ve seçilen oyuncu
-  static List<Map<String, dynamic>> _ilerleme(List<bool> sonuclar, List<String> cevaplar) => [
-        for (var i = 0; i < sonuclar.length; i++) {'dogru': sonuclar[i], 'cevap': cevaplar[i]},
-      ];
-
-  // Kaydı o anki skorla kilitler ve bitiş ekranını açar
+  // Kaydı o anki skorla kapatır (skor sunucuda kalır) ve bitiş ekranını açar
   Future<void> _kapat({required bool sureDoldu}) async {
-    final userId = _depo.kullaniciId;
     state = state.copyWith(gonderiliyor: true);
 
-    if (userId != null) {
+    if (_depo.kullaniciId != null) {
       try {
-        await _depo.skorYaz(
-          kullaniciId: userId,
-          oyunTipi: _oyunTipi,
-          tarih: state.tarih!,
-          skor: state.score,
-          bitti: true,
-          ilerleme: _ilerleme(state.sonuclar, state.cevaplar),
-        );
+        await _depo.oyunuBitir(state.gameId!);
       } catch (_) {
-        // Kayıt kapatılamazsa açık kalır; süre sunucuda da dolduğu için skor sonradan değiştirilemez
+        // Kayıt kapatılamazsa açık kalır; süre sunucuda da dolduğu için sonradan cevap kabul edilmez
       }
     }
     if (!ref.mounted) return;

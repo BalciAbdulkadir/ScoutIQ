@@ -12,6 +12,7 @@ import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_arama.dart';
 import '../widgets/tebesir.dart';
+import '../widgets/oyun_kurallari.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
@@ -35,7 +36,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final state = ref.watch(gameProvider(_secim));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('KESİŞİM')),
+      appBar: AppBar(title: const Text('KESİŞİM'), actions: const [KurallarDugmesi(oyun: 'kesisim'), SizedBox(width: 4)]),
       body: TahtaZemini(child: SafeArea(child: _govde(state))),
     );
   }

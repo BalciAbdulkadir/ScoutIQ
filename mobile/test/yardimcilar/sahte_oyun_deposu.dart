@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:mobile/models/bingo.dart';
+import 'package:mobile/models/bonservis_sorusu.dart';
+import 'package:mobile/models/kesisim.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/models/top10.dart';
@@ -59,9 +61,12 @@ class SahteOyunDeposu implements OyunDeposu {
   bool ornekCevaplarHataVerir = false;
   int ornekCevaplarSayisi = 0;
 
-  // Doluysa skor yazımı bu Completer tamamlanana kadar bekler
+  // Doluysa sunucunun skoru yazması (Kesişim cevabı, Bonservis tahmini, oyunu bitirme) bu Completer tamamlanana kadar bekler
   Completer<void>? skorYazBekletici;
   bool skorYazHataVerir = false;
+  // Bonservis: sunucunun bonservisBedelleri ile döndürdüğü bedeller sorulsun mu
+  int bonservisBedelIstekSayisi = 0;
+  int oyunuBitirSayisi = 0;
 
   // Izgara: oyuncu ID'si -> yerleşeceği hücre. Listede olmayan oyuncu yanlış sayılır.
   Map<String, int> izgaraHucreleri = {'o-1': 4};
@@ -117,6 +122,7 @@ class SahteOyunDeposu implements OyunDeposu {
   int kayitAcSayisi = 0;
   int cevapKontrolSayisi = 0;
   final List<String> arananlar = [];
+  // Sunucunun yazdığı skorlar (033_skor_sunucuda.sql: skor artık sadece sunucuda yazılır)
   final List<({int skor, bool bitti})> yazilanSkorlar = [];
   final List<String> istenenOyunTipleri = []; // gununOyunu ile istenen oyun tipleri
   final List<String> acilanKayitTipleri = []; // kayitAc ile açılan oyun tipleri
@@ -169,12 +175,91 @@ class SahteOyunDeposu implements OyunDeposu {
     return oneriler;
   }
 
+  // Sunucunun açık kaydı alması: kayıt yoksa ya da kapalıysa OyunAcikDegil; süre dolduysa kaydı kapatır (acik_kaydi_al)
+  bool _sureDolduysaKapat() {
+    if (kayit?['durum'] != 'basladi') throw OyunAcikDegil();
+    if (oyunSureKalan != null && oyunSureKalan! <= 0) {
+      kayit = {...kayit!, 'durum': 'tamamlandi'};
+      return true;
+    }
+    return false;
+  }
+
+  void _skoruYaz(int skor, bool bitti) {
+    yazilanSkorlar.add((skor: skor, bitti: bitti));
+    kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
+  }
+
+  int get _kayitSkoru => (kayit?['skor'] as int?) ?? 0;
+
+  int get _soruSayisi => ((oyun?['soru_verisi'] as List?) ?? const []).length;
+
+  // 033_skor_sunucuda.sql'deki kesisim_cevap fonksiyonunun basit bir kopyası
   @override
-  Future<bool> kesisimCevapKontrol({required String oyunId, required int soruIndex, required String oyuncuId}) async {
+  Future<KesisimCevapSonucu> kesisimCevap({required String oyunId, required int soruIndex, required String oyuncuId}) async {
     cevapKontrolSayisi++;
     if (cevapKontrolBekletici != null) await cevapKontrolBekletici!.future;
     if (cevapKontrolHataVerir) throw Exception('bağlantı yok');
-    return dogruCevaplar.contains(oyuncuId);
+    if (skorYazBekletici != null) await skorYazBekletici!.future;
+    if (skorYazHataVerir) throw Exception('bağlantı yok');
+
+    if (_sureDolduysaKapat()) return KesisimCevapSonucu(dogru: false, skor: _kayitSkoru, bitti: true, sureDoldu: true);
+    if (soruIndex != ilerleme.length) throw Exception('Sıra hatalı');
+
+    final dogru = dogruCevaplar.contains(oyuncuId);
+    final isim = oneriler.firstWhere((o) => o.id == oyuncuId, orElse: () => OyuncuOneri(id: oyuncuId, isim: oyuncuId)).isim;
+    final skor = _kayitSkoru + (dogru ? 2 : 0);
+    ilerleme = [...ilerleme, {'dogru': dogru, 'cevap': isim}];
+    final bitti = ilerleme.length >= _soruSayisi;
+    _skoruYaz(skor, bitti);
+    return KesisimCevapSonucu(dogru: dogru, skor: skor, bitti: bitti);
+  }
+
+  // 033_skor_sunucuda.sql'deki bonservis_tahmin fonksiyonunun basit bir kopyası. Bedeller soru verisinden okunur.
+  @override
+  Future<BonservisTahminSonucu> bonservisTahmin({required String oyunId, required int soruIndex, required bool dahaFazla}) async {
+    if (skorYazBekletici != null) await skorYazBekletici!.future;
+    if (skorYazHataVerir) throw Exception('bağlantı yok');
+
+    if (_sureDolduysaKapat()) return BonservisTahminSonucu(dogru: false, skor: _kayitSkoru, bitti: true, sureDoldu: true);
+    if (soruIndex != ilerleme.length) throw Exception('Sıra hatalı');
+
+    final soru = (oyun!['soru_verisi'] as List)[soruIndex] as Map<String, dynamic>;
+    final referans = (soru['oyuncu_a_bonservis'] as num).toInt();
+    final rakip = _rakipBedeli(soruIndex)!;
+    final dogru = dahaFazla == (rakip > referans);
+    final skor = _kayitSkoru + (dogru ? 2 : 0);
+    ilerleme = [...ilerleme, {'dogru': dogru}];
+    final bitti = ilerleme.length >= _soruSayisi;
+    _skoruYaz(skor, bitti);
+    return BonservisTahminSonucu(dogru: dogru, rakipBonservis: rakip, skor: skor, bitti: bitti);
+  }
+
+  // Sunucudaki bonservis_cevaplari tablosu: testler doldurmazsa soru verisindeki eski usul bedel kullanılır
+  Map<int, int> bonservisCevaplari = {};
+
+  int? _rakipBedeli(int soruIndex) {
+    final soru = (oyun!['soru_verisi'] as List)[soruIndex] as Map<String, dynamic>;
+    return bonservisCevaplari[soruIndex] ?? (soru['oyuncu_b_bonservis'] as num?)?.toInt();
+  }
+
+  @override
+  Future<Map<int, int>> bonservisBedelleri(String oyunId) async {
+    bonservisBedelIstekSayisi++;
+    final kadar = kayit?['durum'] == 'tamamlandi' ? _soruSayisi : ilerleme.length;
+    return {
+      for (var i = 0; i < kadar; i++)
+        if (_rakipBedeli(i) != null) i: _rakipBedeli(i)!,
+    };
+  }
+
+  @override
+  Future<void> oyunuBitir(String oyunId) async {
+    oyunuBitirSayisi++;
+    if (skorYazBekletici != null) await skorYazBekletici!.future;
+    if (skorYazHataVerir) throw Exception('bağlantı yok');
+    if (kayit?['durum'] != 'basladi') return;
+    _skoruYaz(_kayitSkoru, true);
   }
 
   @override
@@ -184,24 +269,6 @@ class SahteOyunDeposu implements OyunDeposu {
     // Gerçek sunucu gibi: oyun bitmeden cevap vermez
     if (kayit?['durum'] != 'tamamlandi') return {};
     return ornekCevaplar;
-  }
-
-  @override
-  Future<bool> skorYaz({
-    required String kullaniciId,
-    required String oyunTipi,
-    required String tarih,
-    required int skor,
-    required bool bitti,
-    List<Map<String, dynamic>>? ilerleme,
-  }) async {
-    if (skorYazBekletici != null) await skorYazBekletici!.future;
-    if (skorYazHataVerir) throw Exception('bağlantı yok');
-    if (kayit?['durum'] != 'basladi') return false;
-    yazilanSkorlar.add((skor: skor, bitti: bitti));
-    kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
-    if (ilerleme != null) this.ilerleme = ilerleme;
-    return true;
   }
 
   @override

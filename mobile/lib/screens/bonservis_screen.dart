@@ -11,6 +11,7 @@ import '../widgets/bonservis_oyuncu_karti.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/tebesir.dart';
+import '../widgets/oyun_kurallari.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
@@ -69,7 +70,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final durum = ref.watch(bonservisProvider(_secim));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('BONSERVİS')),
+      appBar: AppBar(title: const Text('BONSERVİS'), actions: const [KurallarDugmesi(oyun: 'bonservis'), SizedBox(width: 4)]),
       body: TahtaZemini(child: SafeArea(child: _govde(durum))),
     );
   }
@@ -256,7 +257,7 @@ class _SonucBandi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final renk = dogru ? Renkler.basari : Renkler.hata;
-    final fark = (soru.rakip.toplamBonservis - soru.referans.toplamBonservis).abs();
+    final fark = soru.fark;
     final butonMetni = sonSoru ? 'Sonuçları gör' : 'Devam';
 
     return Container(
@@ -280,12 +281,14 @@ class _SonucBandi extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Yazi.tebesir(17, renk: renk).copyWith(height: 1.0),
                 ),
-                Text(
-                  '${soru.pahaliOlan.isim}, ${bonservisMetni(fark)} daha pahalı',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13),
-                ),
+                // Bedel sunucudan gelmediyse (eski sürümlü sunucu) fark yazılmaz
+                if (fark != null)
+                  Text(
+                    '${soru.pahaliOlan.isim}, ${bonservisMetni(fark)} daha pahalı',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Renkler.metinIkincil, fontSize: 13),
+                  ),
               ],
             ),
           ),

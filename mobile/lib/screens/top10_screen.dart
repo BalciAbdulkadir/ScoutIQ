@@ -11,6 +11,7 @@ import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_arama.dart';
 import '../widgets/oyuncu_fotografi.dart';
 import '../widgets/tebesir.dart';
+import '../widgets/oyun_kurallari.dart';
 
 // Top 10: başlıktaki listenin 10 oyuncusunu bulma oyunu. Her satırda oyuncunun uyruğunun bayrağı ipucu olarak açıktır.
 // Kullanıcı sıra seçmez; listedeki oyuncu kendi sırasındaki satıra sunucu tarafından yerleştirilir.
@@ -31,6 +32,7 @@ class Top10Screen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('TOP 10'),
         actions: [
+          const KurallarDugmesi(oyun: 'top10'),
           if (oynaniyor)
             Padding(
               padding: const EdgeInsets.only(right: 8),

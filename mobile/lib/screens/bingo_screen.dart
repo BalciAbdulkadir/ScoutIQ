@@ -10,6 +10,7 @@ import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_fotografi.dart';
 import '../widgets/tebesir.dart';
+import '../widgets/oyun_kurallari.dart';
 
 // Bingo: destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
 // Yanlış kutuya konan oyuncu gitmez, başka kutu denenebilir; oyuncu sadece pas geçilince gider. Amaç 12 kutuyu doldurmak.
@@ -32,6 +33,7 @@ class BingoScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('BİNGO'),
         actions: [
+          const KurallarDugmesi(oyun: 'bingo'),
           if (oynaniyor)
             Padding(
               padding: const EdgeInsets.only(right: 8),

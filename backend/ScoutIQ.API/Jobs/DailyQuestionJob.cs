@@ -731,20 +731,20 @@ namespace ScoutIQ.API.Jobs
                     continue;
                 }
 
-                // Toplam bonservisler de kaydedilir: cevaptan sonra ekranda gösterilir
-                await OyunEkle("bonservis", zorluk, tarih, sorular.Select(s => new
+                var oyun = await OyunEkle("bonservis", zorluk, tarih, BonservisSoruSecici.SoruVerisi(sorular));
+
+                // Cevaplar yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
+                try
                 {
-                    oyuncu_a = s.Sol.Isim,
-                    oyuncu_b = s.Sag.Isim,
-                    oyuncu_a_id = s.Sol.Id,
-                    oyuncu_b_id = s.Sag.Id,
-                    oyuncu_a_bonservis = s.Sol.ToplamBonservis,
-                    oyuncu_b_bonservis = s.Sag.ToplamBonservis,
-                    oyuncu_a_foto = s.Sol.FotoUrl,
-                    oyuncu_b_foto = s.Sag.FotoUrl,
-                    oyuncu_a_kademe = ZorlukDagilimi.Metin(s.Sol.Kademe),
-                    oyuncu_b_kademe = ZorlukDagilimi.Metin(s.Sag.Kademe)
-                }).ToList());
+                    await _supabaseClient.From<BonservisCevabi>().Insert(BonservisSoruSecici.Cevaplar(sorular)
+                        .Select(c => new BonservisCevabi { OyunId = oyun.Id, SoruIndex = c.SoruIndex, RakipBonservis = c.RakipBonservis })
+                        .ToList());
+                }
+                catch
+                {
+                    await _supabaseClient.From<GunlukOyun>().Where(g => g.Id == oyun.Id).Delete();
+                    throw;
+                }
                 BonservisSorulariniYaz(sorular);
             }
         }
