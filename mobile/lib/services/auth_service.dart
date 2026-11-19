@@ -38,4 +38,23 @@ class AuthService {
     await googleSignIn.signOut();
     await _supabase.auth.signOut();
   }
+
+  // Hesabı ve bütün oyun geçmişini sunucuda siler (hesabimi_sil, 032_hesabimi_sil.sql), sonra oturumu kapatır.
+  // Sunucudaki silme başarısız olursa hata fırlatır ve oturum açık kalır.
+  Future<void> hesabimiSil() async {
+    await _supabase.rpc('hesabimi_sil');
+
+    // Hesap silindi: Google'ın uygulamaya verdiği izin de geri alınır, bir sonraki girişte hesap yeniden seçilir.
+    // Bunlar başarısız olsa da hesap silinmiştir; oturum cihazda mutlaka kapatılır.
+    final googleSignIn = GoogleSignIn();
+    try {
+      await googleSignIn.disconnect();
+    } catch (_) {
+      try {
+        await googleSignIn.signOut();
+      } catch (_) {}
+    }
+    // Kullanıcı sunucuda artık yok: oturum sadece cihazda kapatılır
+    await _supabase.auth.signOut(scope: SignOutScope.local);
+  }
 }

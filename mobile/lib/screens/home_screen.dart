@@ -3,17 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyun_modu.dart';
 import '../providers/hub_provider.dart';
-import '../services/auth_service.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/gunluk_kart.dart';
 import '../widgets/izgara_zorluk_secimi.dart';
+import '../widgets/kullanici_avatari.dart';
 import '../widgets/oyun_karti.dart';
 import '../widgets/logo.dart';
 import '../widgets/tebesir.dart';
 import 'bingo_screen.dart';
 import 'bonservis_screen.dart';
 import 'game_screen.dart';
+import 'profil_screen.dart';
 import 'top10_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -155,7 +156,7 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// Logo ve profil fotoğrafı. Fotoğrafa dokununca hesap menüsü açılır.
+// Logo ve profil fotoğrafı. Fotoğrafa dokununca hesap sayfası açılır (çıkış, gizlilik, hesap silme).
 class _UstBar extends StatelessWidget {
   final KullaniciBilgisi? kullanici;
 
@@ -169,106 +170,10 @@ class _UstBar extends StatelessWidget {
         const Spacer(),
         IconButton(
           tooltip: 'Hesap',
-          onPressed: () => _hesapMenusunuAc(context),
-          icon: _Avatar(kullanici: kullanici, yaricap: 17),
+          onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const ProfilScreen())),
+          icon: KullaniciAvatari(kullanici: kullanici, yaricap: 17),
         ),
       ],
-    );
-  }
-
-  void _hesapMenusunuAc(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Renkler.yuzey,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: _Avatar(kullanici: kullanici, yaricap: 20),
-                title: Text(
-                  kullanici?.ad ?? '',
-                  style: const TextStyle(color: Renkler.metin, fontWeight: FontWeight.w600),
-                ),
-                subtitle: kullanici?.eposta != null
-                    ? Text(kullanici!.eposta!, style: const TextStyle(color: Renkler.metinIkincil))
-                    : null,
-              ),
-              const Divider(indent: 16, endIndent: 16),
-              ListTile(
-                leading: const Icon(Icons.logout_rounded, color: Renkler.hata),
-                title: const Text(
-                  'Çıkış yap',
-                  style: TextStyle(color: Renkler.hata, fontWeight: FontWeight.w600),
-                ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  if (await _cikisOnayla(context)) {
-                    await AuthService().signOut();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<bool> _cikisOnayla(BuildContext context) async {
-    final onay = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Renkler.yuzey,
-        title: const Text('Çıkış yapılsın mı?'),
-        content: const Text('Tekrar oynamak için Google hesabınla yeniden giriş yapman gerekecek.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil),
-            child: const Text('Vazgeç'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Renkler.hata),
-            child: const Text('Çıkış yap'),
-          ),
-        ],
-      ),
-    );
-    return onay ?? false;
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  final KullaniciBilgisi? kullanici;
-  final double yaricap;
-
-  const _Avatar({required this.kullanici, required this.yaricap});
-
-  @override
-  Widget build(BuildContext context) {
-    final fotoUrl = kullanici?.fotoUrl;
-    final ad = kullanici?.ilkAd ?? '';
-
-    final avatar = CircleAvatar(
-      radius: yaricap,
-      backgroundColor: Renkler.yuzey,
-      foregroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
-      onForegroundImageError: fotoUrl != null ? (_, _) {} : null,
-      child: Text(
-        ad.isNotEmpty ? ad[0].toUpperCase() : '?',
-        style: Yazi.baslik(yaricap * 0.9, kalinlik: FontWeight.w800),
-      ),
-    );
-    // Tebeşirle çizilmiş çerçeve
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Renkler.kenar, width: 1.5)),
-      child: avatar,
     );
   }
 }
