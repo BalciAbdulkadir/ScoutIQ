@@ -132,6 +132,7 @@ class OyunBitisEkrani extends StatelessWidget {
   final String baslik;
   final Color renk;
   final List<Widget> ozetSatirlari;
+  final Widget? paylas; // "Sonucu paylaş" düğmesi; ana menü düğmesinin üstünde durur
 
   const OyunBitisEkrani({
     super.key,
@@ -140,6 +141,7 @@ class OyunBitisEkrani extends StatelessWidget {
     required this.baslik,
     required this.renk,
     required this.ozetSatirlari,
+    this.paylas,
   });
 
   @override
@@ -189,6 +191,7 @@ class OyunBitisEkrani extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 28),
+        if (paylas != null) ...[paylas!, const SizedBox(height: 12)],
         FilledButton(
           onPressed: () => Navigator.pop(context),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),

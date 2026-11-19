@@ -31,7 +31,8 @@ class Oynanabilir extends OyunAcilisi {
 // Bugün bitirilmiş
 class ZatenOynandi extends OyunAcilisi {
   final int skor;
-  ZatenOynandi(this.skor);
+  final List<Map<String, dynamic>> ilerleme; // Cevaplanan sorular (paylaşım metnindeki kareler için)
+  ZatenOynandi(this.skor, {this.ilerleme = const []});
 }
 
 class OyunYok extends OyunAcilisi {}
@@ -67,7 +68,7 @@ Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi, {int? sure})
 
   // 1. Kullanıcı bugün bu oyunu bitirmiş mi?
   var kayit = await depo.oyunKaydi(userId, oyunTipi, tarih);
-  if (kayit != null && kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit));
+  if (kayit != null && kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit), ilerleme: _ilerleme(kayit));
 
   // 2. Bugünün oyununu çek
   final oyun = await depo.gununOyunu(oyunTipi, tarih);
@@ -85,7 +86,7 @@ Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi, {int? sure})
       // Oyun aynı anda başka bir cihazda başlatılmış: o kayıtla devam ediliyor
       kayit = await depo.oyunKaydi(userId, oyunTipi, tarih);
       if (kayit == null) rethrow;
-      if (kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit));
+      if (kayit['durum'] != 'basladi') return ZatenOynandi(_skor(kayit), ilerleme: _ilerleme(kayit));
     } on BaskaModOynandi {
       return BaskaZorlukOynandi();
     }

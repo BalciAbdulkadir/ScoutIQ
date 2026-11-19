@@ -127,7 +127,8 @@ class BonservisNotifier extends Notifier<BonservisState> {
       state = switch (acilis) {
         Oynanabilir(:final sorular, :final tarih, :final skor, :final ilerleme, :final kalanSaniye) =>
           _devamDurumu(bonservisSorulariniOku(sorular), tarih, skor, ilerleme, kalanSaniye),
-        ZatenOynandi(:final skor) => state.copyWith(durum: BonservisDurumu.zatenOynandi, skor: skor),
+        ZatenOynandi(:final skor, :final ilerleme) => state.copyWith(
+            durum: BonservisDurumu.zatenOynandi, skor: skor, sonuclar: [for (final c in ilerleme) c['dogru'] == true]),
         OyunYok() => state.copyWith(durum: BonservisDurumu.oyunYok),
         OturumYok() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: oturumYokMesaji),
         BaskaZorlukOynandi() => state.copyWith(durum: BonservisDurumu.hata, hataMesaji: baskaZorlukMesaji),

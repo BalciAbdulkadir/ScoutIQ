@@ -11,6 +11,8 @@ import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_fotografi.dart';
 import '../widgets/tebesir.dart';
 import '../widgets/oyun_kurallari.dart';
+import '../services/paylasim.dart';
+import '../widgets/paylas_dugmesi.dart';
 
 // Bingo: destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
 // Yanlış kutuya konan oyuncu gitmez, başka kutu denenebilir; oyuncu sadece pas geçilince gider. Amaç 12 kutuyu doldurmak.
@@ -191,6 +193,11 @@ class BingoScreen extends ConsumerWidget {
         const SizedBox(height: 20),
         BingoKartiGorunumu(state: state),
         const SizedBox(height: 28),
+        PaylasDugmesi(
+          oyun: 'bingo',
+          metin: (seri) => bingoPaylasimi(doluKutular: state.hucreler.keys.toSet(), sure: sure, seri: seri),
+        ),
+        const SizedBox(height: 12),
         FilledButton(
           onPressed: () => Navigator.pop(context),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),

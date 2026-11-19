@@ -12,6 +12,9 @@ import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
 import '../widgets/tebesir.dart';
 import '../widgets/oyun_kurallari.dart';
+import '../services/analitik.dart';
+import '../services/paylasim.dart';
+import '../widgets/paylas_dugmesi.dart';
 
 // Bonservis: üstteki oyuncunun toplam bonservisi görünür, alttakinin daha fazla mı daha az mı olduğu tahmin edilir
 class BonservisScreen extends ConsumerStatefulWidget {
@@ -97,6 +100,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           ikon: Icons.check_circle_outline_rounded,
           baslik: 'Bugünkü oyununu oynadın',
           aciklama: 'Skorun: ${durum.skor}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
+          ek: durum.sonuclar.isEmpty ? null : _paylas(durum),
         );
       case BonservisDurumu.bitti:
         return _bitis(durum);
@@ -223,6 +227,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final dogruSayisi = durum.sonuclar.where((d) => d).length;
 
     return OyunBitisEkrani(
+      paylas: _paylas(durum),
       skor: '${durum.skor}/$_maksimumSkor',
       skorAciklamasi: 'puan',
       baslik: durum.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, durum.sorular.length),
@@ -233,6 +238,20 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
           if (i < durum.sonuclar.length || durum.sureDoldu)
             _ozetSatiri(durum.sorular[i], i < durum.sonuclar.length ? durum.sonuclar[i] : null),
       ],
+    );
+  }
+
+  Widget _paylas(BonservisState durum) {
+    final oyun = oyunVeZorluk(widget.oyunTipi);
+    return PaylasDugmesi(
+      oyun: oyun.oyun,
+      metin: (seri) => bonservisPaylasimi(
+        sonuclar: durum.sonuclar,
+        soruSayisi: durum.sorular.isEmpty ? 5 : durum.sorular.length,
+        zorluk: oyun.zorluk,
+        sure: widget.sure,
+        seri: seri,
+      ),
     );
   }
 
