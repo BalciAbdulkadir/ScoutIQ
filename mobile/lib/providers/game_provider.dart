@@ -137,7 +137,8 @@ class GameNotifier extends Notifier<GameState> {
             cevaplar: [for (final c in ilerleme) c['cevap'] as String? ?? '—'],
             bitisZamani: kalanSaniye == null ? null : DateTime.now().add(Duration(seconds: kalanSaniye)),
           ),
-        ZatenOynandi(:final skor) => state.copyWith(status: 'already_played', score: skor),
+        ZatenOynandi(:final skor, :final ilerleme) => state.copyWith(
+            status: 'already_played', score: skor, sonuclar: [for (final c in ilerleme) c['dogru'] == true]),
         OyunYok() => state.copyWith(status: 'no_game'),
         OturumYok() => state.copyWith(status: 'error', hataMesaji: oturumYokMesaji),
         BaskaZorlukOynandi() => state.copyWith(status: 'error', hataMesaji: baskaZorlukMesaji),

@@ -13,6 +13,9 @@ import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_arama.dart';
 import '../widgets/tebesir.dart';
 import '../widgets/oyun_kurallari.dart';
+import '../services/analitik.dart';
+import '../services/paylasim.dart';
+import '../widgets/paylas_dugmesi.dart';
 
 // Kesişim: iki kulübün ikisinde de oynamış bir oyuncuyu bulma oyunu
 class GameScreen extends ConsumerStatefulWidget {
@@ -63,6 +66,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ikon: Icons.check_circle_outline_rounded,
           baslik: 'Bugünkü oyununu oynadın',
           aciklama: 'Skorun: ${state.score}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
+          ek: state.sonuclar.isEmpty ? null : _paylas(state),
         );
       case 'completed':
         return _bitis(state);
@@ -146,6 +150,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _ => null,
       };
 
+  Widget _paylas(GameState state) {
+    final oyun = oyunVeZorluk(widget.oyunTipi);
+    return PaylasDugmesi(
+      oyun: oyun.oyun,
+      metin: (seri) => kesisimPaylasimi(
+        sonuclar: state.sonuclar,
+        soruSayisi: state.questions.isEmpty ? 5 : state.questions.length,
+        zorluk: oyun.zorluk,
+        sure: widget.sure,
+        seri: seri,
+      ),
+    );
+  }
+
   // Bir önceki sorunun sonucu: "Doğru · Arda Güler"
   Widget _oncekiSonuc(GameState state) {
     if (state.sonuclar.isEmpty) return const SizedBox.shrink();
@@ -178,6 +196,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final dogruSayisi = state.sonuclar.where((s) => s).length;
 
     return OyunBitisEkrani(
+      paylas: _paylas(state),
       skor: '${state.score}/$_maksimumSkor',
       skorAciklamasi: 'puan',
       baslik: state.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, state.questions.length),

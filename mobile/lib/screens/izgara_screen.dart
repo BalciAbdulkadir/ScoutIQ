@@ -14,6 +14,9 @@ import '../widgets/oyuncu_arama.dart';
 import '../widgets/oyuncu_fotografi.dart';
 import '../widgets/tebesir.dart';
 import '../widgets/oyun_kurallari.dart';
+import '../services/analitik.dart';
+import '../services/paylasim.dart';
+import '../widgets/paylas_dugmesi.dart';
 
 // Izgara: satır ve sütun başlığının ikisine de uyan oyuncularla 3x3 tahtayı doldurma oyunu.
 // Kullanıcı hücre seçmez; yazdığı oyuncu uyduğu boş hücreye sunucu tarafından yerleştirilir.
@@ -206,6 +209,16 @@ class IzgaraScreen extends ConsumerWidget {
         const SizedBox(height: 20),
         IzgaraTahtasiGorunumu(state: state),
         const SizedBox(height: 28),
+        PaylasDugmesi(
+          oyun: 'izgara',
+          metin: (seri) => izgaraPaylasimi(
+            doluHucreler: state.hucreler.keys.toSet(),
+            zorluk: oyunVeZorluk(_acilis.zorluk.oyunTipi).zorluk,
+            sure: _acilis.sure,
+            seri: seri,
+          ),
+        ),
+        const SizedBox(height: 12),
         FilledButton(
           onPressed: () => Navigator.pop(context),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),

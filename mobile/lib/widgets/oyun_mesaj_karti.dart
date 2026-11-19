@@ -8,6 +8,7 @@ class OyunMesajKarti extends StatelessWidget {
   final String baslik;
   final String aciklama;
   final VoidCallback? onTekrarDene; // Doluysa ana menü butonunun yanında "Tekrar dene" de çıkar
+  final Widget? ek; // Doluysa açıklamanın altında gösterilir (ör. bugün oynanmış oyunda "Sonucu paylaş")
 
   const OyunMesajKarti({
     super.key,
@@ -15,6 +16,7 @@ class OyunMesajKarti extends StatelessWidget {
     required this.baslik,
     required this.aciklama,
     this.onTekrarDene,
+    this.ek,
   });
 
   @override
@@ -44,6 +46,7 @@ class OyunMesajKarti extends StatelessWidget {
               style: const TextStyle(fontSize: 15, height: 1.4, color: Renkler.metinIkincil),
             ),
             const SizedBox(height: 28),
+            if (ek != null) ...[ek!, const SizedBox(height: 12)],
             if (onTekrarDene != null) ...[
               FilledButton(
                 onPressed: onTekrarDene,
