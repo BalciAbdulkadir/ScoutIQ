@@ -4,6 +4,7 @@ import '../models/top10.dart';
 import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
 
 enum Top10Durumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
@@ -87,6 +88,7 @@ class Top10Notifier extends Notifier<Top10State> {
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.durum == Top10Durumu.oynaniyor && simdiki.durum == Top10Durumu.bitti) {
         _olaylar.bitti(skor: simdiki.skor, sebep: _pesEdildi ? BitisSebebi.pes : simdiki.kalanCan == 0 ? BitisSebebi.canBitti : BitisSebebi.tamamlandi);
+        ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.skor);
       }
     });
     ref.onDispose(() {

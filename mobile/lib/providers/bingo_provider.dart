@@ -4,6 +4,7 @@ import '../models/izgara.dart' show OyunSuresiDurumu;
 import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
 
 enum BingoDurumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
@@ -122,6 +123,7 @@ class BingoNotifier extends Notifier<BingoState> {
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.durum == BingoDurumu.oynaniyor && simdiki.durum == BingoDurumu.bitti) {
         _olaylar.bitti(skor: simdiki.skor, sebep: _pesEdildi ? BitisSebebi.pes : simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+        ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.skor);
       }
     });
     ref.onDispose(() {

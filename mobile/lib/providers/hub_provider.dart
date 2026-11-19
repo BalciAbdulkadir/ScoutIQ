@@ -81,6 +81,19 @@ final kullaniciProvider = Provider<KullaniciBilgisi?>((ref) {
   );
 });
 
+// Seri: art arda en az bir oyun bitirilen gün sayısı (034_seri.sql). Bugün oynanmadıysa dünden geriye sayılır.
+// Bugünkü sonuçlar yenilenince (oyundan dönünce) seri de yenilenir. Okunamazsa (fonksiyon yoksa, bağlantı yoksa) 0.
+final seriProvider = FutureProvider.autoDispose<int>((ref) async {
+  ref.watch(bugunProvider);
+  await ref.watch(bugunOynananlarProvider.future);
+  try {
+    final seri = await Supabase.instance.client.rpc('seri_getir');
+    return (seri as num?)?.toInt() ?? 0;
+  } catch (_) {
+    return 0;
+  }
+});
+
 // Kullanıcının bugün oynadığı oyunlar: oyun_tipi -> skor
 final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((ref) async {
   final bugun = ref.watch(bugunProvider);

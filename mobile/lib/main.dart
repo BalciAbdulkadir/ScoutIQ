@@ -5,12 +5,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/analitik.dart';
+import 'services/hatirlatma.dart';
 import 'theme/tema.dart';
 
 // Supabase proje kimlik bilgileri
@@ -27,11 +29,22 @@ void main() async {
   );
 
   final firebaseAcik = await _firebaseBaslat();
+  final Analitik analitik = firebaseAcik ? FirebaseAnalitik(FirebaseAnalytics.instance) : const BosAnalitik();
+
+  // Akşam hatırlatması. Bildirime dokunularak açılınca analitiğe bildirim_acildi gider.
+  // Eklenti açılamazsa uygulama hatırlatmasız çalışır.
+  Hatirlatma? hatirlatma;
+  try {
+    final yerel = YerelHatirlatma(FlutterLocalNotificationsPlugin());
+    await yerel.baslat(acildi: analitik.bildirimAcildi);
+    hatirlatma = yerel;
+  } catch (_) {}
 
   // Uygulamayı Riverpod ProviderScope ile sarıp başlatıyoruz ki State yönetimi çalışsın
   runApp(ProviderScope(
     overrides: [
-      if (firebaseAcik) analitikProvider.overrideWithValue(FirebaseAnalitik(FirebaseAnalytics.instance)),
+      analitikProvider.overrideWithValue(analitik),
+      if (hatirlatma != null) hatirlatmaProvider.overrideWithValue(hatirlatma),
     ],
     child: const FootyLoreApp(),
   ));
