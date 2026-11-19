@@ -13,6 +13,7 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/analitik.dart';
 import 'services/hatirlatma.dart';
+import 'services/puanlama.dart';
 import 'theme/tema.dart';
 
 // Supabase proje kimlik bilgileri
@@ -45,6 +46,7 @@ void main() async {
     overrides: [
       analitikProvider.overrideWithValue(analitik),
       if (hatirlatma != null) hatirlatmaProvider.overrideWithValue(hatirlatma),
+      puanlamaProvider.overrideWithValue(PuanlamaIstegi(YerelPuanlamaDeposu(), const PlayPuanlamaPenceresi())),
     ],
     child: const FootyLoreApp(),
   ));

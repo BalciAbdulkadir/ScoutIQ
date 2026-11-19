@@ -42,3 +42,14 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 | `kariyer_gecmisi` | Oyuncuların kariyer ve transfer geçmişi için sabit veri tablosu. |
 | `gunluk_oyunlar` | Eski `gunun_sorusu` tablosunun genişletilmiş hâli; hangi oyun moduna ait olduğu bilgisini içerir. |
 | `kullanici_oyun_gecmisi` (YENİ) | Kullanıcı_ID, Oyun_Modu_ID, Tarih, Skor ve Sonuc alanlarını tutar. Kullanıcının ilgili oyunu oynayıp oynamadığını ve can haklarını takip etmek için gereklidir. |
+
+## F. Google Play Yayını (19 Kasım 2026 kararları)
+14. **Platform:** Sadece Android. Paket adı `com.footylore.app` (ilk yüklemeden sonra değiştirilemez). Release imzası `mobile/android/key.properties` ve `.jks` dosyasından okunur; ikisi de repoya girmez.
+15. **Puan/sıralama sistemi eklenmez.** Seri ("🔥 6 gün": art arda en az bir oyunun bitirildiği gün sayısı, Türkiye saatiyle; bugün oynanmadıysa dünden geriye sayılır) puan değildir, sadece ana menüde gösterilir.
+16. **Skor sunucuda hesaplanır.** Bütün oyunlarda cevap ve skor sunucudaki fonksiyonlarla yazılır; istemci `kullanici_oyun_gecmisi`'ni güncelleyemez, sadece boş kayıt açar. Bonservis'te tahmin edilen bedel soruyla gönderilmez.
+17. **Hesap silme:** Uygulama içinden (profil fotoğrafı → Hesap → Hesabımı sil, iki adımlı onay). Kullanıcının bütün satırları ve `auth.users` kaydı silinir.
+18. **Analitik ve çökme takibi:** Firebase Crashlytics ve Analytics. Kişisel veri ve oyuncu ismi gönderilmez; olaylar: `oyun_basladi`, `oyun_bitti` (bitiş sebebi: tamamlandi/pes/sure_doldu/can_bitti), `oyun_yarida_birakildi`, `sonuc_paylasildi`, `bildirim_acildi`. Debug derlemede gönderilmez.
+19. **Sonuç paylaşımı:** Her bitiş ekranında "Sonucu paylaş"; metin cevap ele vermez (renkli kareler, skor, seri ve Play linki).
+20. **Akşam hatırlatması:** Yerel bildirim, sunucu yok. O gün hiç oyun bitirilmediyse 20.00'de (Europe/Istanbul). Bildirim izni ilk oyun bitince istenir; Hesap sayfasından kapatılabilir.
+21. **Puanla isteği:** Play'in kendi penceresi; 3 farklı gün oyun bitirildikten sonra, iyi sonuçlu (en yüksek skorun en az %70'i) bir oyunun bitişinde bir kez.
+22. **Oyun kuralları:** Her oyunda ilk dokunuşta örnekli kurallar; oyun ekranındaki "?" düğmesi kuralları tekrar açar.
