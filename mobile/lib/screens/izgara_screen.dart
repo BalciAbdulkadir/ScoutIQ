@@ -13,6 +13,7 @@ import '../widgets/oyun_ortak.dart';
 import '../widgets/oyuncu_arama.dart';
 import '../widgets/oyuncu_fotografi.dart';
 import '../widgets/tebesir.dart';
+import '../widgets/oyun_kurallari.dart';
 
 // Izgara: satır ve sütun başlığının ikisine de uyan oyuncularla 3x3 tahtayı doldurma oyunu.
 // Kullanıcı hücre seçmez; yazdığı oyuncu uyduğu boş hücreye sunucu tarafından yerleştirilir.
@@ -48,6 +49,7 @@ class IzgaraScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          const KurallarDugmesi(oyun: 'izgara'),
           if (oynaniyor)
             Padding(
               padding: const EdgeInsets.only(right: 8),
