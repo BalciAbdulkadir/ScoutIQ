@@ -10,6 +10,7 @@ import 'package:mobile/screens/profil_screen.dart';
 import 'package:mobile/services/hatirlatma.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/services/oyun_sonu.dart';
+import 'package:mobile/services/puanlama.dart';
 import 'package:mobile/theme/tema.dart';
 import 'package:timezone/data/latest.dart' as tz_veri;
 import 'package:timezone/timezone.dart' as tz;
@@ -64,7 +65,7 @@ void main() {
   group('Oyun bitince', () {
     test('bugünün hatırlatması silinir, bildirim izni ilk oyunda bir kez istenir', () async {
       final h = SahteHatirlatma();
-      final sonu = OyunSonu(h);
+      final sonu = OyunSonu(h, PuanlamaIstegi(BellekPuanlamaDeposu(), const BosPuanlamaPenceresi()));
 
       await sonu.oyunBitti(gunlukOyunTipi: 'kesisim_orta', skor: 6);
       await sonu.oyunBitti(gunlukOyunTipi: 'bingo', skor: 9);
@@ -76,7 +77,7 @@ void main() {
     test('hatırlatma kapalıysa izin istenmez', () async {
       final h = SahteHatirlatma()..acik = false;
 
-      await OyunSonu(h).oyunBitti(gunlukOyunTipi: 'top10', skor: 4);
+      await OyunSonu(h, PuanlamaIstegi(BellekPuanlamaDeposu(), const BosPuanlamaPenceresi())).oyunBitti(gunlukOyunTipi: 'top10', skor: 4);
 
       expect(h.izinIstekSayisi, 0);
     });
