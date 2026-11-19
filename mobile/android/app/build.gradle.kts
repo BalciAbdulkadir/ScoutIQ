@@ -1,11 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Release imzası: android/key.properties dosyasından okunur (storeFile, storePassword, keyAlias, keyPassword).
+// key.properties ve .jks dosyaları repoya girmez (android/.gitignore). Dosya yoksa release derleme debug anahtarıyla
+// imzalanır: geliştirme makinelerinde `flutter build` çalışmaya devam eder ama bu paket Play'e yüklenemez.
+val anahtarDosyasi = rootProject.file("key.properties")
+val anahtar = Properties().apply {
+    if (anahtarDosyasi.exists()) anahtarDosyasi.inputStream().use { load(it) }
+}
+val releaseAnahtariVar = anahtarDosyasi.exists()
+
 android {
-    namespace = "com.example.mobile"
+    // Play'deki paket adı: ilk yüklemeden sonra değiştirilemez
+    namespace = "com.footylore.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,21 +27,35 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.footylore.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseAnahtariVar) {
+            create("release") {
+                storeFile = rootProject.file(anahtar.getProperty("storeFile"))
+                storePassword = anahtar.getProperty("storePassword")
+                keyAlias = anahtar.getProperty("keyAlias")
+                keyPassword = anahtar.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseAnahtariVar) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("UYARI: android/key.properties yok, release derleme debug anahtarıyla imzalanıyor (Play'e yüklenemez).")
+                signingConfigs.getByName("debug")
+            }
+            // Kod küçültme kapalı: açılırsa Supabase ve google_sign_in için proguard kuralları gerekir
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
