@@ -101,10 +101,11 @@ final analitikProvider = Provider<Analitik>((ref) => const BosAnalitik());
 // - kapandi: ekran oyun sürerken kapanınca oyun_yarida_birakildi
 class OyunOlaylari {
   final Analitik _analitik;
+  final String gunlukOyunTipi;
   final String _oyun;
   final String? _zorluk;
 
-  OyunOlaylari(this._analitik, String gunlukOyunTipi)
+  OyunOlaylari(this._analitik, this.gunlukOyunTipi)
       : _oyun = oyunVeZorluk(gunlukOyunTipi).oyun,
         _zorluk = oyunVeZorluk(gunlukOyunTipi).zorluk;
 

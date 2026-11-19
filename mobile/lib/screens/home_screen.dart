@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyun_modu.dart';
 import '../providers/hub_provider.dart';
+import '../services/hatirlatma.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/gunluk_kart.dart';
@@ -45,6 +46,15 @@ class HomeScreen extends ConsumerWidget {
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
     final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
+    final seri = ref.watch(seriProvider).value ?? 0;
+
+    // Seri ya da bugünkü sonuçlar değişince akşam hatırlatmaları yeniden kurulur
+    ref.listen(seriProvider, (_, yeni) {
+      final guncelSeri = yeni.value;
+      if (guncelSeri == null) return;
+      final bugunBitirdi = (ref.read(bugunOynananlarProvider).value ?? const {}).isNotEmpty;
+      ref.read(hatirlatmaProvider).planla(seri: guncelSeri, bugunBitirdi: bugunBitirdi).catchError((_) {});
+    });
 
     // Zorluklu oyunun bugün açılmış zorluğu (yarım ya da bitmiş)
     BugunkuMod? bugunku(OyunModu mod) {
@@ -89,9 +99,17 @@ class HomeScreen extends ConsumerWidget {
                 children: [
                   _UstBar(kullanici: kullanici),
                   const SizedBox(height: 14),
-                  Text(
-                    kullanici != null ? 'Merhaba, ${kullanici.ilkAd}' : 'Merhaba',
-                    style: Yazi.tebesir(26, kalinlik: FontWeight.w400),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          kullanici != null ? 'Merhaba, ${kullanici.ilkAd}' : 'Merhaba',
+                          style: Yazi.tebesir(26, kalinlik: FontWeight.w400),
+                        ),
+                      ),
+                      if (seri > 0) SeriRozeti(seri: seri),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   GunlukSerit(tamamlanan: tamamlanan, toplam: aktifModlar.length),
@@ -174,6 +192,26 @@ class _UstBar extends StatelessWidget {
           icon: KullaniciAvatari(kullanici: kullanici, yaricap: 17),
         ),
       ],
+    );
+  }
+}
+
+// Seri: art arda oyun bitirilen gün sayısı, tebeşirle "🔥 6 gün". Puan değildir.
+class SeriRozeti extends StatelessWidget {
+  final int seri;
+
+  const SeriRozeti({super.key, required this.seri});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$seri günlük seri',
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, bottom: 4),
+          child: Text('🔥 $seri gün', style: Yazi.tebesir(22, renk: Renkler.vurgu)),
+        ),
+      ),
     );
   }
 }

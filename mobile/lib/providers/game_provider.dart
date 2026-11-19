@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyuncu_oneri.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
 
 class GameState {
@@ -99,6 +100,7 @@ class GameNotifier extends Notifier<GameState> {
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.status == 'playing' && simdiki.status == 'completed') {
         _olaylar.bitti(skor: simdiki.score, sebep: simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+        ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.score);
       }
     });
     ref.onDispose(() {

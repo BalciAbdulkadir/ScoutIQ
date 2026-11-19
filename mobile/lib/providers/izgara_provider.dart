@@ -4,6 +4,7 @@ import '../models/oyuncu_oneri.dart';
 import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
 
 const baskaIzgaraMesaji = 'Bugünün Izgarasını başka bir zorlukta oynadın. Yeni tahta gece yarısı açılıyor.';
@@ -97,6 +98,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.durum == IzgaraDurumu.oynaniyor && simdiki.durum == IzgaraDurumu.bitti) {
         _olaylar.bitti(skor: simdiki.skor, sebep: _pesEdildi ? BitisSebebi.pes : simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+        ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.skor);
       }
     });
     ref.onDispose(() {

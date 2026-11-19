@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../providers/hub_provider.dart';
+import '../services/hatirlatma.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/kullanici_avatari.dart';
@@ -23,6 +24,24 @@ class ProfilScreen extends ConsumerStatefulWidget {
 
 class _ProfilScreenState extends ConsumerState<ProfilScreen> {
   bool _isleniyor = false;
+  bool? _hatirlatmaAcik; // Cihazdan okununca dolar
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(hatirlatmaProvider).acikMi().then((acik) {
+      if (mounted) setState(() => _hatirlatmaAcik = acik);
+    }).catchError((_) {});
+  }
+
+  Future<void> _hatirlatmayiDegistir(bool acik) async {
+    setState(() => _hatirlatmaAcik = acik);
+    try {
+      await ref.read(hatirlatmaProvider).ayarla(acik);
+      // Açılınca bildirimler ana menüdeki seriyle yeniden kurulur
+      if (acik) ref.invalidate(seriProvider);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +74,21 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
               ),
               const SizedBox(height: 24),
               const Divider(color: Renkler.kenar, height: 1),
+              SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                secondary: const Icon(Icons.notifications_outlined, color: Renkler.metinIkincil),
+                title: const Text(
+                  'Günlük hatırlatma',
+                  style: TextStyle(color: Renkler.metin, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'O gün oyun bitirmediysen akşam 20.00\'de',
+                  style: TextStyle(color: Renkler.metinSoluk, fontSize: 13),
+                ),
+                activeThumbColor: Renkler.vurgu,
+                value: _hatirlatmaAcik ?? true,
+                onChanged: _hatirlatmaAcik == null || _isleniyor ? null : _hatirlatmayiDegistir,
+              ),
               _Satir(
                 ikon: Icons.privacy_tip_outlined,
                 metin: 'Gizlilik politikası',

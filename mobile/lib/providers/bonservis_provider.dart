@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bonservis_sorusu.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
 
 enum BonservisDurumu { yukleniyor, oynaniyor, bitti, zatenOynandi, oyunYok, hata }
@@ -100,6 +101,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.durum == BonservisDurumu.oynaniyor && simdiki.durum == BonservisDurumu.bitti) {
         _olaylar.bitti(skor: simdiki.skor, sebep: simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+        ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.skor);
       }
     });
     ref.onDispose(() {
