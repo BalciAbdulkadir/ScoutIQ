@@ -3,6 +3,7 @@ import '../models/izgara.dart';
 import '../models/oyuncu_oneri.dart';
 import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
+import '../services/analitik.dart';
 import '../services/oyun_deposu.dart';
 
 const baskaIzgaraMesaji = 'Bugünün Izgarasını başka bir zorlukta oynadın. Yeni tahta gece yarısı açılıyor.';
@@ -84,10 +85,30 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
 
   late OyunDeposu _depo;
 
+  // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
+  late OyunOlaylari _olaylar;
+  bool _oynaniyor = false;
+  bool _pesEdildi = false;
+
+  void _olaylariDinle() {
+    _olaylar = OyunOlaylari(ref.read(analitikProvider), acilis.zorluk.oyunTipi);
+    listenSelf((onceki, simdiki) {
+      _oynaniyor = simdiki.durum == IzgaraDurumu.oynaniyor;
+      // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
+      if (onceki != null && onceki.durum == IzgaraDurumu.oynaniyor && simdiki.durum == IzgaraDurumu.bitti) {
+        _olaylar.bitti(skor: simdiki.skor, sebep: _pesEdildi ? BitisSebebi.pes : simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+      }
+    });
+    ref.onDispose(() {
+      if (_oynaniyor) _olaylar.yaridaBirakildi();
+    });
+  }
+
   @override
   IzgaraState build() {
     _depo = ref.read(oyunDeposuProvider);
     // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
+    _olaylariDinle();
     Future.microtask(_yukle);
     return const IzgaraState();
   }
@@ -124,6 +145,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
           await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: zorluk.oyunTipi, tarih: tarih);
           kayit = {'durum': 'basladi'};
           yeniBasladi = true;
+          _olaylar.basladi(sure: acilis.sure);
         } on KayitZatenVar {
           // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
           kayit = await _depo.oyunKaydi(kullaniciId, zorluk.oyunTipi, tarih) ?? {'durum': 'basladi'};
@@ -216,6 +238,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
   Future<String?> pesEt() async {
     if (state.durum != IzgaraDurumu.oynaniyor || state.gonderiliyor) return null;
     state = state.copyWith(gonderiliyor: true);
+    _pesEdildi = true;
 
     try {
       await _depo.izgaraPesEt(state.oyunId!);

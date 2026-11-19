@@ -15,6 +15,15 @@ val anahtar = Properties().apply {
 }
 val releaseAnahtariVar = anahtarDosyasi.exists()
 
+// Firebase (Crashlytics, Analytics): ayarları Firebase konsolundan indirilen app/google-services.json'dadır.
+// Dosya yoksa Firebase eklentileri uygulanmaz: uygulama derlenir ve Firebase'siz çalışır (main.dart).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+} else {
+    logger.warn("UYARI: android/app/google-services.json yok, Firebase (Crashlytics, Analytics) kapalı derleniyor.")
+}
+
 android {
     // Play'deki paket adı: ilk yüklemeden sonra değiştirilemez
     namespace = "com.footylore.app"

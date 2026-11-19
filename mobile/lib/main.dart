@@ -1,9 +1,16 @@
+import 'dart:ui';
+
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/analitik.dart';
 import 'theme/tema.dart';
 
 // Supabase proje kimlik bilgileri
@@ -19,8 +26,37 @@ void main() async {
     anonKey: supabaseAnonKey,
   );
 
+  final firebaseAcik = await _firebaseBaslat();
+
   // Uygulamayı Riverpod ProviderScope ile sarıp başlatıyoruz ki State yönetimi çalışsın
-  runApp(const ProviderScope(child: FootyLoreApp()));
+  runApp(ProviderScope(
+    overrides: [
+      if (firebaseAcik) analitikProvider.overrideWithValue(FirebaseAnalitik(FirebaseAnalytics.instance)),
+    ],
+    child: const FootyLoreApp(),
+  ));
+}
+
+// Firebase'i açar: çökmeler Crashlytics'e gider (debug derlemede gitmez). Ayar dosyası (google-services.json)
+// yoksa ya da açılamazsa uygulama Firebase'siz çalışır, analitik olaylar gönderilmez. Firebase açıldıysa true.
+Future<bool> _firebaseBaslat() async {
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    return false;
+  }
+
+  final crashlytics = FirebaseCrashlytics.instance;
+  await crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode);
+  if (!kDebugMode) {
+    // Flutter'ın yakaladığı hatalar ve Flutter dışında (zamanlayıcı, platform kanalı) kalan hatalar
+    FlutterError.onError = crashlytics.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (hata, iz) {
+      crashlytics.recordError(hata, iz, fatal: true);
+      return true;
+    };
+  }
+  return true;
 }
 
 class FootyLoreApp extends StatelessWidget {
