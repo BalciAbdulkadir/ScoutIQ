@@ -39,7 +39,7 @@ class AuthService {
     await _supabase.auth.signOut();
   }
 
-  // Hesabı ve bütün oyun geçmişini sunucuda siler (hesabimi_sil, 032_hesabimi_sil.sql), sonra oturumu kapatır.
+  // Hesabı ve bütün oyun geçmişini sunucuda siler (hesabimi_sil, 033_hesabimi_sil.sql), sonra oturumu kapatır.
   // Sunucudaki silme başarısız olursa hata fırlatır ve oturum açık kalır.
   Future<void> hesabimiSil() async {
     await _supabase.rpc('hesabimi_sil');

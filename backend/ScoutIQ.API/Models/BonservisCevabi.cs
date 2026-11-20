@@ -3,7 +3,7 @@ using Supabase.Postgrest.Models;
 
 namespace ScoutIQ.API.Models
 {
-    // Bonservis'te tahmin edilen (sağdaki) oyuncunun toplam bonservisi (033_skor_sunucuda.sql).
+    // Bonservis'te tahmin edilen (sağdaki) oyuncunun toplam bonservisi (034_skor_sunucuda.sql).
     // Uygulamaya kapalıdır: cevabı ele vermesin diye soru verisinde yoktur, tahmini sunucudaki fonksiyon kontrol eder.
     [Table("bonservis_cevaplari")]
     public class BonservisCevabi : BaseModel

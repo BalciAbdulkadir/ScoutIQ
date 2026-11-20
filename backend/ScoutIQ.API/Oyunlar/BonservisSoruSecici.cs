@@ -46,7 +46,7 @@ namespace ScoutIQ.API.Oyunlar
         // Sol ve Sag ekrandaki yerlerdir; doğru cevabın hangi tarafta olacağı rastgeledir
         // Uygulamaya giden soru verisi. Soldaki oyuncunun bedeli ekranda baştan görünür, yazılır. Sağdaki oyuncunun
         // bedeli cevabı ele verir: soru verisine yazılmaz, uygulamaya kapalı bonservis_cevaplari tablosuna gider
-        // (Cevaplar); tahmini sunucu kontrol eder, bedel tahminden sonra döner (033_skor_sunucuda.sql).
+        // (Cevaplar); tahmini sunucu kontrol eder, bedel tahminden sonra döner (034_skor_sunucuda.sql).
         public static List<object> SoruVerisi(IEnumerable<BonservisSorusu> sorular) => sorular.Select(s => (object)new
         {
             oyuncu_a = s.Sol.Isim,

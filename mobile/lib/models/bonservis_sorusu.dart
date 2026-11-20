@@ -38,7 +38,7 @@ class BonservisSorusu {
 
 // Backend'in soru_verisi'ni sorulara çevirir. Her soru bağımsız iki oyuncudur: oyuncu_a (sol) bedeliyle
 // gösterilir, oyuncu_b (sağ) için tahmin istenir. Doğru cevabın hangi tarafta olacağını backend rastgele seçer.
-// Sağdaki oyuncunun bedeli yeni sorularda yoktur (033_skor_sunucuda.sql); eski sorularda varsa okunur ama
+// Sağdaki oyuncunun bedeli yeni sorularda yoktur (034_skor_sunucuda.sql); eski sorularda varsa okunur ama
 // ekranda tahminden önce gösterilmez.
 List<BonservisSorusu> bonservisSorulariniOku(List<dynamic> soruVerisi) {
   BonservisOyuncusu oyuncu(Map<String, dynamic> soru, String taraf) => BonservisOyuncusu(
@@ -54,7 +54,7 @@ List<BonservisSorusu> bonservisSorulariniOku(List<dynamic> soruVerisi) {
   ];
 }
 
-// bonservis_tahmin fonksiyonunun cevabı (033_skor_sunucuda.sql). Skor ve ilerleme sunucuda yazılır.
+// bonservis_tahmin fonksiyonunun cevabı (034_skor_sunucuda.sql). Skor ve ilerleme sunucuda yazılır.
 class BonservisTahminSonucu {
   final bool dogru;
   final int? rakipBonservis; // Tahmin edilen oyuncunun bedeli; süre dolduysa null
