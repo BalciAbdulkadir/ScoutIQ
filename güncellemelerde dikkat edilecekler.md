@@ -1,0 +1,100 @@
+# Güncellemelerde Dikkat Edilecekler
+
+Bu liste, şimdiye kadar yaşanan sorunlardan ve verilen kararlardan çıkarıldı. Kuralların kendisi `CLAUDE.md`'de. Burada güncelleme yaparken kolayca atlanabilecek noktalar var.
+
+---
+
+## 1. `oyuncular` tablosuna yeni kolon eklerken
+
+036'dan beri uygulama `oyuncular` tablosunu kolon kolon verilen izinlerle okuyor. `toplam_bonservis` kolonu kapalı, çünkü Bonservis'in cevabını ele veriyor.
+
+- `oyuncular`'a eklenen yeni bir kolonu uygulama **otomatik olarak okuyamaz.**
+- Uygulama yeni kolonu okuyacaksa (doğrudan ya da `oyuncu_ara` gibi kullanıcının yetkisiyle çalışan bir fonksiyon içinden), kolonu ekleyen SQL dosyasına şu satır yazılır:
+  ```sql
+  grant select (yeni_kolon) on public.oyuncular to authenticated;
+  ```
+- Kolon cevabı ele veriyorsa (bedel, kademe, kulüp sayısı gibi) bu izin **verilmez.** Kolonu sadece sunucu fonksiyonları okur.
+- Kontrol:
+  ```sql
+  select has_column_privilege('authenticated', 'public.oyuncular', 'yeni_kolon', 'select');
+  ```
+
+## 2. SQL dosyaları
+
+Kurallar `CLAUDE.md` madde 23–28'de. Kısaca:
+
+- Yeni dosyanın numarası, `main`'deki son numaranın bir fazlasıdır. Numara mesajla sorulmaz. İki kişi aynı anda SQL yazıyorsa numaraların çakışmadığına PR'da bakılır.
+- Dosyanın ilk satırındaki numara dosya adıyla aynıdır (`037_...sql` → `-- 037: ...`). Başka bir dosyaya atıf yapılıyorsa dosya adı tam yazılır ve gerçekten var olduğuna bakılır.
+- Supabase'de çalıştırılmış dosya değiştirilmez. Düzeltme yeni bir dosyayla yapılır.
+- SQL dosyası PR'ın içindedir. PR açıklamasında hangi dosyaların hangi sırayla çalıştırılacağı yazılır.
+- SQL, PR `main`'e birleştikten **sonra** çalıştırılır.
+- Dosya `begin; ... commit;` arasında yazılır. Hata olursa hiçbir değişiklik uygulanmaz.
+- Mümkünse dosya tekrar çalıştırılabilir yazılır (`create or replace`, `if not exists`, `drop ... if exists`).
+- Supabase ile repo arasında fark olup olmadığı `kurallar/supabase_repo_karsilastirma.sql` ile görülebilir. Sorgu sadece okur. Yeni bir dosya eklenince sorguya o dosyanın satırı da eklenir.
+
+## 3. Eski uygulama sürümünü bozan SQL
+
+Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasaklar. Örnek: 034'ten sonra eski sürüm skoru yazamaz.
+
+- Böyle bir dosyada sıra dosyanın başına yazılır: önce yeni uygulama sürümü Play'de yayınlanır, sonra SQL çalıştırılır.
+- Fonksiyonun adı, parametreleri ya da dönüş alanları değişirse eski sürüm hata alır. Mümkünse yeni bir fonksiyon eklenir, eski fonksiyon bir süre yerinde bırakılır.
+
+## 4. Yeni oyun ya da yeni oyun fonksiyonu yazarken
+
+**Cevap telefona gitmez:**
+- `gunluk_oyunlar.soru_verisi`'ni giriş yapmış herkes okuyabilir. Cevap ya da cevabı ele veren bilgi (sağdaki oyuncunun bedeli, Kesişim'in hedef oyuncusu, sorunun kademesi) soru verisine yazılmaz.
+- Böyle bilgiler RLS'i açık ama politikası olmayan ayrı bir tabloda tutulur (`bonservis_cevaplari`, `kesisim_hedefleri`, `top10_cevaplari` gibi).
+- Soru verisinde bir **id** varsa, o id ile okunabilen tablolarda cevabı ele veren bir kolon olup olmadığına bakılır. Bonservis'te açık buradan doğdu: oyuncunun id'si soruda vardı, `oyuncular.toplam_bonservis` de herkese açıktı.
+
+**Cevap ve skor sunucuda kontrol edilir:**
+- Cevap ve skor `security definer` fonksiyonlarla yazılır. İstemci `kullanici_oyun_gecmisi`'ni güncelleyemez, sadece boş kayıt açar (`CLAUDE.md` madde 16).
+- Cevabı kontrol eden ya da cevap döndüren her fonksiyon:
+  - `auth.uid()` boşsa hata verir.
+  - Kullanıcının o oyun için açık (`basladi`) kaydı yoksa cevap vermez.
+  - Süreli oyunda süre dolduysa (3 saniye toleransla) cevabı kabul etmez, oyunu o anki skorla bitirir.
+  - Soru sırasını kontrol eder: aynı soru iki kez cevaplanamaz, soru atlanamaz.
+- Örnek ya da bütün cevapları döndüren fonksiyonlar (`..._ornek_cevaplar`, `top10_cevaplar`) sadece oyun `tamamlandi` olduktan sonra cevap verir.
+- Sadece başka fonksiyonların içinden çağrılan yardımcı fonksiyonların izni herkesten alınır:
+  ```sql
+  revoke execute on function public.yardimci(...) from public, anon, authenticated;
+  ```
+  `kesisim_cevap_kontrol` bunu unuttuğumuz için açık kaldı (036'da kapatıldı).
+- Uygulamanın çağırdığı fonksiyonlar:
+  ```sql
+  revoke execute on function public.fonksiyon(...) from public, anon;
+  grant execute on function public.fonksiyon(...) to authenticated;
+  ```
+- Her fonksiyonda `set search_path = ''` bulunur. Tablolar `public.` önekiyle yazılır.
+
+**Fonksiyon değiştirirken:**
+- `create or replace function` var olan izinleri korur.
+- Fonksiyon silinip yeniden oluşturulursa (dönüş tipi değişince bu zorunludur, 012'deki gibi) izinler sıfırlanır. `revoke` ve `grant` satırları tekrar yazılır.
+- Fonksiyonun eski hâli başka bir dosyadan kopyalanıyorsa en son dosyadaki hâli alınır. Örnek: `oyuncu_ara`'nın son hâli 030'da, `top10_tahmin`'in son hâli 031'de.
+
+**Yeni oyun tipi eklerken:**
+- `gunluk_oyunlar_oyun_tipi_check` ve `kullanici_oyun_gecmisi_oyun_tipi_check` kısıtlarının ikisi de güncellenir. Listeye eski tiplerin hepsi tekrar yazılır (son liste 029'da).
+- Günde tek mod kuralı (`oyun_gunde_bir`), tipin alt çizgiden önceki kısmına bakar (`kesisim_kolay` → `kesisim`). Yeni tipin adı bu düzene uygun seçilir.
+- Tarihler Türkiye saatiyledir: `public.bugunun_tarihi()` ya da `(now() at time zone 'Europe/Istanbul')::date`.
+
+## 5. Soru verisinin biçimi değişirken
+
+- Eski günlerin oyunları veritabanında eski biçimle durur. Örnekler:
+  - Eski Bonservis sorularında sağdaki oyuncunun bedeli soru verisinde var.
+  - Eski Kesişim sorularında `kademe` ve `zorluk` alanları var.
+- Uygulama ve SQL fonksiyonları her iki biçimi de okuyabilmelidir. Bir alan kaldırılınca uygulamanın o alana bağlı olmadığı kontrol edilir.
+
+## 6. Android ve Google Play
+
+- **Paket adı:** `com.footylore.app`. İlk yüklemeden sonra değiştirilemez.
+- **İmza dosyaları:** `mobile/android/key.properties` ve `.jks` repoya girmez. Kaybedilirlerse uygulama güncellenemez, yedekleri güvenli bir yerde tutulur.
+  - `key.properties` yoksa release derleme hata vermez, debug anahtarıyla imzalanır. Böyle bir paket Play'e yüklenemez. Play'e yüklemeden önce dosyanın yerinde olduğuna bakılır.
+- **Firebase:** `mobile/android/app/google-services.json` repoda yok. Dosya yoksa derleme sadece uyarı verir ve uygulama Firebase'siz çalışır: Crashlytics ve Analytics veri toplamaz. Play'e yüklenecek derlemede dosyanın yerinde olduğuna bakılır.
+- **Sürüm numarası:** Her Play yüklemesinde `mobile/pubspec.yaml`'daki sürümün `+` işaretinden sonraki sayısı (`1.0.0+1` → `1.0.0+2`) bir artırılır. Aynı sayıyla ikinci yükleme kabul edilmez.
+- **Analitik:** Kişisel veri ve oyuncu ismi gönderilmez. Yeni olay eklemeden önce `CLAUDE.md` madde 18'e bakılır.
+
+## 7. Git
+
+- Her özellik ayrı bir branch'te yapılır, `main`'e doğrudan push yapılmaz.
+- `kurallar/` klasörü repoya girmez (`.git/info/exclude`).
+- `mobile/linux/flutter/generated_plugins.cmake` ve `mobile/windows/flutter/generated_plugins.cmake` dosyalarındaki değişiklikler Flutter'ın kendi ürettiği değişikliklerdir, commit'e katılmaz.
+- Anahtar, şifre, `.env` gibi gizli bilgiler repoya girmez.
