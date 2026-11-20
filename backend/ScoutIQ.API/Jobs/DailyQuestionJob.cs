@@ -1,4 +1,3 @@
-using Coravel.Invocable;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,13 +11,14 @@ using Supabase.Postgrest.Models;
 
 namespace ScoutIQ.API.Jobs
 {
-    // Her gece her oyunun üç modunu (kolay, orta, zor) ayrı günlük oyun olarak üretir: kesisim_kolay, bonservis_orta,
-    // izgara_zor ... Kullanıcı her oyunda günde bunlardan yalnızca birini oynar (019_zorluk_modlari.sql).
-    public class DailyQuestionJob : IInvocable
+    // Hedef günün oyunlarını üretir: her oyunun üç modu (kolay, orta, zor) ayrı günlük oyundur (kesisim_kolay,
+    // bonservis_orta, izgara_zor ...), Bingo ve Top 10 tek moddur. Kullanıcı her oyunda günde bunlardan yalnızca birini
+    // oynar (019_zorluk_modlari.sql). Hedef tarih normalde yarındır (UretimCalismasi): oyunlar akşamdan üretilir,
+    // kullanıcıya Türkiye saatiyle 00.00'da açılır (gunluk_oyunlar okuma politikası, 002).
+    // Tekrar ve sıra kuralları (Kesişim çift tekrarı, Top 10 tekrarı ve eksen sırası) hedef tarihe göre sayılır,
+    // programın çalıştığı güne göre değil.
+    public class DailyQuestionJob : IOyunUretici
     {
-        // Oyun günleri Türkiye saatine göre başlar ve biter
-        public static readonly TimeZoneInfo TurkiyeSaatDilimi = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
-
         private const int SayfaBoyutu = 1000; // Supabase tek istekte en fazla 1000 satır döndürür
 
         private readonly Client _supabaseClient;
@@ -28,10 +28,9 @@ namespace ScoutIQ.API.Jobs
             _supabaseClient = supabaseClient;
         }
 
-        public async Task Invoke()
+        public async Task Uret(DateTime tarih)
         {
-            DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
-            Console.WriteLine($"[{DateTime.Now}] CRON TETİKLENDİ: {bugun:yyyy-MM-dd} için Hub oyunları hazırlanıyor...");
+            Console.WriteLine($"{tarih:yyyy-MM-dd} için Hub oyunları hazırlanıyor...");
 
             Dictionary<string, Kademe> kademeler;
             try
@@ -44,10 +43,11 @@ namespace ScoutIQ.API.Jobs
                 return;
             }
 
-            // Oyunlar ayrı ayrı denenir: birinde hata olursa diğeri yine üretilir
+            // Oyunlar ayrı ayrı denenir: birinde hata olursa diğeri yine üretilir. Eksik kalan oyun, çalışmanın sonundaki
+            // kontrolde yakalanır ve program başarısız biter (UretimCalismasi).
             try
             {
-                await UretKesisimOyunlari(bugun, kademeler);
+                await UretKesisimOyunlari(tarih, kademeler);
             }
             catch (Exception ex)
             {
@@ -56,7 +56,7 @@ namespace ScoutIQ.API.Jobs
 
             try
             {
-                await UretBonservisOyunlari(bugun, kademeler);
+                await UretBonservisOyunlari(tarih, kademeler);
             }
             catch (Exception ex)
             {
@@ -65,7 +65,7 @@ namespace ScoutIQ.API.Jobs
 
             try
             {
-                await UretIzgaraOyunlari(bugun, kademeler);
+                await UretIzgaraOyunlari(tarih, kademeler);
             }
             catch (Exception ex)
             {
@@ -74,7 +74,7 @@ namespace ScoutIQ.API.Jobs
 
             try
             {
-                await UretBingoOyunlari(bugun, kademeler);
+                await UretBingoOyunlari(tarih, kademeler);
             }
             catch (Exception ex)
             {
@@ -83,7 +83,7 @@ namespace ScoutIQ.API.Jobs
 
             try
             {
-                await UretTop10Oyunu(bugun, kademeler);
+                await UretTop10Oyunu(tarih, kademeler);
             }
             catch (Exception ex)
             {
@@ -91,11 +91,20 @@ namespace ScoutIQ.API.Jobs
             }
         }
 
+        public async Task<HashSet<string>> MevcutOyunTipleri(DateTime tarih)
+        {
+            var oyunlar = (await _supabaseClient.From<GunlukOyun>()
+                .Select("id, oyun_tipi")
+                .Filter("tarih", Operator.Equals, tarih.ToString("yyyy-MM-dd"))
+                .Get()).Models;
+            return oyunlar.Select(o => o.OyunTipi).ToHashSet();
+        }
+
         // ---------------- Top 10 ----------------
 
         // Top 10'un zorluk modu yoktur: günde tek soru (oyun_tipi 'top10'). Cevap listesi soru verisine yazılmaz,
         // uygulamaya kapalı top10_cevaplari tablosunda tutulur (029_top10.sql).
-        private const string Top10OyunTipi = "top10";
+        public const string Top10OyunTipi = "top10";
 
         private async Task UretTop10Oyunu(DateTime tarih, Dictionary<string, Kademe> kademeler)
         {
@@ -110,16 +119,12 @@ namespace ScoutIQ.API.Jobs
             if (soru == null)
             {
                 // Kurallara uyan soru yoksa boş ya da kurala uymayan soru yayınlanmaz
-                Console.WriteLine("HATA: Top 10 için kurallara uyan soru kurulamadı, bugün Top 10 yayınlanmadı.");
+                Console.WriteLine($"HATA: Top 10 için kurallara uyan soru kurulamadı, {tarih:yyyy-MM-dd} için Top 10 yayınlanmadı.");
                 return;
             }
 
-            var oyun = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
-            {
-                OyunTipi = Top10OyunTipi,
-                Tarih = tarih,
-                SoruVerisi = Top10SoruVerisi(soru, veri)
-            })).Models.First();
+            var oyun = await OyunuYaz(Top10OyunTipi, tarih, Top10SoruVerisi(soru, veri));
+            if (oyun == null) return;
 
             // Cevaplar yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
             try
@@ -147,19 +152,17 @@ namespace ScoutIQ.API.Jobs
                 throw;
             }
 
-            Console.WriteLine($"Başarılı: top10 için {tarih:yyyy-MM-dd} tarihli soru eklendi.");
             Top10Yaz(soru, veri, kademeler);
         }
 
-        // Veritabanına yazmadan bugünün Top 10 sorusunu seçip ekrana basar:
-        // dotnet run -- --top10-onizleme
-        public async Task Top10Onizleme()
+        // Veritabanına yazmadan hedef günün Top 10 sorusunu seçip ekrana basar:
+        // dotnet run -- --top10-onizleme [--tarih yyyy-MM-dd]
+        public async Task Top10Onizleme(DateTime tarih)
         {
             var kademeler = await KademeleriOku();
             var veri = await Top10VerisiniOku();
-            DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
-            Console.WriteLine("\nTop 10 önizleme (veritabanına yazılmadı):");
-            var soru = await Top10SorusunuSec(bugun, veri, kademeler);
+            Console.WriteLine($"\nTop 10 önizleme, {tarih:yyyy-MM-dd} (veritabanına yazılmadı):");
+            var soru = await Top10SorusunuSec(tarih, veri, kademeler);
             if (soru != null) Top10Yaz(soru, veri, kademeler);
         }
 
@@ -277,13 +280,8 @@ namespace ScoutIQ.API.Jobs
                 return;
             }
 
-            var soruVerisi = await BingoSoruVerisi(kart);
-            var oyun = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
-            {
-                OyunTipi = BingoSoruSecici.OyunTipi,
-                Tarih = tarih,
-                SoruVerisi = soruVerisi
-            })).Models.First();
+            var oyun = await OyunuYaz(BingoSoruSecici.OyunTipi, tarih, await BingoSoruVerisi(kart));
+            if (oyun == null) return;
 
             // Eşleşmeler yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
             try
@@ -298,7 +296,6 @@ namespace ScoutIQ.API.Jobs
                 throw;
             }
 
-            Console.WriteLine($"Başarılı: {oyun.OyunTipi} için {tarih:yyyy-MM-dd} tarihli kart eklendi.");
             BingoKartiniYaz(kart, kademeler);
         }
 
@@ -476,8 +473,8 @@ namespace ScoutIQ.API.Jobs
                     continue;
                 }
 
-                await OyunEkle("izgara", zorluk, tarih, IzgaraSoruVerisi(izgara));
-                IzgarayiYaz(izgara);
+                if (await OyunEkle("izgara", zorluk, tarih, IzgaraSoruVerisi(izgara)) != null)
+                    IzgarayiYaz(izgara);
             }
         }
 
@@ -566,9 +563,9 @@ namespace ScoutIQ.API.Jobs
                 var sorular = KesisimSorulariniSec(zorluk, veri, kademeler);
                 if (sorular == null) continue;
 
-                await OyunEkle("kesisim", zorluk, tarih,
-                    sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB)).ToList());
-                KesisimSorulariniYaz(sorular);
+                if (await OyunEkle("kesisim", zorluk, tarih,
+                        sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB)).ToList()) != null)
+                    KesisimSorulariniYaz(sorular);
             }
         }
 
@@ -584,8 +581,8 @@ namespace ScoutIQ.API.Jobs
             kulup_b_logo = kulupB.LogoUrl
         };
 
-        // Kolay Kesişim'i hedef oyunculardan kurup ekler. Oyun eklendiyse true; geçmiş okunamadıysa ya da
-        // 5 soru kurulamadıysa false döner.
+        // Kolay Kesişim'i hedef oyunculardan kurup ekler. Oyun eklendiyse (ya da bu arada başka bir çalışma eklediyse)
+        // true; geçmiş okunamadıysa ya da 5 soru kurulamadıysa false döner.
         private async Task<bool> UretKolayKesisim(DateTime tarih, KesisimVerisi veri, Dictionary<string, Kademe> kademeler)
         {
             var sorular = await KolayKesisimSorulariniSec(tarih, veri, kademeler);
@@ -594,6 +591,7 @@ namespace ScoutIQ.API.Jobs
             // Hedef oyuncu cevabı ele verir: soru verisine yazılmaz, uygulamaya kapalı kesisim_hedefleri tablosunda tutulur
             var oyun = await OyunEkle("kesisim", Zorluk.Kolay, tarih,
                 sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB)).ToList());
+            if (oyun == null) return true;
 
             // Hedefler yazılamazsa tekrar kuralları bu oyunu göremez: oyun silinir, bir sonraki çalıştırmada yeniden üretilir
             try
@@ -651,19 +649,18 @@ namespace ScoutIQ.API.Jobs
             }
         }
 
-        // Veritabanına yazmadan her moddan bir soru seti seçip ekrana basar:
-        // dotnet run -- --kesisim-onizleme
-        public async Task KesisimOnizleme()
+        // Veritabanına yazmadan hedef gün için her moddan bir soru seti seçip ekrana basar:
+        // dotnet run -- --kesisim-onizleme [--tarih yyyy-MM-dd]
+        public async Task KesisimOnizleme(DateTime tarih)
         {
             var kademeler = await KademeleriOku();
             var veri = await KesisimVerisiniOku(ayrintili: true);
-            DateTime bugun = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TurkiyeSaatDilimi).Date;
             foreach (var zorluk in Enum.GetValues<Zorluk>())
             {
-                Console.WriteLine($"\nKesişim ({zorluk}) önizleme (veritabanına yazılmadı):");
+                Console.WriteLine($"\nKesişim ({zorluk}) önizleme, {tarih:yyyy-MM-dd} (veritabanına yazılmadı):");
                 if (zorluk == Zorluk.Kolay)
                 {
-                    var kolay = await KolayKesisimSorulariniSec(bugun, veri, kademeler);
+                    var kolay = await KolayKesisimSorulariniSec(tarih, veri, kademeler);
                     if (kolay != null)
                     {
                         await KolayKesisimSorulariniYaz(kolay);
@@ -731,6 +728,7 @@ namespace ScoutIQ.API.Jobs
                 }
 
                 var oyun = await OyunEkle("bonservis", zorluk, tarih, BonservisSoruSecici.SoruVerisi(sorular));
+                if (oyun == null) continue;
 
                 // Cevaplar yazılamazsa oyun cevapsız kalır: silinir, bir sonraki çalıştırmada yeniden üretilir
                 try
@@ -812,7 +810,7 @@ namespace ScoutIQ.API.Jobs
 
         // ---------------- Ortak ----------------
 
-        // Bugün için henüz üretilmemiş modlar
+        // Hedef gün için henüz üretilmemiş modlar
         private async Task<List<Zorluk>> EksikModlar(string oyun, DateTime tarih)
         {
             var eksikler = new List<Zorluk>();
@@ -826,16 +824,30 @@ namespace ScoutIQ.API.Jobs
             return eksikler;
         }
 
-        private async Task<GunlukOyun> OyunEkle(string oyun, Zorluk zorluk, DateTime tarih, object soruVerisi)
+        private Task<GunlukOyun?> OyunEkle(string oyun, Zorluk zorluk, DateTime tarih, object soruVerisi) =>
+            OyunuYaz(ZorlukDagilimi.OyunTipi(oyun, zorluk), tarih, soruVerisi);
+
+        // Oyunu gunluk_oyunlar'a yazar. Aynı oyunu bu arada başka bir çalışma yazdıysa (Scheduler'ın yeniden denemesi,
+        // elle çalıştırma) tekillik kısıtına takılır: oyun zaten var demektir, hata sayılmaz ve null döner.
+        // Böyle bir durumda cevap tabloları da o çalışmanın işidir, bu çalışma onlara dokunmaz.
+        private async Task<GunlukOyun?> OyunuYaz(string oyunTipi, DateTime tarih, object soruVerisi)
         {
-            var eklenen = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+            try
             {
-                OyunTipi = ZorlukDagilimi.OyunTipi(oyun, zorluk),
-                Tarih = tarih,
-                SoruVerisi = soruVerisi
-            })).Models.First();
-            Console.WriteLine($"Başarılı: {ZorlukDagilimi.OyunTipi(oyun, zorluk)} için {tarih:yyyy-MM-dd} tarihli oyun eklendi.");
-            return eklenen;
+                var eklenen = (await _supabaseClient.From<GunlukOyun>().Insert(new GunlukOyun
+                {
+                    OyunTipi = oyunTipi,
+                    Tarih = tarih,
+                    SoruVerisi = soruVerisi
+                })).Models.First();
+                Console.WriteLine($"Başarılı: {oyunTipi} için {tarih:yyyy-MM-dd} tarihli oyun eklendi.");
+                return eklenen;
+            }
+            catch (Exception ex) when (UretimCalismasi.TekillikIhlali(ex))
+            {
+                Console.WriteLine($"{oyunTipi}: {tarih:yyyy-MM-dd} için oyunu bu arada başka bir çalışma eklemiş, atlanıyor.");
+                return null;
+            }
         }
 
         private async Task<bool> OyunVarMi(string oyunTipi, DateTime tarih)

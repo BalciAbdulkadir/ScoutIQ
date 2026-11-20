@@ -65,6 +65,7 @@ Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasakl
   grant execute on function public.fonksiyon(...) to authenticated;
   ```
 - Her fonksiyonda `set search_path = ''` bulunur. Tablolar `public.` önekiyle yazılır.
+- `oyun_id` alan her fonksiyon oyunun tarihinin bugünden sonra olmadığını kontrol eder (`tarih <= public.bugunun_tarihi()`). Yarının oyunları akşamdan veritabanında durur (bkz. 6. bölüm), 00.00'dan önce hiçbir fonksiyondan oynanamamalı ve cevabı dönmemeli (037).
 
 **Fonksiyon değiştirirken:**
 - `create or replace function` var olan izinleri korur.
@@ -83,7 +84,17 @@ Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasakl
   - Eski Kesişim sorularında `kademe` ve `zorluk` alanları var.
 - Uygulama ve SQL fonksiyonları her iki biçimi de okuyabilmelidir. Bir alan kaldırılınca uygulamanın o alana bağlı olmadığı kontrol edilir.
 
-## 6. Android ve Google Play
+## 6. Backend (Cloud Run işi)
+
+Kurulum ve dağıtım: `backend/CLOUD_RUN.md`.
+
+- Backend yarının oyunlarını bugün üretir (18.00, eksikler 20.00). Üretimle ilgili tarih hesaplarında "bugün" (`DateTime.Now`, `DateTime.UtcNow`) değil, işe verilen **hedef tarih** kullanılır. Tekrar kuralları (Kesişim'in 21 günü, Top 10'un 180 günü ve eksen sırası) hedef tarihe göre sayılır.
+- "Bugün" ve "yarın" her zaman `Europe/Istanbul`'a göre hesaplanır, makinenin saatine göre değil. Cloud Run makineleri UTC'dedir.
+- Yeni bir oyun tipi eklenirse `UretimCalismasi.BeklenenOyunTipleri`'ne de eklenir. Eklenmezse eksik kalması fark edilmez.
+- Backend değişikliği `main`'e birleşince imaj yeniden derlenip yüklenir (`CLOUD_RUN.md` 9. adım). Yüklenmezse iş eski kodla çalışmaya devam eder.
+- Supabase secret anahtarı sadece Secret Manager'da (Cloud Run) ve user-secrets'ta (yerel) durur. `appsettings.json`'a yazılmaz.
+
+## 7. Android ve Google Play
 
 - **Paket adı:** `com.footylore.app`. İlk yüklemeden sonra değiştirilemez.
 - **İmza dosyaları:** `mobile/android/key.properties` ve `.jks` repoya girmez. Kaybedilirlerse uygulama güncellenemez, yedekleri güvenli bir yerde tutulur.
@@ -92,7 +103,7 @@ Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasakl
 - **Sürüm numarası:** Her Play yüklemesinde `mobile/pubspec.yaml`'daki sürümün `+` işaretinden sonraki sayısı (`1.0.0+1` → `1.0.0+2`) bir artırılır. Aynı sayıyla ikinci yükleme kabul edilmez.
 - **Analitik:** Kişisel veri ve oyuncu ismi gönderilmez. Yeni olay eklemeden önce `CLAUDE.md` madde 18'e bakılır.
 
-## 7. Git
+## 8. Git
 
 - Her özellik ayrı bir branch'te yapılır, `main`'e doğrudan push yapılmaz.
 - `kurallar/` klasörü repoya girmez (`.git/info/exclude`).

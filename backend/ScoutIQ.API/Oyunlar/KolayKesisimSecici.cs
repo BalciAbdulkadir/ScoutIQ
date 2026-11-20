@@ -42,7 +42,8 @@ namespace ScoutIQ.API.Oyunlar
             _random = random ?? new Random();
         }
 
-        public SecimSonucu Sec(DateTime bugun, IEnumerable<Kulup> kulupListesi, IEnumerable<KariyerGecmisi> kariyer,
+        // hedefTarih: soruların yayınlanacağı gün (normalde yarın). 21 günlük çift tekrarı bu güne göre sayılır.
+        public SecimSonucu Sec(DateTime hedefTarih, IEnumerable<Kulup> kulupListesi, IEnumerable<KariyerGecmisi> kariyer,
             IReadOnlyDictionary<string, Kademe> kademeler, IEnumerable<Gecmis> gecmis)
         {
             var kulupler = kulupListesi.Where(k => k.Kademe == KulupKademeleri.Buyuk).ToDictionary(k => k.Id);
@@ -81,7 +82,7 @@ namespace ScoutIQ.API.Oyunlar
             var bugunkuHedefler = new HashSet<string>();
 
             bool CiftSorulabilir((string, string) cift) =>
-                !sonCift.TryGetValue(cift, out var son) || (bugun - son).Days >= CiftTekrarGunu;
+                !sonCift.TryGetValue(cift, out var son) || (hedefTarih - son).Days >= CiftTekrarGunu;
 
             // Sıradaki hedeflerle soru ekler. ciftKurali false ise çift tekrarı kuralı esnetilir: en eski çift seçilir.
             int Ekle(List<(string Oyuncu, List<string> Kulupler)> adaylar, bool ciftKurali)

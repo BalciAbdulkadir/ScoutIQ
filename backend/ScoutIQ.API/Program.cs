@@ -1,74 +1,62 @@
-using Coravel;
+using Microsoft.Extensions.Configuration;
 using ScoutIQ.API.Jobs;
 using Supabase;
 
-var builder = WebApplication.CreateBuilder(args);
+// ScoutIQ soru üretim işi. Bir kez çalışır, hedef günün eksik oyunlarını üretir ve kapanır; web sunucusu ya da
+// zamanlayıcı yoktur. Google Cloud Run Jobs'ta çalışır, Cloud Scheduler her gün Türkiye saatiyle 18.00 ve 20.00'de
+// başlatır (backend/CLOUD_RUN.md).
+//
+//   dotnet run                                  Türkiye saatine göre yarının eksik oyunlarını üretir
+//   dotnet run -- --tarih 2026-11-21            Verilen günün eksik oyunlarını üretir (acil durum: bugünün eksiğini
+//                                               tamamlamak ya da belirli bir günü üretmek için)
+//   dotnet run -- --kesisim-onizleme            Her moddan bir soru seti seçip ekrana basar, veritabanına yazmaz
+//   dotnet run -- --bonservis-onizleme          Her moddan bir Bonservis soru seti seçip ekrana basar, veritabanına yazmaz
+//   dotnet run -- --izgara-onizleme             Her moddan bir Izgara tahtası seçip ekrana basar, veritabanına yazmaz
+//   dotnet run -- --bingo-onizleme              Bir Bingo kartı seçip ekrana basar, veritabanına yazmaz
+//   dotnet run -- --top10-onizleme              Top 10 sorusunu seçip ekrana basar, veritabanına yazmaz
+// Kesişim ve Top 10 önizlemeleri de hedef tarihe göre seçer (varsayılan yarın, --tarih ile başka bir gün).
+//
+// Çıkış kodu: hedef günün beklenen bütün oyunları veritabanındaysa 0, biri bile eksikse 1.
+//
+// Ayarlar: Supabase:Url appsettings.json'dadır. Supabase:Key (secret anahtar) hiçbir dosyada tutulmaz:
+// Cloud Run'da Secret Manager'dan Supabase__Key ortam değişkeni olarak verilir, yerelde user-secrets'tadır
+// (dotnet user-secrets set "Supabase:Key" "...").
 
-builder.Services.AddControllers();
+var ayarlar = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: true)
+    .AddUserSecrets<Program>(optional: true)
+    .AddEnvironmentVariables()
+    .Build();
 
-// 1. Supabase İstemcisini Singleton olarak enjekte edelim
-var supabaseUrl = builder.Configuration["Supabase:Url"];
-var supabaseKey = builder.Configuration["Supabase:Key"];
-var supabaseOptions = new SupabaseOptions { AutoConnectRealtime = true };
-
-builder.Services.AddSingleton(provider => 
-    new Client(supabaseUrl, supabaseKey, supabaseOptions));
-
-// 2. Coravel Zamanlayıcısını ve Job'ımızı servislere ekleyelim
-builder.Services.AddScheduler();
-builder.Services.AddTransient<DailyQuestionJob>();
-
-var app = builder.Build();
-
-// Zorluk ayarı için: "dotnet run -- --kesisim-onizleme" her moddan (kolay, orta, zor) bir soru seti seçip ekrana basar, veritabanına yazmaz
-if (args.Contains("--kesisim-onizleme"))
+var supabaseUrl = ayarlar["Supabase:Url"];
+var supabaseKey = ayarlar["Supabase:Key"];
+if (string.IsNullOrWhiteSpace(supabaseUrl) || string.IsNullOrWhiteSpace(supabaseKey))
 {
-    await app.Services.GetRequiredService<DailyQuestionJob>().KesisimOnizleme();
-    return;
+    Console.WriteLine("HATA: Supabase:Url ya da Supabase:Key ayarı yok (Cloud Run'da Supabase__Key ortam değişkeni, yerelde user-secrets).");
+    return UretimCalismasi.BasarisizCikis;
 }
 
-// "dotnet run -- --bonservis-onizleme" her moddan bir Bonservis soru seti seçip ekrana basar, veritabanına yazmaz
-if (args.Contains("--bonservis-onizleme"))
+var uretici = new DailyQuestionJob(new Client(supabaseUrl, supabaseKey, new SupabaseOptions { AutoConnectRealtime = false }));
+
+var onizlemeler = new Dictionary<string, Func<DateTime, Task>>
 {
-    await app.Services.GetRequiredService<DailyQuestionJob>().BonservisOnizleme();
-    return;
+    ["--kesisim-onizleme"] = uretici.KesisimOnizleme,
+    ["--bonservis-onizleme"] = _ => uretici.BonservisOnizleme(),
+    ["--izgara-onizleme"] = _ => uretici.IzgaraOnizleme(),
+    ["--bingo-onizleme"] = _ => uretici.BingoOnizleme(),
+    ["--top10-onizleme"] = uretici.Top10Onizleme,
+};
+
+var onizleme = onizlemeler.Keys.FirstOrDefault(args.Contains);
+if (onizleme != null)
+{
+    var utcSimdi = DateTime.UtcNow;
+    var hedef = UretimCalismasi.HedefTarih(args, utcSimdi);
+    Console.WriteLine($"[{utcSimdi:yyyy-MM-dd HH:mm:ss} UTC] Önizleme. Türkiye'de bugün {UretimCalismasi.TurkiyeBugun(utcSimdi):yyyy-MM-dd}, " +
+                      $"hedef tarih {hedef:yyyy-MM-dd}.");
+    await onizlemeler[onizleme](hedef);
+    return UretimCalismasi.BasariliCikis;
 }
 
-// "dotnet run -- --bingo-onizleme" bir Bingo kartı seçip ekrana basar, veritabanına yazmaz
-if (args.Contains("--bingo-onizleme"))
-{
-    await app.Services.GetRequiredService<DailyQuestionJob>().BingoOnizleme();
-    return;
-}
-
-// "dotnet run -- --izgara-onizleme" her moddan bir Izgara tahtası seçip ekrana basar, veritabanına yazmaz
-if (args.Contains("--izgara-onizleme"))
-{
-    await app.Services.GetRequiredService<DailyQuestionJob>().IzgaraOnizleme();
-    return;
-}
-
-// "dotnet run -- --top10-onizleme" bugünün Top 10 sorusunu seçip ekrana basar, veritabanına yazmaz
-if (args.Contains("--top10-onizleme"))
-{
-    await app.Services.GetRequiredService<DailyQuestionJob>().Top10Onizleme();
-    return;
-}
-
-// 3. Zamanlayıcıyı yapılandıralım
-
-app.Services.UseScheduler(scheduler =>
-{
-    // Her gece Türkiye saatiyle 00:00'da o günün oyunlarını üretir.
-    // RunOnceAtStart: uygulama açılınca da bir kez çalışır, bugünün oyunu eksikse tamamlanır.
-    // Job o gün için oyun zaten varsa yenisini üretmez.
-    scheduler.Schedule<DailyQuestionJob>()
-             .DailyAt(0, 0)
-             .Zoned(DailyQuestionJob.TurkiyeSaatDilimi)
-             .RunOnceAtStart()
-             .PreventOverlapping(nameof(DailyQuestionJob));
-});
-
-app.MapControllers();
-
-app.Run();
+return await UretimCalismasi.Calistir(args, DateTime.UtcNow, uretici);

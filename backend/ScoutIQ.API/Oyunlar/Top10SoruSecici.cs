@@ -112,14 +112,16 @@ namespace ScoutIQ.API.Oyunlar
             _random = random ?? new Random();
         }
 
-        public SecimSonucu Sec(DateTime bugun, Veri veri, IReadOnlyDictionary<string, Kademe> kademeler, IEnumerable<Gecmis> gecmisListesi)
+        // hedefTarih: sorunun yayınlanacağı gün (normalde yarın). 180 günlük tekrar ve "önceki günün ekseni" bu güne
+        // göre sayılır: önceki gün, hedef tarihten bir önceki gündür, yani programın çalıştığı gün.
+        public SecimSonucu Sec(DateTime hedefTarih, Veri veri, IReadOnlyDictionary<string, Kademe> kademeler, IEnumerable<Gecmis> gecmisListesi)
         {
             var gecmis = gecmisListesi.ToList();
-            var son = gecmis.Where(g => g.Tarih.Date < bugun.Date).OrderByDescending(g => g.Tarih).FirstOrDefault();
-            var yakinda = gecmis.Where(g => (bugun.Date - g.Tarih.Date).TotalDays < TekrarGunu)
+            var son = gecmis.Where(g => g.Tarih.Date < hedefTarih.Date).OrderByDescending(g => g.Tarih).FirstOrDefault();
+            var yakinda = gecmis.Where(g => (hedefTarih.Date - g.Tarih.Date).TotalDays < TekrarGunu)
                 .Select(g => (g.Sablon, g.Anahtar)).ToHashSet();
 
-            var adaylar = Adaylar(bugun, veri).Where(a => !yakinda.Contains((a.Sablon, a.Anahtar))).ToList();
+            var adaylar = Adaylar(hedefTarih, veri).Where(a => !yakinda.Contains((a.Sablon, a.Anahtar))).ToList();
             Karistir(adaylar);
             // Dünkü eksenden olmayanlar önce: diğer eksende uygun soru yoksa dünkü eksen de denenir
             adaylar = adaylar.OrderBy(a => son != null && a.Eksen == son.Eksen ? 1 : 0).ToList();
@@ -163,13 +165,13 @@ namespace ScoutIQ.API.Oyunlar
         }
 
         // Bütün şablon + değişken adayları. Listeler sadece denenince hesaplanır.
-        private static List<Aday> Adaylar(DateTime bugun, Veri veri)
+        private static List<Aday> Adaylar(DateTime hedefTarih, Veri veri)
         {
             var adaylar = new List<Aday>();
             var transferler = veri.Transferler
                 .Where(t => t.Bedel > 0 && t.Tarih.HasValue && t.Tarih.Value.Year >= BaslangicYili && veri.Oyuncular.ContainsKey(t.OyuncuId))
                 .ToList();
-            var donem = $"{BaslangicYili}'den bugüne · {Tarihi(bugun)} itibarıyla";
+            var donem = $"{BaslangicYili}'den bugüne · {Tarihi(hedefTarih)} itibarıyla";
 
             var kulupler = veri.Kulupler
                 .Where(k => k.Kademe is KulupKademeleri.Buyuk or KulupKademeleri.BasAlti && KesisimSoruSecici.Kulupler.ContainsKey(k.TransfermarktId))
@@ -226,7 +228,7 @@ namespace ScoutIQ.API.Oyunlar
             if (veri.KulupSayilari.Count > 0)
             {
                 adaylar.Add(new Aday("T7", "hepsi", TransferEkseni,
-                    () => ("En çok kulüp değiştiren 10 oyuncu", $"Kariyerindeki farklı kulüp sayısı · {Tarihi(bugun)} itibarıyla",
+                    () => ("En çok kulüp değiştiren 10 oyuncu", $"Kariyerindeki farklı kulüp sayısı · {Tarihi(hedefTarih)} itibarıyla",
                         veri.KulupSayilari
                             .Where(k => veri.Oyuncular.ContainsKey(k.OyuncuId))
                             .Select(k => new Kayit(k.OyuncuId, k.Sayi, DateTime.MinValue, $"{k.Sayi} kulüp"))
