@@ -185,6 +185,46 @@ public class KolayKesisimSeciciTests
     }
 
     [Fact]
+    public void Sec_CiftTekrari_HedefTariheGoreSayilir()
+    {
+        // Program bugün (Bugun) çalışır, soruları yarın (hedef) için üretir. Çiftler bugünden CiftTekrarGunu - 1 gün
+        // önce sorulmuş: bugüne göre süre dolmamış, yarına göre tam CiftTekrarGunu gün geçmiş.
+        var hedef = Bugun.AddDays(1);
+        TestVerisi Veri()
+        {
+            var v = new TestVerisi();
+            var k = Enumerable.Range(0, 10).Select(i => v.Kulup($"b{i}")).ToList();
+            for (int i = 0; i < 5; i++)
+            {
+                v.Unlu(k[2 * i], k[2 * i + 1]);
+                v.Gecmis.Add(new Gecmis("baska-oyuncu", k[2 * i].Id, k[2 * i + 1].Id, hedef.AddDays(-CiftTekrarGunu)));
+            }
+            return v;
+        }
+
+        Assert.Empty(Veri().Sec(1, bugun: hedef).Uyarilar);
+        Assert.Contains(Veri().Sec(1, bugun: Bugun).Uyarilar, u => u.Contains("esnetildi"));
+    }
+
+    [Fact]
+    public void Sec_BugunSorulanCift_YarinTekrarSorulmaz()
+    {
+        // Bugünün oyunu üretilmiş durumda; yarının oyunu bugünün çiftini sormaz
+        var v = new TestVerisi();
+        var k = Enumerable.Range(0, 10).Select(i => v.Kulup($"b{i}")).ToList();
+        for (int i = 0; i < k.Count; i++)
+            for (int j = i + 1; j < k.Count; j++)
+                v.Unlu(k[i], k[j]);
+        v.Gecmis.Add(new Gecmis("baska-oyuncu", k[0].Id, k[1].Id, Bugun));
+
+        for (int tohum = 0; tohum < 30; tohum++)
+        {
+            var sorular = v.Sec(tohum, bugun: Bugun.AddDays(1)).Sorular!;
+            Assert.DoesNotContain(sorular, s => Cift(s.KulupA.Id, s.KulupB.Id) == Cift(k[0].Id, k[1].Id));
+        }
+    }
+
+    [Fact]
     public void Sec_UygunCiftKalmazsa_KuralEsnetilir_EnEskiCiftSecilir()
     {
         var v = new TestVerisi();

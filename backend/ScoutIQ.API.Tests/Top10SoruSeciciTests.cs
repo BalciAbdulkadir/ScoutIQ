@@ -212,6 +212,32 @@ public class Top10SoruSeciciTests
     }
 
     [Fact]
+    public void Sec_YuzSeksenGunTekrari_HedefTariheGoreSayilir()
+    {
+        // Program bugün çalışır, soruyu yarın için üretir. Soru bugünden TekrarGunu - 1 gün önce sorulmuş:
+        // bugüne göre tekrar, yarına göre tam TekrarGunu gün geçmiş.
+        var hedef = Bugun.AddDays(1);
+        var (v, gs, _) = TekKulup();
+        v.Gecmis.Add(new Gecmis("T1", gs.TransfermarktId, TransferEkseni, hedef.AddDays(-TekrarGunu)));
+
+        Assert.Null(v.Sec(bugun: Bugun).Soru);
+        Assert.NotNull(v.Sec(bugun: hedef).Soru);
+    }
+
+    [Fact]
+    public void Sec_OncekiGun_HedefTarihtenBirOncekiGun_YaniBugun()
+    {
+        // Yarının sorusu üretilirken bugünün sorusu zaten var: "dünkü eksen" bugünün eksenidir
+        var hedef = Bugun.AddDays(1);
+        var v = IkiEksen();
+        v.Gecmis.Add(new Gecmis("B1", "1999", BallonDorEkseni, Bugun.AddDays(-1)));
+        v.Gecmis.Add(new Gecmis("T5", "x", TransferEkseni, Bugun));
+
+        for (int tohum = 0; tohum < 20; tohum++)
+            Assert.Equal(BallonDorEkseni, v.Sec(tohum, bugun: hedef).Soru!.Eksen);
+    }
+
+    [Fact]
     public void Sec_DigerEksendeSoruYoksa_AyniEksenKullanilir()
     {
         var (v, _, _) = TekKulup();

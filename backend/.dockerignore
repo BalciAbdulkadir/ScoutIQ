@@ -1,0 +1,12 @@
+# İmaja sadece ScoutIQ.API'nin kaynak kodu girer
+**/bin/
+**/obj/
+out/
+192.168.1.107/
+ScoutIQ.API.Tests/
+**/*.user
+**/secrets.json
+**/.env
+Dockerfile
+.dockerignore
+*.md
