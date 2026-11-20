@@ -75,7 +75,7 @@ class BonservisState {
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 // Her zorluk ayrı bir günlük oyundur: bonservis_kolay, bonservis_orta ya da bonservis_zor.
 // Tahmin sunucuda kontrol edilir; skor ve ilerleme sunucuda yazılır. Tahmin edilen oyuncunun bedeli soruyla gelmez,
-// tahminden sonra sunucudan gelir (033_skor_sunucuda.sql).
+// tahminden sonra sunucudan gelir (034_skor_sunucuda.sql).
 class BonservisNotifier extends Notifier<BonservisState> {
   static const puan = 2;
 

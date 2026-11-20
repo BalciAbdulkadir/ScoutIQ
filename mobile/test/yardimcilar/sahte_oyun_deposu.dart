@@ -122,7 +122,7 @@ class SahteOyunDeposu implements OyunDeposu {
   int kayitAcSayisi = 0;
   int cevapKontrolSayisi = 0;
   final List<String> arananlar = [];
-  // Sunucunun yazdığı skorlar (033_skor_sunucuda.sql: skor artık sadece sunucuda yazılır)
+  // Sunucunun yazdığı skorlar (034_skor_sunucuda.sql: skor artık sadece sunucuda yazılır)
   final List<({int skor, bool bitti})> yazilanSkorlar = [];
   final List<String> istenenOyunTipleri = []; // gununOyunu ile istenen oyun tipleri
   final List<String> acilanKayitTipleri = []; // kayitAc ile açılan oyun tipleri
@@ -194,7 +194,7 @@ class SahteOyunDeposu implements OyunDeposu {
 
   int get _soruSayisi => ((oyun?['soru_verisi'] as List?) ?? const []).length;
 
-  // 033_skor_sunucuda.sql'deki kesisim_cevap fonksiyonunun basit bir kopyası
+  // 034_skor_sunucuda.sql'deki kesisim_cevap fonksiyonunun basit bir kopyası
   @override
   Future<KesisimCevapSonucu> kesisimCevap({required String oyunId, required int soruIndex, required String oyuncuId}) async {
     cevapKontrolSayisi++;
@@ -215,7 +215,7 @@ class SahteOyunDeposu implements OyunDeposu {
     return KesisimCevapSonucu(dogru: dogru, skor: skor, bitti: bitti);
   }
 
-  // 033_skor_sunucuda.sql'deki bonservis_tahmin fonksiyonunun basit bir kopyası. Bedeller soru verisinden okunur.
+  // 034_skor_sunucuda.sql'deki bonservis_tahmin fonksiyonunun basit bir kopyası. Bedeller soru verisinden okunur.
   @override
   Future<BonservisTahminSonucu> bonservisTahmin({required String oyunId, required int soruIndex, required bool dahaFazla}) async {
     if (skorYazBekletici != null) await skorYazBekletici!.future;

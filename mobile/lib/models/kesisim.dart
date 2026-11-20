@@ -1,4 +1,4 @@
-// kesisim_cevap fonksiyonunun cevabı (033_skor_sunucuda.sql). Skor ve ilerleme sunucuda yazılır.
+// kesisim_cevap fonksiyonunun cevabı (034_skor_sunucuda.sql). Skor ve ilerleme sunucuda yazılır.
 class KesisimCevapSonucu {
   final bool dogru;
   final int skor; // Sunucudaki güncel skor

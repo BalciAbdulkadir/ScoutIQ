@@ -35,7 +35,7 @@ abstract class OyunDeposu {
 
   Future<List<OyuncuOneri>> oyuncuAra(String metin);
 
-  // Kesişim ve Bonservis: cevap sunucuda kontrol edilir, skor ve ilerleme sunucuda yazılır (033_skor_sunucuda.sql).
+  // Kesişim ve Bonservis: cevap sunucuda kontrol edilir, skor ve ilerleme sunucuda yazılır (034_skor_sunucuda.sql).
   // Kayıt açık değilse OyunAcikDegil fırlatır.
 
   // Seçilen oyuncuyu soru index'indeki sorunun cevabı olarak gönderir. Son soruda kayıt kapanır.

@@ -32,7 +32,7 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 10. **Frontend (Mobil) – `mobile/`:** Flutter + Riverpod. Siyah/yeşil karanlık tema ve grid liste yapısı.
 11. **Backend (API ve Cron) – `backend/`:** C# ASP.NET Core + Coravel. Her gece tüm oyun modları için yeni sorular üreten otonom motor.
 12. **Veri Kaynağı – `data_miner/`:** Python script'i + Dockerize edilmiş Transfermarkt API. 2025/2026 sezonu baz alınarak güncellenmiş oyuncu ve kariyer verileri.
-13. **Veritabanı:** Supabase.
+13. **Veritabanı:** Supabase. Şema ve fonksiyonlar `supabase/migrations/` altında numaralı SQL dosyaları olarak repoda tutulur (bkz. G).
 
 ## E. Veritabanı Şeması (Supabase)
 | Tablo | Açıklama |
@@ -53,3 +53,11 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 20. **Akşam hatırlatması:** Yerel bildirim, sunucu yok. O gün hiç oyun bitirilmediyse 20.00'de (Europe/Istanbul). Bildirim izni ilk oyun bitince istenir; Hesap sayfasından kapatılabilir.
 21. **Puanla isteği:** Play'in kendi penceresi; 3 farklı gün oyun bitirildikten sonra, iyi sonuçlu (en yüksek skorun en az %70'i) bir oyunun bitişinde bir kez.
 22. **Oyun kuralları:** Her oyunda ilk dokunuşta örnekli kurallar; oyun ekranındaki "?" düğmesi kuralları tekrar açar.
+
+## G. SQL Dosyaları (20 Kasım 2026 kararları)
+23. Supabase'de yapılan her değişiklik `supabase/migrations/` altında numaralı bir dosya olarak repoya girer. SQL Editor'da dosyası olmayan değişiklik yapılmaz.
+24. Yeni dosyanın numarası `main`'deki son numaranın bir fazlasıdır. Numara mesajla sorulmaz, repodan bakılır.
+25. Dosyanın ilk satırı dosya adıyla aynı numarayı taşır (`036_...sql` → `-- 036: ...`).
+26. Bir kez Supabase'de çalıştırılmış dosya değiştirilmez. Düzeltme gerekirse yeni bir dosya yazılır.
+27. PR açıklamasında hangi SQL dosyalarının hangi sırayla çalıştırılacağı yazılır. Dosya PR'ın içindedir, mesajla gönderilmez.
+28. SQL dosyası, PR `main`'e birleştikten sonra Supabase'de çalıştırılır. Uygulamanın eski sürümünü bozan dosyalarda (034 gibi) sıra dosyanın başında yazar.
