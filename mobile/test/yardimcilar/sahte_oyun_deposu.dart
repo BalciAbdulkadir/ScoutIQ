@@ -5,6 +5,7 @@ import 'package:mobile/models/bonservis_sorusu.dart';
 import 'package:mobile/models/kesisim.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
+import 'package:mobile/models/puan.dart';
 import 'package:mobile/models/top10.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 
@@ -448,5 +449,45 @@ class SahteOyunDeposu implements OyunDeposu {
       for (final e in top10Listesi.entries)
         if (bitti || bulunanlar.contains(e.key)) e.key: e.value.$2,
     };
+  }
+
+  // Puan ve liderlik tablosu
+
+  // Oyun bitince sunucunun yazacağı puan; null: puan yok (038 çalışmadı ya da kayıt kapanmadı)
+  PuanDetayi? puan;
+  bool puanHataVerir = false;
+  final List<String> puanIstekleri = [];
+
+  LiderlikSonucu liderlik = const LiderlikSonucu(liste: []);
+  final List<(LiderlikDonemi, String?)> liderlikIstekleri = [];
+  bool liderlikHataVerir = false;
+
+  Profil profil = const Profil(takmaAd: 'Oyuncu 3FA9', varsayilan: true);
+  String? takmaAdHatasi; // Doluysa takmaAdKaydet bu mesajla reddeder
+  final List<String> kaydedilenTakmaAdlar = [];
+
+  @override
+  Future<PuanDetayi?> puanGetir(String oyunTipi, {String? tarih}) async {
+    puanIstekleri.add(oyunTipi);
+    if (puanHataVerir) throw Exception('bağlantı yok');
+    return puan;
+  }
+
+  @override
+  Future<LiderlikSonucu> liderlikTablosu(LiderlikDonemi donem, {String? oyun}) async {
+    liderlikIstekleri.add((donem, oyun));
+    if (liderlikHataVerir) throw Exception('bağlantı yok');
+    return liderlik;
+  }
+
+  @override
+  Future<Profil> profilGetir() async => profil;
+
+  @override
+  Future<String> takmaAdKaydet(String ad) async {
+    if (takmaAdHatasi != null) throw TakmaAdHatasi(takmaAdHatasi!);
+    kaydedilenTakmaAdlar.add(ad);
+    profil = Profil(takmaAd: ad, varsayilan: false, degistirilebilirTarih: DateTime.now().add(const Duration(days: 7)));
+    return ad;
   }
 }

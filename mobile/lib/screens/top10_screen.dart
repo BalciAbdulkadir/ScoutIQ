@@ -5,6 +5,7 @@ import '../models/top10.dart';
 import '../providers/top10_provider.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import '../widgets/puan_karti.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
@@ -190,6 +191,8 @@ class Top10Screen extends ConsumerWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 14),
         ),
+        const SizedBox(height: 16),
+        PuanKarti(oyunTipi: oyunTipi),
         const SizedBox(height: 20),
         _Baslik(soru: state.soru!),
         const SizedBox(height: 14),
@@ -197,11 +200,13 @@ class Top10Screen extends ConsumerWidget {
         const SizedBox(height: 28),
         PaylasDugmesi(
           oyun: 'top10',
-          metin: (seri) => top10Paylasimi(
+          oyunTipi: oyunTipi,
+          metin: (seri, puan) => top10Paylasimi(
             bulunanSiralar: state.bulunanlar.keys.toSet(),
             kalanCan: state.kalanCan,
             toplamCan: top10Can,
             seri: seri,
+            puan: puan,
           ),
         ),
         const SizedBox(height: 12),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyun_modu.dart';
+import '../models/puan.dart';
 import '../providers/hub_provider.dart';
 import '../services/hatirlatma.dart';
 import '../theme/renkler.dart';
@@ -15,6 +16,7 @@ import '../widgets/tebesir.dart';
 import 'bingo_screen.dart';
 import 'bonservis_screen.dart';
 import 'game_screen.dart';
+import 'liderlik_screen.dart';
 import 'profil_screen.dart';
 import 'top10_screen.dart';
 
@@ -47,6 +49,7 @@ class HomeScreen extends ConsumerWidget {
     final kullanici = ref.watch(kullaniciProvider);
     final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
     final seri = ref.watch(seriProvider).value ?? 0;
+    final bugunkuPuan = ref.watch(bugunkuPuanProvider).value ?? 0;
 
     // Seri ya da bugünkü sonuçlar değişince akşam hatırlatmaları yeniden kurulur
     ref.listen(seriProvider, (_, yeni) {
@@ -108,6 +111,7 @@ class HomeScreen extends ConsumerWidget {
                           style: Yazi.tebesir(26, kalinlik: FontWeight.w400),
                         ),
                       ),
+                      if (bugunkuPuan > 0) BugunkuPuanRozeti(puan: bugunkuPuan),
                       if (seri > 0) SeriRozeti(seri: seri),
                     ],
                   ),
@@ -187,11 +191,44 @@ class _UstBar extends StatelessWidget {
         const FootyLoreLogo(),
         const Spacer(),
         IconButton(
+          tooltip: 'Sıralama',
+          onPressed: () => liderligiAc(context),
+          icon: const Icon(Icons.emoji_events_outlined, color: Renkler.metin, size: 26),
+        ),
+        IconButton(
           tooltip: 'Hesap',
           onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const ProfilScreen())),
           icon: KullaniciAvatari(kullanici: kullanici, yaricap: 17),
         ),
       ],
+    );
+  }
+}
+
+void liderligiAc(BuildContext context) =>
+    Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const LiderlikScreen()));
+
+// Bugün biten oyunların puan toplamı, tebeşirle "⭐ 316". Dokununca sıralama "Bugün" sekmesiyle açılır.
+class BugunkuPuanRozeti extends StatelessWidget {
+  final int puan;
+
+  const BugunkuPuanRozeti({super.key, required this.puan});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Bugün $puan puan, sıralamayı aç',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () => liderligiAc(context),
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: 4),
+            child: Text('⭐ ${binlik(puan)}', style: Yazi.tebesir(22, renk: Renkler.vurgu)),
+          ),
+        ),
+      ),
     );
   }
 }

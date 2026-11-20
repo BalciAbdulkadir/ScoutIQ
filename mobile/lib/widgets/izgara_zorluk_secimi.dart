@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/izgara.dart';
 import '../models/oyun_modu.dart';
+import '../models/puan.dart';
 import '../providers/hub_provider.dart';
 import '../screens/izgara_screen.dart';
 import '../theme/renkler.dart';
@@ -295,11 +296,20 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
           _SecimSatiri(
             baslik: zorluklar[i].ad,
             aciklama: zorluklar[i].aciklama,
+            carpan: '×${carpanMetni(zorlukCarpanlari[_zorlukKodlari[i]]!)}',
             onTap: () => setState(() => _zorluk = i),
           ),
         ],
       ],
     );
+  }
+
+  static const _zorlukKodlari = ['kolay', 'orta', 'zor'];
+
+  // "Bitirirsen 300 puan + hız bonusu" ya da süresizde "Süresiz oyunlar tabloya girmez"
+  String _puanOzeti(int? zorluk, OyunSuresi sure) {
+    final ana = anaPuanHesapla(zorluk: zorluk == null ? null : _zorlukKodlari[zorluk], sure: sure.saniye);
+    return ana == null ? 'Süresiz oyunlar tabloya girmez' : 'Bitirirsen ${binlik(ana)} puan + hız bonusu';
   }
 
   Widget _sureAdimi(int? zorluk) {
@@ -311,6 +321,11 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
     Widget sureKutusu(OyunSuresi s) {
       final secili = s == sure;
       final saniye = s.saniye;
+      // Puan çarpanı; süresiz oyun puansızdır
+      final carpanYazisi = Text(
+        saniye == null ? 'puansız' : '×${carpanMetni(sureCarpanlari[saniye] ?? 1)}',
+        style: Yazi.tebesir(16, renk: saniye == null ? Renkler.metinSoluk : Renkler.vurgu, kalinlik: FontWeight.w400),
+      );
       return Expanded(
         child: Material(
           type: MaterialType.transparency,
@@ -330,6 +345,17 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
                   Text(saniye == null ? '∞' : '$saniye', style: Yazi.tebesir(30, renk: secili ? Renkler.vurgu : Renkler.metin)),
                   if (!dar) const SizedBox(width: 6),
                   Text(Yazi.buyuk(saniye == null ? 'süresiz' : 'saniye'), style: Yazi.etiket(boyut: 10)),
+                  // Dar kutuda alta yazılır; geniş kutuda sağa yaslanır ve sığmazsa küçülür
+                  if (dar) ...[const SizedBox(height: 4), carpanYazisi]
+                  else ...[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FittedBox(fit: BoxFit.scaleDown, child: carpanYazisi),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -338,8 +364,8 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
       );
     }
 
-    return Column(
-      key: const ValueKey('sure'),
+    // Üst kısım küçük ekranda kayar; puan özeti ve başla düğmesi hep altta görünür
+    final ust = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -376,17 +402,38 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
                   'bitmediyse kaldığın yerden devam edersin.',
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
         ),
-        const SizedBox(height: 14),
-        FilledButton(
-          onPressed: sure == null ? null : () => Navigator.pop(context, (zorluk: zorluk, sure: sure)),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-          child: Text(
-            sure == null
-                ? 'SÜRE SEÇ'
-                : Yazi.buyuk(zorlukAdi == null ? '${sure.ad} başla' : '$zorlukAdi · ${sure.ad} başla'),
-          ),
-        ),
       ],
+    );
+
+    return ConstrainedBox(
+      key: const ValueKey('sure'),
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Flexible(child: SingleChildScrollView(child: ust)),
+          // Süre seçilmeden de yer tutar: seçim yapınca sayfanın boyu değişmesin
+          const SizedBox(height: 12),
+          Text(
+            sure == null ? 'Süre seç, puanını gör' : _puanOzeti(zorluk, sure),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Yazi.tebesir(17, renk: sure?.saniye == null ? Renkler.metinSoluk : Renkler.vurgu),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: sure == null ? null : () => Navigator.pop(context, (zorluk: zorluk, sure: sure)),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            child: Text(
+              sure == null
+                  ? 'SÜRE SEÇ'
+                  : Yazi.buyuk(zorlukAdi == null ? '${sure.ad} başla' : '$zorlukAdi · ${sure.ad} başla'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -397,9 +444,10 @@ List<List<OyunSuresi>> _satirlar(List<OyunSuresi> sureler) =>
 class _SecimSatiri extends StatelessWidget {
   final String baslik;
   final String aciklama;
+  final String? carpan; // Puan çarpanı, ör. "×1.5"
   final VoidCallback onTap;
 
-  const _SecimSatiri({required this.baslik, required this.aciklama, required this.onTap});
+  const _SecimSatiri({required this.baslik, required this.aciklama, this.carpan, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -422,6 +470,10 @@ class _SecimSatiri extends StatelessWidget {
                   ],
                 ),
               ),
+              if (carpan != null) ...[
+                const SizedBox(width: 10),
+                Text(carpan!, style: Yazi.tebesir(18, renk: Renkler.vurgu)),
+              ],
               const SizedBox(width: 10),
               Text('→', style: Yazi.tebesir(20, renk: Renkler.metinIkincil)),
             ],

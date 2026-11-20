@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/izgara.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
+import 'package:mobile/models/puan.dart';
 import 'package:mobile/models/top10.dart';
 import 'package:mobile/providers/bingo_provider.dart';
 import 'package:mobile/providers/bonservis_provider.dart';
@@ -36,6 +37,13 @@ Future<(ProviderContainer, SahteAnalitik)> ac<T>(SahteOyunDeposu depo, ProviderL
   return (c, analitik);
 }
 
+// oyun_bitti puan sunucudan okununca gider: bekleyen işler bitsin
+Future<void> bekle() async {
+  for (var i = 0; i < 10; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
 void main() {
   test('günlük oyun tipi oyun ve zorluğa ayrılır', () {
     expect(oyunVeZorluk('kesisim_orta'), (oyun: 'kesisim', zorluk: 'orta'));
@@ -62,14 +70,35 @@ void main() {
         await c.read(p.notifier).makeGuess(const OyuncuOneri(id: 'o-1', isim: 'Arda Güler'));
       }
 
+      await bekle();
+
       expect(a.son('oyun_bitti'), {'oyun_tipi': 'kesisim', 'zorluk': 'orta', 'skor': 10, 'bitis_sebebi': 'tamamlandi'});
       expect(a.olaylar.toString(), isNot(contains('Arda')));
+    });
+
+    test('puanlı bitişte oyun_bitti puanla gider, puansızda puan parametresi yok', () async {
+      final depo = SahteOyunDeposu()..puan = const PuanDetayi(puan: 316, hizBonusu: 16);
+      final (c, a) = await ac(depo, p, (GameState s) => s.status == 'loading');
+      for (var i = 0; i < 5; i++) {
+        await c.read(p.notifier).makeGuess(const OyuncuOneri(id: 'o-1', isim: 'Arda Güler'));
+      }
+      await bekle();
+      expect(a.son('oyun_bitti')['puan'], 316);
+      expect(depo.puanIstekleri, ['kesisim_orta']);
+
+      final (c2, a2) = await ac(SahteOyunDeposu()..puan = const PuanDetayi(sebep: 'bitirilemedi'), p,
+          (GameState s) => s.status == 'loading');
+      await c2.read(p.notifier).sureDoldu();
+      await bekle();
+      expect(a2.son('oyun_bitti').containsKey('puan'), isFalse);
     });
 
     test('süre dolunca sebep "sure_doldu"', () async {
       final (c, a) = await ac(SahteOyunDeposu(), p, (GameState s) => s.status == 'loading');
 
       await c.read(p.notifier).sureDoldu();
+
+      await bekle();
 
       expect(a.son('oyun_bitti')['bitis_sebebi'], 'sure_doldu');
     });
@@ -105,6 +134,7 @@ void main() {
       c.read(p.notifier).devamEt();
     }
 
+    await bekle();
     expect(a.son('oyun_basladi'), {'oyun_tipi': 'bonservis', 'zorluk': 'kolay', 'sure': null});
     expect(a.son('oyun_bitti')['bitis_sebebi'], 'tamamlandi');
     expect(a.son('oyun_bitti')['skor'], c.read(p).skor);
@@ -117,6 +147,7 @@ void main() {
 
     await c.read(p.notifier).pesEt();
 
+    await bekle();
     expect(a.son('oyun_basladi'), {'oyun_tipi': 'izgara', 'zorluk': 'zor', 'sure': 90});
     expect(a.son('oyun_bitti'), {'oyun_tipi': 'izgara', 'zorluk': 'zor', 'skor': 0, 'bitis_sebebi': 'pes'});
   });
@@ -128,6 +159,7 @@ void main() {
 
     await c.read(p.notifier).sureDoldu();
 
+    await bekle();
     expect(a.son('oyun_basladi'), {'oyun_tipi': 'bingo', 'zorluk': null, 'sure': 60});
     expect(a.son('oyun_bitti')['bitis_sebebi'], 'sure_doldu');
   });
@@ -144,6 +176,7 @@ void main() {
       await c.read(p.notifier).tahminEt(OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i'));
     }
 
+    await bekle();
     expect(a.son('oyun_basladi'), {'oyun_tipi': 'top10', 'zorluk': null, 'sure': null});
     expect(a.son('oyun_bitti'), {'oyun_tipi': 'top10', 'zorluk': null, 'skor': 0, 'bitis_sebebi': 'can_bitti'});
   });

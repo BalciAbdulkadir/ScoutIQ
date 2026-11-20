@@ -13,7 +13,7 @@ class OyunIlerlemesi extends StatelessWidget {
   final int mevcutSoru; // 0'dan başlar
   final List<bool> sonuclar;
   final Color renk;
-  final String sagMetin; // ör. "4 puan"
+  final String sagMetin; // ör. "2 doğru"
   final Widget? sayac; // Süreli oyunda ortada geri sayım
 
   const OyunIlerlemesi({
@@ -127,12 +127,13 @@ String bitisBasligi(int dogru, int toplam) {
 
 // Oyun bitince gösterilen özet: skor, başlık ve soru soru sonuçlar
 class OyunBitisEkrani extends StatelessWidget {
-  final String skor; // ör. "6/10"
-  final String skorAciklamasi; // ör. "puan"
+  final String skor; // ör. "4/5"
+  final String skorAciklamasi; // Skorun birimi, ör. "doğru". "puan" yazılmaz: puan liderlik puanıdır (PuanKarti)
   final String baslik;
   final Color renk;
   final List<Widget> ozetSatirlari;
   final Widget? paylas; // "Sonucu paylaş" düğmesi; ana menü düğmesinin üstünde durur
+  final Widget? puan; // Liderlik puanı kartı (PuanKarti); ÖZET'in üstünde durur
 
   const OyunBitisEkrani({
     super.key,
@@ -142,6 +143,7 @@ class OyunBitisEkrani extends StatelessWidget {
     required this.renk,
     required this.ozetSatirlari,
     this.paylas,
+    this.puan,
   });
 
   @override
@@ -173,6 +175,7 @@ class OyunBitisEkrani extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Yazi.tebesir(16, renk: Renkler.metinSoluk, kalinlik: FontWeight.w400),
         ),
+        if (puan != null) ...[const SizedBox(height: 20), puan!],
         const SizedBox(height: 32),
         Text('ÖZET', style: Yazi.etiket(boyut: 12)),
         const SizedBox(height: 10),

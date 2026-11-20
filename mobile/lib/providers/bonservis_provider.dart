@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bonservis_sorusu.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import 'puan_provider.dart';
 import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
 
@@ -96,12 +97,22 @@ class BonservisNotifier extends Notifier<BonservisState> {
 
   void _olaylariDinle() {
     _olaylar = OyunOlaylari(ref.read(analitikProvider), secim.oyunTipi);
+    // Puan bitiş ekranıyla paylaşılır; ekran açık kaldıkça canlı tutulur
+    final puan = oyunPuaniProvider(_olaylar.gunlukOyunTipi);
+    ref.listen(puan, (_, _) {});
     listenSelf((onceki, simdiki) {
       _oynaniyor = simdiki.durum == BonservisDurumu.oynaniyor;
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.durum == BonservisDurumu.oynaniyor && simdiki.durum == BonservisDurumu.bitti) {
-        _olaylar.bitti(skor: simdiki.skor, sebep: simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi);
+        final sebep = simdiki.sureDoldu ? BitisSebebi.sureDoldu : BitisSebebi.tamamlandi;
+        // oyun_bitti puan sunucudan okununca gider (puansız oyunda puan parametresi yok)
+        ref.read(puan.notifier).yukle().then((p) => _olaylar.bitti(skor: simdiki.skor, sebep: sebep, puan: p?.puan));
         ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.skor);
+      }
+      // Bitmiş oyun açıldıysa da puanı gösterilir
+      const bitmis = {BonservisDurumu.bitti, BonservisDurumu.zatenOynandi};
+      if (bitmis.contains(simdiki.durum) && !bitmis.contains(onceki?.durum)) {
+        ref.read(puan.notifier).yukle();
       }
     });
     ref.onDispose(() {

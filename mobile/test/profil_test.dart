@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/providers/auth_provider.dart';
+import 'package:mobile/models/puan.dart';
 import 'package:mobile/providers/hub_provider.dart';
 import 'package:mobile/screens/profil_screen.dart';
 import 'package:mobile/services/auth_service.dart';
+import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthResponse;
+
+import 'yardimcilar/sahte_oyun_deposu.dart';
 
 // Supabase ve Google'a gitmeyen sahte servis: çağrıları sayar, istenirse hata verir
 class SahteAuthService implements AuthService {
@@ -27,12 +32,13 @@ class SahteAuthService implements AuthService {
   }
 }
 
-Future<SahteAuthService> profiliAc(WidgetTester tester, {bool silmeHataVerir = false}) async {
+Future<SahteAuthService> profiliAc(WidgetTester tester, {bool silmeHataVerir = false, List<Override> ek = const []}) async {
   final servis = SahteAuthService()..silmeHataVerir = silmeHataVerir;
   await tester.pumpWidget(ProviderScope(
     overrides: [
       authServiceProvider.overrideWithValue(servis),
       kullaniciProvider.overrideWithValue(const KullaniciBilgisi(ad: 'Celal Test', eposta: 'test@ornek.com')),
+      ...ek,
     ],
     // Ana sayfanın üstüne açılır: çıkış ve silmeden sonra ana sayfaya dönülmeli
     child: MaterialApp(
@@ -147,5 +153,27 @@ void main() {
     await profiliAc(tester);
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('takma ad satırı sıralamada görünen adı gösterir ve takma ad sayfasını açar', (tester) async {
+    final depo = SahteOyunDeposu();
+    await profiliAc(tester, ek: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    expect(find.text('Takma ad'), findsOneWidget);
+    expect(find.text('Oyuncu 3FA9 · sıralamada bu ad görünüyor'), findsOneWidget);
+    await tester.tap(find.text('Takma ad'));
+    await tester.pumpAndSettle();
+    expect(find.text('TAKMA ADIN'), findsOneWidget);
+  });
+
+  testWidgets('7 gün dolmadıysa takma ad sayfası açılmaz, ne zaman değişebileceği yazar', (tester) async {
+    final depo = SahteOyunDeposu()
+      ..profil = Profil(takmaAd: 'kanarya_10', varsayilan: false, degistirilebilirTarih: DateTime(2099, 11, 28));
+    await profiliAc(tester, ek: [oyunDeposuProvider.overrideWithValue(depo)]);
+
+    await tester.tap(find.text('Takma ad'));
+    await tester.pumpAndSettle();
+    expect(find.text('TAKMA ADIN'), findsNothing);
+    expect(find.text('Takma adını 28 Kasım tarihinde değiştirebilirsin.'), findsOneWidget);
   });
 }

@@ -257,7 +257,7 @@ void main() {
     });
 
     expect(find.text('Soru 2/5'), findsOneWidget);
-    expect(find.text('2 puan'), findsOneWidget);
+    expect(find.text('1 doğru'), findsOneWidget);
     expect(find.text('Kulüp A1'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
   });
