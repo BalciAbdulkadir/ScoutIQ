@@ -55,9 +55,8 @@ namespace ScoutIQ.API.Oyunlar
             oyuncu_b_id = s.Sag.Id,
             oyuncu_a_bonservis = s.Sol.ToplamBonservis,
             oyuncu_a_foto = s.Sol.FotoUrl,
-            oyuncu_b_foto = s.Sag.FotoUrl,
-            oyuncu_a_kademe = ZorlukDagilimi.Metin(s.Sol.Kademe),
-            oyuncu_b_kademe = ZorlukDagilimi.Metin(s.Sag.Kademe)
+            oyuncu_b_foto = s.Sag.FotoUrl
+            // Oyuncuların kademesi yazılmaz: küçük bir ipucudur ve uygulama kullanmaz (eski sorularda durur)
         }).ToList();
 
         public record Cevap(int SoruIndex, long RakipBonservis);

@@ -567,22 +567,21 @@ namespace ScoutIQ.API.Jobs
                 if (sorular == null) continue;
 
                 await OyunEkle("kesisim", zorluk, tarih,
-                    sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB, s.Kademe)).ToList());
+                    sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB)).ToList());
                 KesisimSorulariniYaz(sorular);
             }
         }
 
-        private static object KesisimSoruVerisi(Kulup kulupA, Kulup kulupB, Kademe kademe) => new
+        // Uygulamaya giden soru verisi. Sorunun kademesi (cevabın ünlü, bilinen ya da diğer olduğu) yazılmaz:
+        // küçük bir ipucudur ve uygulama kullanmaz. Eski oyunların soru verisinde 'kademe' ve 'zorluk' durur.
+        private static object KesisimSoruVerisi(Kulup kulupA, Kulup kulupB) => new
         {
             kulup_a = kulupA.Isim,
             kulup_b = kulupB.Isim,
             kulup_a_id = kulupA.Id,
             kulup_b_id = kulupB.Id,
             kulup_a_logo = kulupA.LogoUrl,
-            kulup_b_logo = kulupB.LogoUrl,
-            kademe = ZorlukDagilimi.Metin(kademe),
-            // Sorunun kendi kademesi: ünlü soru kolay, bilinen orta, diğer zor
-            zorluk = kademe switch { Kademe.Unlu => "kolay", Kademe.Bilinen => "orta", _ => "zor" }
+            kulup_b_logo = kulupB.LogoUrl
         };
 
         // Kolay Kesişim'i hedef oyunculardan kurup ekler. Oyun eklendiyse true; geçmiş okunamadıysa ya da
@@ -594,7 +593,7 @@ namespace ScoutIQ.API.Jobs
 
             // Hedef oyuncu cevabı ele verir: soru verisine yazılmaz, uygulamaya kapalı kesisim_hedefleri tablosunda tutulur
             var oyun = await OyunEkle("kesisim", Zorluk.Kolay, tarih,
-                sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB, Kademe.Unlu)).ToList());
+                sorular.Select(s => KesisimSoruVerisi(s.KulupA, s.KulupB)).ToList());
 
             // Hedefler yazılamazsa tekrar kuralları bu oyunu göremez: oyun silinir, bir sonraki çalıştırmada yeniden üretilir
             try
