@@ -7,6 +7,7 @@ import '../providers/game_provider.dart';
 import '../services/gunluk_oyun.dart' show GunlukOyunSecimi;
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import '../widgets/puan_karti.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
@@ -32,7 +33,7 @@ class GameScreen extends ConsumerStatefulWidget {
 class _GameScreenState extends ConsumerState<GameScreen> {
   GunlukOyunSecimi get _secim => (oyunTipi: widget.oyunTipi, sure: widget.sure);
 
-  static const _maksimumSkor = 10;
+  static const _soruSayisi = 5;
 
   @override
   Widget build(BuildContext context) {
@@ -65,8 +66,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return OyunMesajKarti(
           ikon: Icons.check_circle_outline_rounded,
           baslik: 'Bugünkü oyununu oynadın',
-          aciklama: 'Skorun: ${state.score}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
-          ek: state.sonuclar.isEmpty ? null : _paylas(state),
+          aciklama: 'Skorun: ${state.score ~/ 2}/$_soruSayisi doğru\nYeni oyun gece yarısı açılıyor.',
+          ek: Column(children: [
+            PuanKarti(oyunTipi: widget.oyunTipi),
+            if (state.sonuclar.isNotEmpty) ...[const SizedBox(height: 12), _paylas(state)],
+          ]),
         );
       case 'completed':
         return _bitis(state);
@@ -90,7 +94,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             mevcutSoru: state.currentIndex,
             sonuclar: state.sonuclar,
             renk: Renkler.kesisim,
-            sagMetin: '${state.score} puan',
+            sagMetin: '${state.sonuclar.where((d) => d).length} doğru',
             sayac: state.bitisZamani == null
                 ? null
                 : SureSayaci(
@@ -154,12 +158,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final oyun = oyunVeZorluk(widget.oyunTipi);
     return PaylasDugmesi(
       oyun: oyun.oyun,
-      metin: (seri) => kesisimPaylasimi(
+      oyunTipi: widget.oyunTipi,
+      metin: (seri, puan) => kesisimPaylasimi(
         sonuclar: state.sonuclar,
         soruSayisi: state.questions.isEmpty ? 5 : state.questions.length,
         zorluk: oyun.zorluk,
         sure: widget.sure,
         seri: seri,
+        puan: puan,
       ),
     );
   }
@@ -197,8 +203,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     return OyunBitisEkrani(
       paylas: _paylas(state),
-      skor: '${state.score}/$_maksimumSkor',
-      skorAciklamasi: 'puan',
+      skor: '$dogruSayisi/${state.questions.length}',
+      skorAciklamasi: 'doğru',
+      puan: PuanKarti(oyunTipi: widget.oyunTipi),
       baslik: state.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, state.questions.length),
       renk: Renkler.kesisim,
       ozetSatirlari: [

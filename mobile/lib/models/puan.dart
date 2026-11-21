@@ -1,0 +1,167 @@
+// Puan ve liderlik tablosu (038_puan_ve_liderlik.sql, CLAUDE.md madde 15).
+// Skor (doğru/kutu/oyuncu sayısı) ayrı kalır; puan liderlik tablosuna giden sayıdır ve sunucuda, oyun bitince yazılır.
+// Puanı sadece oyunu bitiren alır (5/5, 9/9, 12/12, 10/10); kısmi puan yoktur. Süresiz oyun puansızdır, Top 10 hariç.
+// Not: services/puanlama.dart "uygulamayı puanla" (Play değerlendirmesi) içindir, bu dosyayla ilgisi yoktur.
+
+// Sunucudaki puan_detay jsonb'si. puan null ise oyun puansızdır; sebep 'suresiz' ya da 'bitirilemedi'.
+class PuanDetayi {
+  final int? puan;
+  final String? sebep;
+  final num? zorlukCarpani;
+  final num? sureCarpani;
+  final int? sure; // saniye; Top 10'da null
+  final int? kalanSaniye;
+  final int hizBonusu;
+
+  const PuanDetayi({
+    this.puan,
+    this.sebep,
+    this.zorlukCarpani,
+    this.sureCarpani,
+    this.sure,
+    this.kalanSaniye,
+    this.hizBonusu = 0,
+  });
+
+  factory PuanDetayi.fromJson(Map<String, dynamic> json) => PuanDetayi(
+        puan: (json['puan'] as num?)?.toInt(),
+        sebep: json['sebep'] as String?,
+        zorlukCarpani: json['zorluk_carpani'] as num?,
+        sureCarpani: json['sure_carpani'] as num?,
+        sure: (json['sure'] as num?)?.toInt(),
+        kalanSaniye: (json['kalan_saniye'] as num?)?.toInt(),
+        hizBonusu: (json['hiz_bonusu'] as num?)?.toInt() ?? 0,
+      );
+
+  bool get puansiz => puan == null;
+  bool get suresiz => sebep == 'suresiz';
+
+  // Hız bonusu hariç ana puan
+  int? get anaPuan => puan == null ? null : puan! - hizBonusu;
+}
+
+class LiderlikSatiri {
+  final int sira; // Eşit puanda aynı numara
+  final String ad; // Takma ad ya da "Oyuncu 3FA9"
+  final int puan;
+  final int oyun; // Puanlı (bitirilen) oyun sayısı
+  final bool ben;
+
+  const LiderlikSatiri({required this.sira, required this.ad, required this.puan, required this.oyun, this.ben = false});
+
+  factory LiderlikSatiri.fromJson(Map<String, dynamic> json, {bool? ben}) => LiderlikSatiri(
+        sira: (json['sira'] as num).toInt(),
+        ad: json['ad'] as String,
+        puan: (json['puan'] as num).toInt(),
+        oyun: (json['oyun'] as num?)?.toInt() ?? 0,
+        ben: ben ?? json['ben'] == true,
+      );
+}
+
+class LiderlikSonucu {
+  final List<LiderlikSatiri> liste; // En fazla 50 kişi, sırayla
+  final LiderlikSatiri? ben; // Kullanıcının kendi satırı; bu dönemde puanı yoksa null
+  final int katilimci;
+
+  const LiderlikSonucu({required this.liste, this.ben, this.katilimci = 0});
+
+  factory LiderlikSonucu.fromJson(Map<String, dynamic> json) => LiderlikSonucu(
+        liste: [
+          for (final satir in (json['liste'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>())
+            LiderlikSatiri.fromJson(satir),
+        ],
+        ben: json['ben'] is Map<String, dynamic> ? LiderlikSatiri.fromJson(json['ben'], ben: true) : null,
+        katilimci: (json['katilimci'] as num?)?.toInt() ?? 0,
+      );
+
+  // Kullanıcı listede görünüyor mu (görünmüyorsa kendi satırı altta sabit durur)
+  bool get benListede => liste.any((s) => s.ben);
+}
+
+enum LiderlikDonemi {
+  gun('gun', 'Bugün'),
+  hafta('hafta', 'Bu Hafta'),
+  tum('tum', 'Tüm Zamanlar');
+
+  final String kod;
+  final String ad;
+
+  const LiderlikDonemi(this.kod, this.ad);
+}
+
+// Liderlik tablosundaki oyun filtresi: null bütün oyunlar
+const liderlikOyunlari = <({String? kod, String ad})>[
+  (kod: null, ad: 'Hepsi'),
+  (kod: 'kesisim', ad: 'Kesişim'),
+  (kod: 'bonservis', ad: 'Bonservis'),
+  (kod: 'izgara', ad: 'Izgara'),
+  (kod: 'bingo', ad: 'Bingo'),
+  (kod: 'top10', ad: 'Top 10'),
+];
+
+// Kullanıcının takma adı. varsayilan: henüz seçmedi, tabloda "Oyuncu 3FA9" görünüyor.
+class Profil {
+  final String takmaAd;
+  final bool varsayilan;
+  final DateTime? degistirilebilirTarih; // Bu tarihten önce takma ad değiştirilemez
+
+  const Profil({required this.takmaAd, required this.varsayilan, this.degistirilebilirTarih});
+
+  factory Profil.fromJson(Map<String, dynamic> json) => Profil(
+        takmaAd: json['takma_ad'] as String,
+        varsayilan: json['varsayilan'] == true,
+        degistirilebilirTarih: json['degistirilebilir_tarih'] == null
+            ? null
+            : DateTime.tryParse(json['degistirilebilir_tarih'] as String)?.toLocal(),
+      );
+
+  bool degistirilebilir(DateTime simdi) => degistirilebilirTarih == null || !simdi.isBefore(degistirilebilirTarih!);
+}
+
+// Takma ad kaydedilemedi: mesaj kullanıcıya gösterilir
+class TakmaAdHatasi implements Exception {
+  final String mesaj;
+  const TakmaAdHatasi(this.mesaj);
+
+  @override
+  String toString() => mesaj;
+}
+
+// Sunucunun hata ipucundan (hint) Türkçe mesaj
+String takmaAdHataMesaji(String? hint) => switch (hint) {
+      'takma_ad_gecersiz' => '3-16 karakter; harf, rakam, _ ve . kullanılabilir',
+      'takma_ad_yasakli' => 'Bu takma ad kullanılamaz',
+      'takma_ad_alinmis' => 'Bu takma ad alınmış',
+      'takma_ad_erken' => 'Takma adını 7 günde bir değiştirebilirsin',
+      _ => 'Takma ad kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.',
+    };
+
+// Seçim ekranında gösterilen çarpanlar. Puanı uygulama yazmaz; bu değerler sunucudaki puan_hesapla (038) ile
+// aynı olmalıdır, biri değişirse öbürü de değişir.
+const puanTabani = 100;
+const zorlukCarpanlari = {'kolay': 1.0, 'orta': 1.5, 'zor': 2.0};
+const tekModCarpani = 1.5; // Bingo ve Top 10
+const sureCarpanlari = {30: 1.5, 60: 1.25, 90: 1.0};
+const hizBonusuOrani = 0.2;
+const top10Puani = 150;
+
+// Oyunu bitirene verilecek ana puan (hız bonusu hariç). zorluk null: tek modlu oyun. Süresizse null (puansız).
+int? anaPuanHesapla({String? zorluk, int? sure}) {
+  if (sure == null) return null;
+  final z = zorluk == null ? tekModCarpani : (zorlukCarpanlari[zorluk] ?? 1.0);
+  final s = sureCarpanlari[sure] ?? 1.0;
+  return (puanTabani * z * s).round();
+}
+
+// "1240" -> "1.240"
+String binlik(int sayi) {
+  final metin = sayi.abs().toString();
+  final parcalar = <String>[];
+  for (var i = metin.length; i > 0; i -= 3) {
+    parcalar.insert(0, metin.substring(i - 3 < 0 ? 0 : i - 3, i));
+  }
+  return '${sayi < 0 ? '-' : ''}${parcalar.join('.')}';
+}
+
+// Çarpanı kısa yazar: 1.0 -> "1", 1.25 -> "1.25"
+String carpanMetni(num carpan) => carpan == carpan.roundToDouble() ? carpan.toInt().toString() : carpan.toString();

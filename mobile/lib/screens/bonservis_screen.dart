@@ -7,6 +7,7 @@ import '../providers/bonservis_provider.dart';
 import '../services/gunluk_oyun.dart' show GunlukOyunSecimi;
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import '../widgets/puan_karti.dart';
 import '../widgets/bonservis_oyuncu_karti.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
@@ -34,7 +35,7 @@ class BonservisScreen extends ConsumerStatefulWidget {
 class _BonservisScreenState extends ConsumerState<BonservisScreen> {
   GunlukOyunSecimi get _secim => (oyunTipi: widget.oyunTipi, sure: widget.sure);
 
-  static const _maksimumSkor = 10;
+  static const _soruSayisi = 5;
 
   Timer? _devamZamanlayici;
 
@@ -99,8 +100,11 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
         return OyunMesajKarti(
           ikon: Icons.check_circle_outline_rounded,
           baslik: 'Bugünkü oyununu oynadın',
-          aciklama: 'Skorun: ${durum.skor}/$_maksimumSkor\nYeni oyun gece yarısı açılıyor.',
-          ek: durum.sonuclar.isEmpty ? null : _paylas(durum),
+          aciklama: 'Skorun: ${durum.skor ~/ 2}/$_soruSayisi doğru\nYeni oyun gece yarısı açılıyor.',
+          ek: Column(children: [
+            PuanKarti(oyunTipi: widget.oyunTipi),
+            if (durum.sonuclar.isNotEmpty) ...[const SizedBox(height: 12), _paylas(durum)],
+          ]),
         );
       case BonservisDurumu.bitti:
         return _bitis(durum);
@@ -128,7 +132,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
                   mevcutSoru: durum.soruIndex,
                   sonuclar: durum.sonuclar,
                   renk: Renkler.bonservis,
-                  sagMetin: '${durum.skor} puan',
+                  sagMetin: '${durum.sonuclar.where((d) => d).length} doğru',
                   sayac: durum.bitisZamani == null
                       ? null
                       : SureSayaci(
@@ -228,8 +232,9 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
 
     return OyunBitisEkrani(
       paylas: _paylas(durum),
-      skor: '${durum.skor}/$_maksimumSkor',
-      skorAciklamasi: 'puan',
+      skor: '$dogruSayisi/${durum.sorular.length}',
+      skorAciklamasi: 'doğru',
+      puan: PuanKarti(oyunTipi: widget.oyunTipi),
       baslik: durum.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, durum.sorular.length),
       renk: Renkler.bonservis,
       ozetSatirlari: [
@@ -245,12 +250,14 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
     final oyun = oyunVeZorluk(widget.oyunTipi);
     return PaylasDugmesi(
       oyun: oyun.oyun,
-      metin: (seri) => bonservisPaylasimi(
+      oyunTipi: widget.oyunTipi,
+      metin: (seri, puan) => bonservisPaylasimi(
         sonuclar: durum.sonuclar,
         soruSayisi: durum.sorular.isEmpty ? 5 : durum.sorular.length,
         zorluk: oyun.zorluk,
         sure: widget.sure,
         seri: seri,
+        puan: puan,
       ),
     );
   }

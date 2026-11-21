@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../providers/hub_provider.dart';
+import '../models/puan.dart';
+import '../providers/liderlik_provider.dart';
 import '../services/hatirlatma.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import '../widgets/kullanici_avatari.dart';
+import '../widgets/takma_ad_sayfasi.dart';
 import '../widgets/tebesir.dart';
 
 // Gizlilik politikasının yayınlandığı sayfa
@@ -46,6 +49,7 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
   @override
   Widget build(BuildContext context) {
     final kullanici = ref.watch(kullaniciProvider);
+    final profil = ref.watch(profilProvider).value;
 
     return Scaffold(
       appBar: AppBar(title: const Text('HESAP')),
@@ -74,6 +78,22 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
               ),
               const SizedBox(height: 24),
               const Divider(color: Renkler.kenar, height: 1),
+              // Sıralamada görünen ad (okunamazsa satır gösterilmez)
+              if (profil != null)
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  leading: const Icon(Icons.badge_outlined, color: Renkler.metinIkincil),
+                  title: const Text(
+                    'Takma ad',
+                    style: TextStyle(color: Renkler.metin, fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    profil.varsayilan ? '${profil.takmaAd} · sıralamada bu ad görünüyor' : profil.takmaAd,
+                    style: const TextStyle(color: Renkler.metinSoluk, fontSize: 13),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Renkler.metinSoluk),
+                  onTap: _isleniyor ? null : () => _takmaAdiDegistir(profil),
+                ),
               SwitchListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                 secondary: const Icon(Icons.notifications_outlined, color: Renkler.metinIkincil),
@@ -130,6 +150,18 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
       ),
     );
   }
+
+  // 7 gün dolmadıysa sayfa açılmaz, ne zaman değiştirilebileceği yazılır
+  Future<void> _takmaAdiDegistir(Profil profil) async {
+    final tarih = profil.degistirilebilirTarih;
+    if (!profil.degistirilebilir(DateTime.now()) && tarih != null) {
+      _mesajGoster('Takma adını ${tarih.day} ${_aylar[tarih.month - 1]} tarihinde değiştirebilirsin.');
+      return;
+    }
+    await takmaAdSayfasiniAc(context, mevcut: profil.varsayilan ? null : profil.takmaAd);
+  }
+
+  static const _aylar = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
   Future<void> _gizlilikPolitikasiniAc() async {
     final acildi = await launchUrl(Uri.parse(gizlilikPolitikasiAdresi), mode: LaunchMode.externalApplication)

@@ -438,7 +438,7 @@ void main() {
       await tahminEt(tester, 'Daha az'); // 2. soru: Dumfries (40) < Kane (90)
 
       expect(find.text('Doğru'), findsOneWidget);
-      expect(find.text('4 puan'), findsOneWidget);
+      expect(find.text('2 doğru'), findsOneWidget);
     });
 
     testWidgets('"Sıradaki" butonu beklemeden geçirir', (tester) async {
@@ -473,7 +473,7 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      expect(find.text('8/10'), findsOneWidget);
+      expect(find.text('4/5'), findsOneWidget);
       expect(find.text('ÖZET'), findsOneWidget);
       expect(find.textContaining('Dumfries'), findsOneWidget);
     });

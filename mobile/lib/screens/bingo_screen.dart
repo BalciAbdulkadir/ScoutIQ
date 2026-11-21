@@ -5,6 +5,7 @@ import '../providers/bingo_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import '../widgets/puan_karti.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
@@ -190,12 +191,16 @@ class BingoScreen extends ConsumerWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 14),
         ),
+        const SizedBox(height: 16),
+        PuanKarti(oyunTipi: oyunTipi),
         const SizedBox(height: 20),
         BingoKartiGorunumu(state: state),
         const SizedBox(height: 28),
         PaylasDugmesi(
           oyun: 'bingo',
-          metin: (seri) => bingoPaylasimi(doluKutular: state.hucreler.keys.toSet(), sure: sure, seri: seri),
+          oyunTipi: oyunTipi,
+          metin: (seri, puan) =>
+              bingoPaylasimi(doluKutular: state.hucreler.keys.toSet(), sure: sure, seri: seri, puan: puan),
         ),
         const SizedBox(height: 12),
         FilledButton(

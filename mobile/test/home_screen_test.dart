@@ -9,6 +9,7 @@ import 'package:mobile/screens/bonservis_screen.dart';
 import 'package:mobile/screens/game_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/izgara_screen.dart';
+import 'package:mobile/screens/liderlik_screen.dart';
 import 'package:mobile/screens/profil_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
@@ -361,7 +362,7 @@ void main() {
 
     expect(find.text('NASIL OYNANIR'), findsOneWidget);
     expect(find.textContaining('5 soru var'), findsOneWidget);
-    expect(find.text('Her doğru cevap 2 puan. En fazla 10 puan.'), findsOneWidget);
+    expect(find.textContaining('Puanı sadece 5/5 yapan alır'), findsOneWidget);
     expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
 
     await tester.tap(find.text('ANLADIM · ZORLUK SEÇ'));
@@ -378,14 +379,14 @@ void main() {
     await anaMenuyuAc(tester);
 
     for (final (oyun, puan) in [
-      ('BONSERVİS', 'Her doğru tahmin 2 puan. En fazla 10 puan.'),
-      ('IZGARA', 'Her dolu kutu 1 puan. En fazla 9 puan.'),
-      ('BİNGO', 'Her dolu kutu 1 puan. En fazla 12 puan.'),
+      ('BONSERVİS', 'Puanı sadece 5/5 yapan alır'),
+      ('IZGARA', 'Puanı sadece 9 kutuyu dolduran alır'),
+      ('BİNGO', 'Puanı sadece 12 kutuyu dolduran alır'),
     ]) {
       await tester.tap(find.text(oyun).first);
       await tester.pumpAndSettle();
       expect(find.text('NASIL OYNANIR'), findsOneWidget);
-      expect(find.text(puan), findsOneWidget);
+      expect(find.textContaining(puan), findsOneWidget);
       if (oyun == 'BİNGO') {
         await tester.tap(find.text('ANLADIM · SÜRE SEÇ'));
         await tester.pumpAndSettle();
@@ -442,6 +443,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ProfilScreen), findsNothing);
     expect(find.text('Merhaba, Celal'), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('bugün puan varsa seri satırında yıldızla yazar, kupa sıralamayı açar', (tester) async {
+    await anaMenuyuAc(tester, ekOverridelar: [
+      bugunkuPuanProvider.overrideWith((ref) async => 1240),
+      oyunDeposuProvider.overrideWithValue(SahteOyunDeposu()),
+    ]);
+    await tester.pump();
+
+    expect(find.text('⭐ 1.240'), findsOneWidget);
+    await tester.tap(find.byTooltip('Sıralama'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LiderlikScreen), findsOneWidget);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('bugün puan yoksa yıldız yazmaz', (tester) async {
+    await anaMenuyuAc(tester, ekOverridelar: [bugunkuPuanProvider.overrideWith((ref) async => 0)]);
+    await tester.pump();
+
+    expect(find.textContaining('⭐'), findsNothing);
+    await ekraniKapat(tester);
+  });
+
+  testWidgets('seçim sayfasında zorluk ve süre çarpanları, seçime göre puan özeti yazar', (tester) async {
+    await anaMenuyuAc(tester);
+
+    await tester.tap(find.text('KESİŞİM'));
+    await tester.pumpAndSettle();
+    await kurallariGec(tester);
+    expect(find.text('×1'), findsOneWidget);
+    expect(find.text('×1.5'), findsOneWidget);
+    expect(find.text('×2'), findsOneWidget);
+
+    await tester.tap(find.text('ZOR'));
+    await tester.pumpAndSettle();
+    expect(find.text('puansız'), findsOneWidget);
+    expect(find.text('Süre seç, puanını gör'), findsOneWidget);
+
+    await tester.tap(find.text('30'));
+    await tester.pump();
+    expect(find.text('Bitirirsen 300 puan + hız bonusu'), findsOneWidget);
+
+    await tester.tap(find.text('∞'));
+    await tester.pump();
+    expect(find.text('Süresiz oyunlar tabloya girmez'), findsOneWidget);
     await ekraniKapat(tester);
   });
 }

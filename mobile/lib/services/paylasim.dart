@@ -25,10 +25,11 @@ String _zorlukAdi(String zorluk) => switch (zorluk) {
       _ => zorluk,
     };
 
-// Ortak son satırlar: seri (varsa) ve uygulamanın Play linki
-String _metin(String baslik, List<String> govde, int? seri) => [
+// Ortak son satırlar: liderlik puanı (puanlı bitişte), seri (varsa) ve uygulamanın Play linki
+String _metin(String baslik, List<String> govde, int? seri, [int? puan]) => [
       baslik,
       ...govde,
+      if (puan != null && puan > 0) '⭐ $puan puan',
       if (seri != null && seri > 0) '🔥 $seri gün seri',
       playStoreLinki,
     ].join('\n');
@@ -38,21 +39,23 @@ String _soruSirasi(List<bool> sonuclar, int soruSayisi) => [
       for (var i = 0; i < soruSayisi; i++) i < sonuclar.length ? (sonuclar[i] ? _dogru : _yanlis) : _bos,
     ].join();
 
-String kesisimPaylasimi({required List<bool> sonuclar, int soruSayisi = 5, String? zorluk, int? sure, int? seri}) {
+String kesisimPaylasimi({required List<bool> sonuclar, int soruSayisi = 5, String? zorluk, int? sure, int? seri, int? puan}) {
   final dogru = sonuclar.where((d) => d).length;
   return _metin(
     paylasimBasligi(oyunAdi: 'Kesişim', zorluk: zorluk, sure: sure),
     ['${_soruSirasi(sonuclar, soruSayisi)}   $dogru/$soruSayisi'],
     seri,
+    puan,
   );
 }
 
-String bonservisPaylasimi({required List<bool> sonuclar, int soruSayisi = 5, String? zorluk, int? sure, int? seri}) {
+String bonservisPaylasimi({required List<bool> sonuclar, int soruSayisi = 5, String? zorluk, int? sure, int? seri, int? puan}) {
   final dogru = sonuclar.where((d) => d).length;
   return _metin(
     paylasimBasligi(oyunAdi: 'Bonservis', zorluk: zorluk, sure: sure),
     ['${_soruSirasi(sonuclar, soruSayisi)}   $dogru/$soruSayisi'],
     seri,
+    puan,
   );
 }
 
@@ -66,27 +69,30 @@ List<String> _kutular({required Set<int> dolu, required int satir, required int 
 }
 
 // Izgara: 3x3, hücre sırası satır satır (0 sol üst, 8 sağ alt)
-String izgaraPaylasimi({required Set<int> doluHucreler, String? zorluk, int? sure, int? seri}) => _metin(
+String izgaraPaylasimi({required Set<int> doluHucreler, String? zorluk, int? sure, int? seri, int? puan}) => _metin(
       paylasimBasligi(oyunAdi: 'Izgara', zorluk: zorluk, sure: sure),
       _kutular(dolu: doluHucreler, satir: 3, sutun: 3),
       seri,
+      puan,
     );
 
 // Bingo: 4 satır 3 sütunluk kart, zorluk modu yok
-String bingoPaylasimi({required Set<int> doluKutular, int? sure, int? seri}) => _metin(
+String bingoPaylasimi({required Set<int> doluKutular, int? sure, int? seri, int? puan}) => _metin(
       paylasimBasligi(oyunAdi: 'Bingo', sure: sure),
       _kutular(dolu: doluKutular, satir: 4, sutun: 3),
       seri,
+      puan,
     );
 
 // Top 10: 1'den 10'a satırlar bulundu 🟩 / bulunamadı ⬛ (beşerli iki satır), skor ve kalan canlar ❤️ (giden 🤍)
-String top10Paylasimi({required Set<int> bulunanSiralar, required int kalanCan, int toplamCan = 3, int? seri}) {
+String top10Paylasimi({required Set<int> bulunanSiralar, required int kalanCan, int toplamCan = 3, int? seri, int? puan}) {
   String satir(int bas) => [for (var s = bas; s < bas + 5; s++) bulunanSiralar.contains(s) ? _dogru : _bos].join();
   final canlar = '${'❤️' * kalanCan}${'🤍' * (toplamCan - kalanCan).clamp(0, toplamCan)}';
   return _metin(
     paylasimBasligi(oyunAdi: 'Top 10'),
     [satir(1), '${satir(6)}   ${bulunanSiralar.length}/10', canlar],
     seri,
+    puan,
   );
 }
 

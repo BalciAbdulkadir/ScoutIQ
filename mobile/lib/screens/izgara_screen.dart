@@ -7,6 +7,7 @@ import '../models/oyuncu_oneri.dart';
 import '../providers/izgara_provider.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import '../widgets/puan_karti.dart';
 import '../widgets/kulup_logosu.dart';
 import '../widgets/oyun_mesaj_karti.dart';
 import '../widgets/oyun_ortak.dart';
@@ -206,16 +207,20 @@ class IzgaraScreen extends ConsumerWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 14),
         ),
+        const SizedBox(height: 16),
+        PuanKarti(oyunTipi: _acilis.zorluk.oyunTipi),
         const SizedBox(height: 20),
         IzgaraTahtasiGorunumu(state: state),
         const SizedBox(height: 28),
         PaylasDugmesi(
           oyun: 'izgara',
-          metin: (seri) => izgaraPaylasimi(
+          oyunTipi: _acilis.zorluk.oyunTipi,
+          metin: (seri, puan) => izgaraPaylasimi(
             doluHucreler: state.hucreler.keys.toSet(),
             zorluk: oyunVeZorluk(_acilis.zorluk.oyunTipi).zorluk,
             sure: _acilis.sure,
             seri: seri,
+            puan: puan,
           ),
         ),
         const SizedBox(height: 12),

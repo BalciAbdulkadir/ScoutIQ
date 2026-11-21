@@ -13,16 +13,20 @@ enum BitisSebebi {
   const BitisSebebi(this.deger);
 }
 
-// Kullanım olayları. Kişisel veri ve oyuncu ismi gönderilmez: sadece oyun tipi, zorluk, süre, skor ve bitiş sebebi.
+// Kullanım olayları. Kişisel veri, takma ad ve oyuncu ismi gönderilmez: sadece oyun tipi, zorluk, süre, skor, puan,
+// bitiş sebebi ve liderlik dönemi.
 // Ekranlar Firebase'i doğrudan çağırmaz, bu arayüzü kullanır; testlerde sahtesi verilir.
 abstract class Analitik {
   // oyun_tipi: kesisim, bonservis, izgara, bingo, top10. zorluk: kolay, orta, zor (zorluksuz oyunda yok).
   // sure: saniye (süresiz oyunda 0)
   Future<void> oyunBasladi({required String oyunTipi, String? zorluk, int? sure});
-  Future<void> oyunBitti({required String oyunTipi, String? zorluk, required int skor, required BitisSebebi sebep});
+  // puan: liderlik puanı (038); puansız oyunda gönderilmez
+  Future<void> oyunBitti({required String oyunTipi, String? zorluk, required int skor, required BitisSebebi sebep, int? puan});
   Future<void> oyunYaridaBirakildi({required String oyunTipi});
   Future<void> sonucPaylasildi({required String oyunTipi});
   Future<void> bildirimAcildi();
+  // Liderlik tablosu açıldı. donem: gun, hafta, tum
+  Future<void> liderlikAcildi({required String donem});
 }
 
 // Günlük oyun tipini oyuna ve zorluğa ayırır: kesisim_orta -> (kesisim, orta), bingo -> (bingo, null)
@@ -59,8 +63,9 @@ class FirebaseAnalitik implements Analitik {
       _gonder('oyun_basladi', {'oyun_tipi': oyunTipi, 'zorluk': zorluk, 'sure': sure ?? 0});
 
   @override
-  Future<void> oyunBitti({required String oyunTipi, String? zorluk, required int skor, required BitisSebebi sebep}) =>
-      _gonder('oyun_bitti', {'oyun_tipi': oyunTipi, 'zorluk': zorluk, 'skor': skor, 'bitis_sebebi': sebep.deger});
+  Future<void> oyunBitti({required String oyunTipi, String? zorluk, required int skor, required BitisSebebi sebep, int? puan}) =>
+      _gonder('oyun_bitti',
+          {'oyun_tipi': oyunTipi, 'zorluk': zorluk, 'skor': skor, 'bitis_sebebi': sebep.deger, 'puan': puan});
 
   @override
   Future<void> oyunYaridaBirakildi({required String oyunTipi}) => _gonder('oyun_yarida_birakildi', {'oyun_tipi': oyunTipi});
@@ -70,6 +75,9 @@ class FirebaseAnalitik implements Analitik {
 
   @override
   Future<void> bildirimAcildi() => _gonder('bildirim_acildi');
+
+  @override
+  Future<void> liderlikAcildi({required String donem}) => _gonder('liderlik_acildi', {'donem': donem});
 }
 
 // Firebase kurulmamışsa (google-services.json yoksa) ya da testlerde: hiçbir şey göndermez
@@ -80,7 +88,7 @@ class BosAnalitik implements Analitik {
   Future<void> oyunBasladi({required String oyunTipi, String? zorluk, int? sure}) async {}
 
   @override
-  Future<void> oyunBitti({required String oyunTipi, String? zorluk, required int skor, required BitisSebebi sebep}) async {}
+  Future<void> oyunBitti({required String oyunTipi, String? zorluk, required int skor, required BitisSebebi sebep, int? puan}) async {}
 
   @override
   Future<void> oyunYaridaBirakildi({required String oyunTipi}) async {}
@@ -90,6 +98,9 @@ class BosAnalitik implements Analitik {
 
   @override
   Future<void> bildirimAcildi() async {}
+
+  @override
+  Future<void> liderlikAcildi({required String donem}) async {}
 }
 
 // main.dart Firebase açılabildiyse FirebaseAnalitik ile ezer
@@ -111,8 +122,8 @@ class OyunOlaylari {
 
   void basladi({int? sure}) => _analitik.oyunBasladi(oyunTipi: _oyun, zorluk: _zorluk, sure: sure);
 
-  void bitti({required int skor, required BitisSebebi sebep}) =>
-      _analitik.oyunBitti(oyunTipi: _oyun, zorluk: _zorluk, skor: skor, sebep: sebep);
+  void bitti({required int skor, required BitisSebebi sebep, int? puan}) =>
+      _analitik.oyunBitti(oyunTipi: _oyun, zorluk: _zorluk, skor: skor, sebep: sebep, puan: puan);
 
   void yaridaBirakildi() => _analitik.oyunYaridaBirakildi(oyunTipi: _oyun);
 }

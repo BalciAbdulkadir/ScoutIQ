@@ -114,6 +114,27 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
   };
 });
 
+// Bugün biten oyunların puan toplamı (038_puan_ve_liderlik.sql); puansız oyunlar sayılmaz.
+// Bugünkü sonuçlar yenilenince yenilenir. Okunamazsa (038 çalışmadıysa, bağlantı yoksa) 0: ana menüde gösterilmez.
+final bugunkuPuanProvider = FutureProvider.autoDispose<int>((ref) async {
+  final bugun = ref.watch(bugunProvider);
+  await ref.watch(bugunOynananlarProvider.future);
+  try {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return 0;
+    final kayitlar = await supabase
+        .from('kullanici_oyun_gecmisi')
+        .select('puan')
+        .eq('kullanici_id', userId)
+        .eq('tarih', bugun)
+        .not('puan', 'is', null);
+    return kayitlar.fold<int>(0, (toplam, k) => toplam + ((k['puan'] as num?)?.toInt() ?? 0));
+  } catch (_) {
+    return 0;
+  }
+});
+
 bool izgaraTipiMi(String oyunTipi) => oyunTipi.startsWith('izgara_');
 
 // Zorluklu bir oyunun bugün açılmış zorluğu: altTipler'deki sırası (0 kolay, 1 orta, 2 zor) ve bitip bitmediği.

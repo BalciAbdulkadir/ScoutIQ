@@ -5,6 +5,7 @@ import '../models/bonservis_sorusu.dart';
 import '../models/kesisim.dart';
 import '../models/izgara.dart';
 import '../models/oyuncu_oneri.dart';
+import '../models/puan.dart';
 import '../models/top10.dart';
 
 // Aynı gün aynı oyun için kayıt zaten varsa (örneğin başka bir cihazda başlanmışsa) fırlatılır
@@ -106,6 +107,20 @@ abstract class OyunDeposu {
 
   // Listedeki oyuncular: sıra -> oyuncu. Oyun bitmediyse sadece bulunanlar, bittiyse hepsi döner.
   Future<Map<int, Top10Oyuncusu>> top10Cevaplar(String oyunId);
+
+  // Puan ve liderlik tablosu (038_puan_ve_liderlik.sql). Puan oyun bitince sunucuda yazılır, uygulama sadece okur.
+
+  // Kullanıcının bitmiş oyununun puanı. tarih null ise sunucudaki bugün. Kayıt yoksa ya da puan henüz yazılmadıysa null.
+  Future<PuanDetayi?> puanGetir(String oyunTipi, {String? tarih});
+
+  // donem: bugün, bu hafta ya da tüm zamanlar; oyun: null (hepsi) ya da kesisim, bonservis, izgara, bingo, top10
+  Future<LiderlikSonucu> liderlikTablosu(LiderlikDonemi donem, {String? oyun});
+
+  // Kullanıcının takma adı (seçmediyse varsayılan "Oyuncu 3FA9")
+  Future<Profil> profilGetir();
+
+  // Takma adı kaydeder, kaydedilen adı döndürür. Sunucu reddederse TakmaAdHatasi fırlatır.
+  Future<String> takmaAdKaydet(String ad);
 }
 
 class SupabaseOyunDeposu implements OyunDeposu {
@@ -352,6 +367,50 @@ class SupabaseOyunDeposu implements OyunDeposu {
           deger: satir['deger'] as String?,
         ),
     };
+  }
+
+  Future<Map<String, dynamic>?> _puanKaydi(String oyunTipi, String tarih) => _supabase
+      .from('kullanici_oyun_gecmisi')
+      .select('durum, puan, puan_detay')
+      .eq('kullanici_id', kullaniciId!)
+      .eq('oyun_tipi', oyunTipi)
+      .eq('tarih', tarih)
+      .maybeSingle();
+
+  @override
+  Future<PuanDetayi?> puanGetir(String oyunTipi, {String? tarih}) async {
+    if (kullaniciId == null) return null;
+    final gun = tarih ?? await oyunTarihi();
+    var kayit = await _puanKaydi(oyunTipi, gun);
+    // Puan oyun kapanırken yazılır; kapanış daha yeni gönderildiyse bir kez daha bakılır
+    if (kayit != null && kayit['puan_detay'] == null) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      kayit = await _puanKaydi(oyunTipi, gun);
+    }
+    final detay = kayit?['puan_detay'];
+    return detay is Map<String, dynamic> ? PuanDetayi.fromJson(detay) : null;
+  }
+
+  @override
+  Future<LiderlikSonucu> liderlikTablosu(LiderlikDonemi donem, {String? oyun}) async {
+    final sonuc = await _supabase.rpc('liderlik_tablosu', params: {'p_donem': donem.kod, 'p_oyun': oyun, 'p_adet': 50});
+    return LiderlikSonucu.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Profil> profilGetir() async {
+    final sonuc = await _supabase.rpc('profil_getir');
+    return Profil.fromJson(sonuc as Map<String, dynamic>);
+  }
+
+  @override
+  Future<String> takmaAdKaydet(String ad) async {
+    try {
+      final sonuc = await _supabase.rpc('takma_ad_kaydet', params: {'p_ad': ad});
+      return sonuc as String;
+    } on PostgrestException catch (e) {
+      throw TakmaAdHatasi(takmaAdHataMesaji(e.hint));
+    }
   }
 }
 
