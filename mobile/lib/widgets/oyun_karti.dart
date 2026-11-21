@@ -5,10 +5,13 @@ import '../theme/yazi.dart';
 import 'tebesir.dart';
 
 // Ana menüdeki oyun kutucuğu. Dört hâli var: oynanmadı ("Oyna"), yarım kaldı ("Devam et", sarı kesik kenar),
-// bitti (soluk, köşesinde tebeşirle daire içine alınmış skor) ve yakında (silik, kesik kenar).
+// bitti (soluk, sağ üstte o oyundan bugün kazanılan puan) ve yakında (silik, kesik kenar).
+// Oyunun serisi varsa sağ üstte "🔥 3" yazar (CLAUDE.md madde 15).
 class OyunKarti extends StatelessWidget {
   final OyunModu mod;
-  final int? bugunkuSkor; // null ise bugün henüz oynanmadı
+  final int? bugunkuSkor; // null ise bugün henüz oynanmadı (skor gösterilmez, sadece bitti mi diye bakılır)
+  final int? bugunkuPuan; // Bugün bu oyundan kazanılan puan; süresiz oynandıysa ya da okunamadıysa null
+  final int seri; // Art arda bu oyunun bitirildiği gün sayısı; 0 ise gösterilmez
   final String? oynananZorluk; // Zorluklu modlarda bugün oynanan zorluğun adı (ör. "Orta")
   final bool devamEdiyor; // Yarım kalan oyun var: "Oyna" yerine "Devam et"
   final VoidCallback? onTap;
@@ -17,6 +20,8 @@ class OyunKarti extends StatelessWidget {
     super.key,
     required this.mod,
     required this.bugunkuSkor,
+    this.bugunkuPuan,
+    this.seri = 0,
     this.onTap,
     this.oynananZorluk,
     this.devamEdiyor = false,
@@ -25,30 +30,15 @@ class OyunKarti extends StatelessWidget {
   bool get _yakinda => mod.durum == OyunDurumu.yakinda;
   bool get _bitti => bugunkuSkor != null && !devamEdiyor;
 
-  String get _skorMetni => mod.maksimumSkor != null ? '$bugunkuSkor/${mod.maksimumSkor}' : '$bugunkuSkor';
-
   @override
   Widget build(BuildContext context) {
-    final icerik = Column(
+    // Bitmiş oyunda kutucuk soluklaşır; sağ üstteki puan ve seri soluklaşmaz
+    Widget soluk(Widget w) => _bitti ? Opacity(opacity: 0.5, child: w) : w;
+
+    final alt = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ikon(),
-            const SizedBox(width: 8),
-            // Bitmiş kutucukta sağ üst köşe damgaya ayrılır. Dar ekranda yazı küçülür, taşmaz.
-            if (!_bitti)
-              Expanded(
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: FittedBox(fit: BoxFit.scaleDown, child: _sagUst()),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 14),
         Text(
           Yazi.buyuk(mod.baslik),
           maxLines: 2,
@@ -74,20 +64,35 @@ class OyunKarti extends StatelessWidget {
       ],
     );
 
+    final icerik = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            soluk(_ikon()),
+            const SizedBox(width: 8),
+            // Dar ekranda sağ üstteki yazılar küçülür, taşmaz
+            Expanded(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: FittedBox(fit: BoxFit.scaleDown, child: _sagUst()),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        soluk(alt),
+      ],
+    );
+
     final kutu = TebesirKutusu(
       kenarRengi: devamEdiyor ? Renkler.vurgu : Renkler.kenar,
       kesik: devamEdiyor || _yakinda,
       dolgu: _yakinda ? null : const Color(0x08FFFFFF),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      child: _bitti
-          ? Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Opacity(opacity: 0.5, child: icerik),
-                Positioned(top: -6, right: -6, child: TebesirDamga(metin: _skorMetni)),
-              ],
-            )
-          : icerik,
+      child: icerik,
     );
 
     if (_yakinda) return kutu;
@@ -115,11 +120,27 @@ class OyunKarti extends StatelessWidget {
     if (mod.durum != OyunDurumu.aktif) {
       return const Text('Hazırlanıyor', style: TextStyle(color: Renkler.metinSoluk, fontSize: 12));
     }
-    // Elle yazılıp altı çizilmiş "Oyna"
-    return Container(
-      padding: const EdgeInsets.only(bottom: 1),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Renkler.vurgu, width: 1.6))),
-      child: Text(devamEdiyor ? 'Devam et' : 'Oyna', style: Yazi.tebesir(16, renk: Renkler.vurgu)),
+    final Widget? durum = _bitti
+        // Bitmiş oyunda bugün kazanılan puan (süresiz oynandıysa puan yoktur, sadece seri kalır)
+        ? (bugunkuPuan == null ? null : Text('+$bugunkuPuan puan', style: Yazi.tebesir(17, renk: Renkler.vurgu)))
+        // Elle yazılıp altı çizilmiş "Oyna"
+        : Container(
+            padding: const EdgeInsets.only(bottom: 1),
+            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Renkler.vurgu, width: 1.6))),
+            child: Text(devamEdiyor ? 'Devam et' : 'Oyna', style: Yazi.tebesir(16, renk: Renkler.vurgu)),
+          );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (seri > 0)
+          Semantics(
+            label: '$seri günlük seri',
+            child: ExcludeSemantics(child: Text('🔥 $seri', style: Yazi.tebesir(16, renk: Renkler.vurgu))),
+          ),
+        if (seri > 0 && durum != null) const SizedBox(width: 8),
+        ?durum,
+      ],
     );
   }
 

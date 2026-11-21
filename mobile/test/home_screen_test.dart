@@ -76,12 +76,16 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('günlük ilerleme bitirilen oyunları sayar, biten kutucukta skor yazar', (tester) async {
-    await anaMenuyuAc(tester, oynananlar: {'kesisim_kolay': 6});
+  testWidgets('günlük ilerleme bitirilen oyunları sayar, biten kutucukta puan yazar', (tester) async {
+    await anaMenuyuAc(tester, oynananlar: {'kesisim_kolay': 6}, ekOverridelar: [
+      bugunkuPuanlarProvider.overrideWith((ref) async => {'kesisim_kolay': 60}),
+    ]);
+    await tester.pump();
 
     // Kesişim, Bonservis, Izgara, Bingo ve Top 10: 5 günlük oyun (bir oyunun zorlukları tek oyun sayılır)
     expect(find.text('1 / 5'), findsOneWidget);
-    expect(find.text('6/10'), findsOneWidget);
+    expect(find.text('+60 puan'), findsOneWidget);
+    expect(find.text('6/10'), findsNothing);
     expect(find.text('KOLAY'), findsOneWidget); // Kesişim'de oynanan zorluk
     expect(find.text('Oyna'), findsNWidgets(4)); // Bonservis, Izgara, Bingo ve Top 10 henüz oynanmadı
     await ekraniKapat(tester);
@@ -148,10 +152,13 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('Izgara\'da bir zorluk bitince kutucuk o zorluk ve skorla kapanır', (tester) async {
-    await anaMenuyuAc(tester, oynananlar: {'izgara_kolay': 7});
+  testWidgets('Izgara\'da bir zorluk bitince kutucuk o zorluk ve puanla kapanır', (tester) async {
+    await anaMenuyuAc(tester, oynananlar: {'izgara_kolay': 7}, ekOverridelar: [
+      bugunkuPuanlarProvider.overrideWith((ref) async => {'izgara_kolay': 70}),
+    ]);
+    await tester.pump();
 
-    expect(find.text('7/9'), findsOneWidget);
+    expect(find.text('+70 puan'), findsOneWidget);
     expect(find.text('KOLAY'), findsOneWidget);
     expect(find.text('1 / 5'), findsOneWidget);
     expect(find.text('Oyna'), findsNWidgets(4));
@@ -362,7 +369,7 @@ void main() {
 
     expect(find.text('NASIL OYNANIR'), findsOneWidget);
     expect(find.textContaining('5 soru var'), findsOneWidget);
-    expect(find.textContaining('Puanı sadece 5/5 yapan alır'), findsOneWidget);
+    expect(find.textContaining('Her doğru 20 puan'), findsOneWidget);
     expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
 
     await tester.tap(find.text('ANLADIM · ZORLUK SEÇ'));
@@ -379,9 +386,9 @@ void main() {
     await anaMenuyuAc(tester);
 
     for (final (oyun, puan) in [
-      ('BONSERVİS', 'Puanı sadece 5/5 yapan alır'),
-      ('IZGARA', 'Puanı sadece 9 kutuyu dolduran alır'),
-      ('BİNGO', 'Puanı sadece 12 kutuyu dolduran alır'),
+      ('BONSERVİS', 'Her doğru 12 puan'),
+      ('IZGARA', 'Her dolu kutu 10 puan'),
+      ('BİNGO', 'Her dolu kutu 8 puan'),
     ]) {
       await tester.tap(find.text(oyun).first);
       await tester.pumpAndSettle();
@@ -485,7 +492,7 @@ void main() {
 
     await tester.tap(find.text('30'));
     await tester.pump();
-    expect(find.text('Bitirirsen 300 puan + hız bonusu'), findsOneWidget);
+    expect(find.text('En fazla 360 puan'), findsOneWidget);
 
     await tester.tap(find.text('∞'));
     await tester.pump();

@@ -60,7 +60,8 @@ void main() {
     test('puan detayı sunucudaki jsonb\'den okunur', () {
       final p = PuanDetayi.fromJson({
         'puan': 316,
-        'bitti': true,
+        'taban': 100,
+        'kusursuz': true,
         'zorluk_carpani': 2.0,
         'sure_carpani': 1.5,
         'sure': 30,
@@ -69,18 +70,34 @@ void main() {
       });
       expect(p.puan, 316);
       expect(p.puansiz, isFalse);
-      expect(p.anaPuan, 300);
+      expect(p.taban, 100);
+      expect(p.kusursuz, isTrue);
       expect(p.kalanSaniye, 8);
 
       final suresiz = PuanDetayi.fromJson({'puan': null, 'sebep': 'suresiz'});
       expect(suresiz.puansiz, isTrue);
       expect(suresiz.suresiz, isTrue);
 
-      // Top 10: süre yok, hız bonusu 0
-      final top10 = PuanDetayi.fromJson({'puan': 150, 'bitti': true, 'zorluk_carpani': 1.5, 'sure_carpani': 1.0, 'sure': null, 'hiz_bonusu': 0});
-      expect(top10.puan, 150);
+      // Top 10: süre yok, hız bonusu 0, kalan can
+      final top10 = PuanDetayi.fromJson({
+        'puan': 180,
+        'taban': 120,
+        'kusursuz': true,
+        'zorluk_carpani': 1.5,
+        'sure_carpani': 1.0,
+        'sure': null,
+        'hiz_bonusu': 0,
+        'kalan_can': 2,
+      });
+      expect(top10.puan, 180);
       expect(top10.sure, isNull);
       expect(top10.hizBonusu, 0);
+      expect(top10.kalanCan, 2);
+
+      // Kısmi puan: oyun bitmedi ama puan var
+      final kismi = PuanDetayi.fromJson({'puan': 60, 'taban': 60, 'kusursuz': false, 'hiz_bonusu': 0});
+      expect(kismi.puansiz, isFalse);
+      expect(kismi.kusursuz, isFalse);
     });
 
     test('liderlik sonucu: kullanıcının satırı olabilir de olmayabilir de', () {
@@ -103,12 +120,13 @@ void main() {
       expect(dolu.katilimci, 2);
     });
 
-    test('seçim ekranındaki ana puan sunucudaki formülle aynı', () {
-      expect(anaPuanHesapla(zorluk: 'zor', sure: 30), 300);
-      expect(anaPuanHesapla(zorluk: 'kolay', sure: 90), 100);
-      expect(anaPuanHesapla(zorluk: 'orta', sure: 60), 188); // 187.5 yukarı yuvarlanır (Postgres round ile aynı)
-      expect(anaPuanHesapla(sure: 60), 188); // Bingo
-      expect(anaPuanHesapla(zorluk: 'zor'), isNull); // süresiz puansız
+    test('seçim ekranındaki en yüksek puan: taban × zorluk × süre × 1.2, aşağı yuvarlanır', () {
+      expect(enFazlaPuan(oyun: 'kesisim', zorluk: 'zor', sure: 30), 360);
+      expect(enFazlaPuan(oyun: 'kesisim', zorluk: 'kolay', sure: 90), 120);
+      expect(enFazlaPuan(oyun: 'bonservis', zorluk: 'orta', sure: 60), 135); // 60 × 1.5 × 1.25 × 1.2
+      expect(enFazlaPuan(oyun: 'izgara', zorluk: 'orta', sure: 60), 225);
+      expect(enFazlaPuan(oyun: 'bingo', sure: 60), 225);
+      expect(enFazlaPuan(oyun: 'kesisim', zorluk: 'zor'), isNull); // süresiz puansız
     });
 
     test('binlik ayırıcı', () {
@@ -119,22 +137,8 @@ void main() {
   });
 
   group('Metinler', () {
-    test('puan dökümü', () {
-      expect(puanDokumu('kesisim_zor', zorKesisimPuani), '100 × Zor 2 × 30 sn 1.5 + 16 hız');
-      expect(
-        puanDokumu('bingo', const PuanDetayi(puan: 188, zorlukCarpani: 1.5, sureCarpani: 1.25, sure: 60)),
-        '100 × Bingo 1.5 × 60 sn 1.25',
-      );
-      expect(puanDokumu('top10', const PuanDetayi(puan: 150)), 'Listeyi tamamladın');
-    });
-
-    test('puansız açıklama oyuna göre değişir', () {
-      const bitirilemedi = PuanDetayi(sebep: 'bitirilemedi');
-      expect(puansizMetni('kesisim_kolay', const PuanDetayi(sebep: 'suresiz')), 'Süresiz oynadın, bu oyun tabloya girmez.');
-      expect(puansizMetni('bonservis_orta', bitirilemedi), contains('5/5 yaparsan'));
-      expect(puansizMetni('izgara_zor', bitirilemedi), contains('9 kutuyu doldurursan'));
-      expect(puansizMetni('bingo', bitirilemedi), contains('12 kutuyu doldurursan'));
-      expect(puansizMetni('top10', bitirilemedi), contains('10 oyuncunun hepsini bulursan'));
+    test('puansız açıklama', () {
+      expect(puansizMetni(const PuanDetayi(sebep: 'suresiz')), 'Süresiz oynadın, bu oyun tabloya girmez.');
     });
 
     test('paylaşımda puan skor satırının altında, puansızda yok', () {
@@ -150,11 +154,11 @@ void main() {
   });
 
   group('Bitiş ekranındaki puan kartı', () {
-    testWidgets('puanlı bitişte puan, döküm ve sıralama bağlantısı görünür', (tester) async {
+    testWidgets('puanlı bitişte sadece puan ve sıralama bağlantısı görünür, hesap dökümü yok', (tester) async {
       final depo = await bitmisOyunuAc(tester, puan: zorKesisimPuani);
 
       expect(find.text('+316'), findsOneWidget);
-      expect(find.text('100 × Zor 2 × 30 sn 1.5 + 16 hız'), findsOneWidget);
+      expect(find.textContaining('×'), findsNothing);
       expect(find.textContaining('5/5 doğru'), findsOneWidget);
       expect(depo.puanIstekleri, ['kesisim_zor']);
 

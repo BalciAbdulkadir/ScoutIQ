@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/puan.dart';
 import '../providers/puan_provider.dart';
 import '../screens/liderlik_screen.dart';
-import '../services/analitik.dart' show oyunVeZorluk;
 import '../services/oyun_deposu.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
@@ -11,8 +10,9 @@ import 'takma_ad_sayfasi.dart';
 
 // Bitiş ekranındaki puan (038_puan_ve_liderlik.sql). Parametre günlük oyun tipidir (ör. kesisim_zor).
 // - Puan gelene kadar küçük bir yükleniyor göstergesi; okunamazsa hiçbir şey gösterilmez (oyunu asla bozmasın).
-// - Puanlıysa tebeşir çerçeveli kart: "+316 puan", döküm ve "Sıralamaya bak →".
-// - Puansızsa tek satır soluk açıklama (süresiz oynandı ya da oyun bitirilemedi).
+// - Puanlıysa tebeşir çerçeveli kart: "+316 puan" ve "Sıralamaya bak →". Puanın nasıl hesaplandığı burada
+//   gösterilmez, kural ekranında kısaca anlatılır.
+// - Süresiz oynandıysa tek satır soluk açıklama.
 // Kullanıcının ilk puanlı oyununda takma ad bir kez sorulur.
 class PuanKarti extends ConsumerStatefulWidget {
   final String oyunTipi;
@@ -58,7 +58,7 @@ class _PuanKartiState extends ConsumerState<PuanKarti> {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Text(
-          puansizMetni(widget.oyunTipi, puan),
+          puansizMetni(puan),
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 14, height: 1.4),
         ),
@@ -89,12 +89,6 @@ class _PuanKartiState extends ConsumerState<PuanKarti> {
               Text('puan', style: Yazi.tebesir(18, renk: Renkler.metinIkincil, kalinlik: FontWeight.w400)),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            puanDokumu(widget.oyunTipi, puan),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Renkler.metinSoluk, fontSize: 13.5),
-          ),
           TextButton(
             onPressed: () => Navigator.push(
               context,
@@ -109,33 +103,6 @@ class _PuanKartiState extends ConsumerState<PuanKarti> {
   }
 }
 
-// "100 × Zor 2 × 30 sn 1.5 + 16 hız". Top 10'da "Listeyi tamamladın".
-String puanDokumu(String oyunTipi, PuanDetayi puan) {
-  final (:oyun, :zorluk) = oyunVeZorluk(oyunTipi);
-  if (oyun == 'top10') return 'Listeyi tamamladın';
-
-  final zorlukAdi = switch (zorluk) {
-    'kolay' => 'Kolay',
-    'orta' => 'Orta',
-    'zor' => 'Zor',
-    _ => oyun == 'bingo' ? 'Bingo' : 'Mod',
-  };
-  return [
-    '$puanTabani',
-    if (puan.zorlukCarpani != null) '$zorlukAdi ${carpanMetni(puan.zorlukCarpani!)}',
-    if (puan.sure != null && puan.sureCarpani != null) '${puan.sure} sn ${carpanMetni(puan.sureCarpani!)}',
-  ].join(' × ') +
-      (puan.hizBonusu > 0 ? ' + ${puan.hizBonusu} hız' : '');
-}
-
-// Puansız bitişin açıklaması
-String puansizMetni(String oyunTipi, PuanDetayi puan) {
-  if (puan.suresiz) return 'Süresiz oynadın, bu oyun tabloya girmez.';
-  final kosul = switch (oyunVeZorluk(oyunTipi).oyun) {
-    'izgara' => '9 kutuyu doldurursan',
-    'bingo' => '12 kutuyu doldurursan',
-    'top10' => '10 oyuncunun hepsini bulursan',
-    _ => '5/5 yaparsan',
-  };
-  return 'Puan sadece oyunu bitirene verilir: $kosul puan alırsın. Yarın tekrar dene.';
-}
+// Puansız bitişin açıklaması (039'dan sonra puansız olan tek oyun süresiz oynanan oyundur)
+String puansizMetni(PuanDetayi puan) =>
+    puan.suresiz ? 'Süresiz oynadın, bu oyun tabloya girmez.' : 'Bu oyundan puan alamadın.';

@@ -82,6 +82,7 @@ final kullaniciProvider = Provider<KullaniciBilgisi?>((ref) {
 });
 
 // Seri: art arda en az bir oyun bitirilen gün sayısı (035_seri.sql). Bugün oynanmadıysa dünden geriye sayılır.
+// Ana menüde gösterilmez (oyun başına seri gösterilir: seriOyunlarProvider); akşam hatırlatmaları bunu kullanır.
 // Bugünkü sonuçlar yenilenince (oyundan dönünce) seri de yenilenir. Okunamazsa (fonksiyon yoksa, bağlantı yoksa) 0.
 final seriProvider = FutureProvider.autoDispose<int>((ref) async {
   ref.watch(bugunProvider);
@@ -114,24 +115,45 @@ final bugunOynananlarProvider = FutureProvider.autoDispose<Map<String, int>>((re
   };
 });
 
-// Bugün biten oyunların puan toplamı (038_puan_ve_liderlik.sql); puansız oyunlar sayılmaz.
-// Bugünkü sonuçlar yenilenince yenilenir. Okunamazsa (038 çalışmadıysa, bağlantı yoksa) 0: ana menüde gösterilmez.
-final bugunkuPuanProvider = FutureProvider.autoDispose<int>((ref) async {
+// Bugün biten oyunların puanları (038/039): oyun_tipi -> puan; puansız oyunlar yoktur.
+// Bugünkü sonuçlar yenilenince yenilenir. Okunamazsa (bağlantı yoksa) boş: ana menüde puan yazmaz.
+final bugunkuPuanlarProvider = FutureProvider.autoDispose<Map<String, int>>((ref) async {
   final bugun = ref.watch(bugunProvider);
   await ref.watch(bugunOynananlarProvider.future);
   try {
     final supabase = Supabase.instance.client;
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return 0;
+    if (userId == null) return {};
     final kayitlar = await supabase
         .from('kullanici_oyun_gecmisi')
-        .select('puan')
+        .select('oyun_tipi, puan')
         .eq('kullanici_id', userId)
         .eq('tarih', bugun)
         .not('puan', 'is', null);
-    return kayitlar.fold<int>(0, (toplam, k) => toplam + ((k['puan'] as num?)?.toInt() ?? 0));
+    return {for (final k in kayitlar) k['oyun_tipi'] as String: (k['puan'] as num).toInt()};
   } catch (_) {
-    return 0;
+    return {};
+  }
+});
+
+// Bugünkü puanların toplamı (ana menünün üstündeki ⭐)
+final bugunkuPuanProvider = FutureProvider.autoDispose<int>((ref) async {
+  final puanlar = await ref.watch(bugunkuPuanlarProvider.future);
+  return puanlar.values.fold<int>(0, (toplam, puan) => toplam + puan);
+});
+
+// Oyun başına seri (039 seri_oyunlar): oyun (kesisim, bonservis, izgara, bingo, top10) -> art arda o oyunun
+// bitirildiği gün sayısı. Ana menüde her oyunun kutucuğunda gösterilir. Okunamazsa boş.
+final seriOyunlarProvider = FutureProvider.autoDispose<Map<String, int>>((ref) async {
+  ref.watch(bugunProvider);
+  await ref.watch(bugunOynananlarProvider.future);
+  try {
+    final sonuc = await Supabase.instance.client.rpc('seri_oyunlar');
+    return {
+      for (final MapEntry(:key, :value) in (sonuc as Map<String, dynamic>).entries) key: (value as num).toInt(),
+    };
+  } catch (_) {
+    return {};
   }
 });
 

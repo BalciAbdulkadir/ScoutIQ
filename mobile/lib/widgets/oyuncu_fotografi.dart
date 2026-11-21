@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import '../theme/renkler.dart';
 
@@ -6,8 +8,11 @@ import '../theme/renkler.dart';
 class OyuncuFotografi extends StatelessWidget {
   // Transfermarkt portreleri 300x390 (en/boy 1:1.3). Çerçeve aynı oranda olduğu için fotoğraf kırpılmadan sığar.
   static const double enBoyOrani = 300 / 390;
-  // Yuvarlak fotoğrafta portrenin dairenin tepesinden ne kadar aşağıda başladığı (dairenin çapına oranla)
-  static const double _yuvarlakKayma = 0.07;
+  // Yuvarlak fotoğrafta portrenin eni (dairenin çapına oranla) ve dairenin tepesine göre yeri. Transfermarkt'ın büyük
+  // portrelerinde yüz fotoğrafın neredeyse tamamını kaplar: portre daire genişliğinde olunca saçın üstü ve çene
+  // kesiliyordu. Portre küçültülüp dikeyde ortalanınca başın tamamı daireye girer.
+  static const double _yuvarlakOlcek = 0.8;
+  static const double _yuvarlakKayma = -0.02;
 
   final String isim;
   final String? fotoUrl;
@@ -31,9 +36,9 @@ class OyuncuFotografi extends StatelessWidget {
     return (ilk + son).toUpperCase();
   }
 
-  // Daire içinde oyuncu fotoğrafı. Transfermarkt portrelerinde saçın üstü fotoğrafın üst kenarına çok yakın olduğu için
-  // fotoğraf dairenin tepesinden başlarsa saç dairenin dar üst kısmında kesilir. Fotoğraf dairenin genişliğinde kalır,
-  // biraz aşağı kaydırılır: baş dairenin içine sığar, fotoğrafın kenarları görünmez, çene altı dairenin alt kenarında kesilir.
+  // Daire içinde oyuncu fotoğrafı. Portre küçültülüp ortalanır, başın tamamı daireye sığar; kenarlarda kalan boşluğu
+  // aynı fotoğrafın bulanık hâli doldurur (düz renk zeminde portrenin dikdörtgen kenarları görünüyordu).
+  // Fotoğraf yoksa, yüklenirken ya da yüklenemezse dairenin ortasında baş harfler.
   static Widget yuvarlak({
     Key? key,
     required String isim,
@@ -47,16 +52,7 @@ class OyuncuFotografi extends StatelessWidget {
       height: boyut,
       clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(color: Renkler.yuzeyYuksek, shape: BoxShape.circle),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 0,
-            top: boyut * _yuvarlakKayma,
-            child: _YuvarlakIcerik(isim: isim, fotoUrl: fotoUrl, en: boyut, harfRengi: harfRengi, daire: boyut),
-          ),
-        ],
-      ),
+      child: _YuvarlakIcerik(isim: isim, fotoUrl: fotoUrl, daire: boyut, harfRengi: harfRengi),
     );
   }
 
@@ -97,43 +93,68 @@ class OyuncuFotografi extends StatelessWidget {
   }
 }
 
-// Yuvarlak fotoğrafın içi: küçültülmüş portre; fotoğraf yoksa ya da yüklenemezse dairenin ortasında baş harfler
+// Yuvarlak fotoğrafın içi: baş harfler, üstünde bulanık zemin ve küçültülmüş portre. Fotoğraf gelince baş harfleri örter.
 class _YuvarlakIcerik extends StatelessWidget {
   final String isim;
   final String? fotoUrl;
-  final double en;
   final double daire;
   final Color harfRengi;
 
-  const _YuvarlakIcerik({required this.isim, required this.fotoUrl, required this.en, required this.daire, required this.harfRengi});
+  const _YuvarlakIcerik({required this.isim, required this.fotoUrl, required this.daire, required this.harfRengi});
 
   @override
   Widget build(BuildContext context) {
-    final yukseklik = en / OyuncuFotografi.enBoyOrani;
-    // Baş harfler fotoğrafın değil dairenin ortasında dursun: kutu daireye göre yukarı kaydırılır
-    final harfler = Transform.translate(
-      offset: Offset(0, -daire * OyuncuFotografi._yuvarlakKayma),
-      child: SizedBox(
-        width: en,
-        height: daire,
-        child: Center(
-          child: Text(
-            OyuncuFotografi.basHarfler(isim),
-            style: TextStyle(color: harfRengi, fontWeight: FontWeight.w700, fontSize: daire * 0.36),
-          ),
-        ),
+    final harfler = Center(
+      child: Text(
+        OyuncuFotografi.basHarfler(isim),
+        style: TextStyle(color: harfRengi, fontWeight: FontWeight.w700, fontSize: daire * 0.36),
       ),
     );
     if (fotoUrl == null) return harfler;
-    return Image.network(
-      fotoUrl!,
-      width: en,
-      height: yukseklik,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
-      cacheWidth: (en * MediaQuery.devicePixelRatioOf(context)).round(),
-      frameBuilder: (context, child, kare, senkron) => senkron || kare != null ? child : harfler,
-      errorBuilder: (context, hata, iz) => harfler,
+
+    final en = daire * OyuncuFotografi._yuvarlakOlcek;
+    final cacheWidth = (daire * MediaQuery.devicePixelRatioOf(context)).round();
+    // İlk kare gelmeden ya da hata olursa boş kalır: alttaki baş harfler görünür
+    Widget yuklenince(BuildContext context, Widget child, int? kare, bool senkron) =>
+        senkron || kare != null ? child : const SizedBox.shrink();
+    Widget bos(BuildContext context, Object hata, StackTrace? iz) => const SizedBox.shrink();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: harfler),
+        // Bulanık zemin: daireden taşacak kadar büyük, kenarlarda bulanıklık saydamlaşmasın
+        Positioned(
+          left: -daire * 0.2,
+          top: -daire * 0.2,
+          width: daire * 1.4,
+          height: daire * 1.4,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: daire * 0.12, sigmaY: daire * 0.12),
+            child: Image.network(
+              fotoUrl!,
+              fit: BoxFit.cover,
+              cacheWidth: cacheWidth,
+              frameBuilder: yuklenince,
+              errorBuilder: bos,
+            ),
+          ),
+        ),
+        Positioned(
+          left: (daire - en) / 2,
+          top: daire * OyuncuFotografi._yuvarlakKayma,
+          width: en,
+          height: en / OyuncuFotografi.enBoyOrani,
+          child: Image.network(
+            fotoUrl!,
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            cacheWidth: cacheWidth,
+            frameBuilder: yuklenince,
+            errorBuilder: bos,
+          ),
+        ),
+      ],
     );
   }
 }
