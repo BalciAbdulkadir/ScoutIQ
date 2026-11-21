@@ -5,7 +5,6 @@ import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/providers/auth_provider.dart';
 import 'package:mobile/providers/game_provider.dart';
 import 'package:mobile/providers/hub_provider.dart';
-import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/profil_screen.dart';
 import 'package:mobile/services/hatirlatma.dart';
 import 'package:mobile/services/oyun_deposu.dart';
