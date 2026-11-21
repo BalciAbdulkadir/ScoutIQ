@@ -8,10 +8,19 @@ final kesisim = oyunModlari.firstWhere((m) => m.tip == 'kesisim');
 final bonservis = oyunModlari.firstWhere((m) => m.tip == 'bonservis');
 final izgara = oyunModlari.firstWhere((m) => m.tip == 'izgara');
 
-Future<void> kartiGoster(WidgetTester tester, OyunModu mod, int? skor, {String? zorluk, bool devam = false}) {
+Future<void> kartiGoster(WidgetTester tester, OyunModu mod, int? skor,
+    {String? zorluk, bool devam = false, int? puan, int seri = 0}) {
   return tester.pumpWidget(MaterialApp(
     home: Scaffold(
-      body: OyunKarti(mod: mod, bugunkuSkor: skor, oynananZorluk: zorluk, devamEdiyor: devam, onTap: () {}),
+      body: OyunKarti(
+        mod: mod,
+        bugunkuSkor: skor,
+        bugunkuPuan: puan,
+        seri: seri,
+        oynananZorluk: zorluk,
+        devamEdiyor: devam,
+        onTap: () {},
+      ),
     ),
   ));
 }
@@ -24,18 +33,30 @@ void main() {
     expect(find.byType(TebesirDamga), findsNothing);
   });
 
-  testWidgets('bugün oynanmış oyunda "Oyna" yerine tebeşir damgasıyla skor yazar', (tester) async {
-    await kartiGoster(tester, kesisim, 8);
+  testWidgets('bugün oynanmış oyunda "Oyna" yerine kazanılan puan yazar, skor damgası yok', (tester) async {
+    await kartiGoster(tester, kesisim, 8, puan: 120);
 
     expect(find.text('Oyna'), findsNothing);
-    expect(find.text('8/10'), findsOneWidget);
-    expect(find.byType(TebesirDamga), findsOneWidget);
+    expect(find.text('+120 puan'), findsOneWidget);
+    expect(find.text('8/10'), findsNothing);
+    expect(find.byType(TebesirDamga), findsNothing);
   });
 
-  testWidgets('Bonservis skoru 10 üzerinden gösterilir (her doğru 2 puan)', (tester) async {
+  testWidgets('süresiz oynanmış oyunda puan yazmaz', (tester) async {
     await kartiGoster(tester, bonservis, 6);
 
-    expect(find.text('6/10'), findsOneWidget);
+    expect(find.textContaining('puan'), findsNothing);
+    expect(find.text('Oyna'), findsNothing);
+  });
+
+  testWidgets('serisi olan oyunun sağ üstünde seri yazar', (tester) async {
+    await kartiGoster(tester, kesisim, null, seri: 3);
+    expect(find.text('🔥 3'), findsOneWidget);
+    expect(find.text('Oyna'), findsOneWidget);
+
+    await kartiGoster(tester, kesisim, 8, puan: 316, seri: 4);
+    expect(find.text('🔥 4'), findsOneWidget);
+    expect(find.text('+316 puan'), findsOneWidget);
   });
 
   testWidgets('zorluklu oyunlarda K O Z yazar', (tester) async {
@@ -48,10 +69,9 @@ void main() {
     }
   });
 
-  testWidgets('zorluklu oyun bitince oynanan zorluk ve skor kalır', (tester) async {
+  testWidgets('zorluklu oyun bitince oynanan zorluk kalır', (tester) async {
     await kartiGoster(tester, izgara, 7, zorluk: 'Orta');
 
-    expect(find.text('7/9'), findsOneWidget);
     expect(find.text('ORTA'), findsOneWidget);
     expect(find.text('K'), findsNothing);
   });

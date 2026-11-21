@@ -43,6 +43,7 @@ Future<void> zorlukluOyunuAc(
       showDragHandle: true,
       builder: (context) => ZorlukSureSecimSayfasi(
         oyunAdi: mod.baslik,
+        oyun: oyun,
         cizim: mod.cizim ?? TebesirCizimi.kesisim,
         zorluklar: [
           for (var i = 0; i < altTipler.length; i++) (ad: zorlukAdlari[i], aciklama: mod.zorlukAciklamalari?[i] ?? ''),
@@ -92,6 +93,7 @@ Future<void> tekModluOyunuAc(
       showDragHandle: true,
       builder: (context) => ZorlukSureSecimSayfasi(
         oyunAdi: mod.baslik,
+        oyun: oyunTipi,
         cizim: mod.cizim ?? TebesirCizimi.kesisim,
         sureler: mod.sureSecenekleri,
         onizleme: mod.onizleme,
@@ -131,6 +133,7 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
       showDragHandle: true,
       builder: (context) => ZorlukSureSecimSayfasi(
         oyunAdi: 'Izgara',
+        oyun: 'izgara',
         cizim: TebesirCizimi.izgara,
         zorluklar: [for (final z in IzgaraZorlugu.values) (ad: z.ad, aciklama: z.aciklama)],
         onizleme: oyunModlari.firstWhere((m) => m.tip == 'izgara').onizleme,
@@ -156,6 +159,7 @@ typedef ZorlukSureSecimi = ({int? zorluk, OyunSuresi sure});
 // Zorluklu oyunda sonra 3 zorluktan biri, ardından süre seçilir. Zorluksuz oyunda (Bingo) sadece süre seçilir.
 class ZorlukSureSecimSayfasi extends StatefulWidget {
   final String oyunAdi;
+  final String? oyun; // kesisim, bonservis, izgara, bingo: seçime göre en yüksek puanı yazmak için
   final TebesirCizimi cizim;
   final List<({String ad, String aciklama})>? zorluklar; // null: zorluksuz oyun
   final List<OyunSuresi> sureler; // Seçilebilen süreler
@@ -164,6 +168,7 @@ class ZorlukSureSecimSayfasi extends StatefulWidget {
   const ZorlukSureSecimSayfasi({
     super.key,
     required this.oyunAdi,
+    this.oyun,
     required this.cizim,
     this.zorluklar,
     this.sureler = OyunSuresi.values,
@@ -306,10 +311,14 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
 
   static const _zorlukKodlari = ['kolay', 'orta', 'zor'];
 
-  // "Bitirirsen 300 puan + hız bonusu" ya da süresizde "Süresiz oyunlar tabloya girmez"
+  // "En fazla 360 puan" ya da süresizde "Süresiz oyunlar tabloya girmez"
   String _puanOzeti(int? zorluk, OyunSuresi sure) {
-    final ana = anaPuanHesapla(zorluk: zorluk == null ? null : _zorlukKodlari[zorluk], sure: sure.saniye);
-    return ana == null ? 'Süresiz oyunlar tabloya girmez' : 'Bitirirsen ${binlik(ana)} puan + hız bonusu';
+    if (sure.saniye == null) return 'Süresiz oyunlar tabloya girmez';
+    final oyun = widget.oyun;
+    final enFazla = oyun == null
+        ? null
+        : enFazlaPuan(oyun: oyun, zorluk: zorluk == null ? null : _zorlukKodlari[zorluk], sure: sure.saniye);
+    return enFazla == null ? 'Bu süreyle puan kazanırsın' : 'En fazla ${binlik(enFazla)} puan';
   }
 
   Widget _sureAdimi(int? zorluk) {

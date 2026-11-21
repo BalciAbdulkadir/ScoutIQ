@@ -48,8 +48,9 @@ class HomeScreen extends ConsumerWidget {
     final skorlar = oynananlar.hasValue ? oynananlar.requireValue : const <String, int>{};
     final kullanici = ref.watch(kullaniciProvider);
     final bugunkuIzgara = ref.watch(bugunkuIzgaraProvider).value;
-    final seri = ref.watch(seriProvider).value ?? 0;
     final bugunkuPuan = ref.watch(bugunkuPuanProvider).value ?? 0;
+    final puanlar = ref.watch(bugunkuPuanlarProvider).value ?? const <String, int>{};
+    final seriler = ref.watch(seriOyunlarProvider).value ?? const <String, int>{};
 
     // Seri ya da bugünkü sonuçlar değişince akşam hatırlatmaları yeniden kurulur
     ref.listen(seriProvider, (_, yeni) {
@@ -79,7 +80,7 @@ class HomeScreen extends ConsumerWidget {
     final tamamlanan = aktifModlar.where((m) => m.oyunTipleri.any(skorlar.containsKey)).length;
 
     final kutucuklar = [
-      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, bugunku(mod)),
+      for (final mod in modlar) _kutucuk(context, ref, mod, skorlar, puanlar, seriler[mod.tip] ?? 0, bugunku(mod)),
     ];
 
     // Ana menüde AppBar yok: durum çubuğu simgelerinin koyu zeminde açık renk olduğunu kendimiz söylüyoruz
@@ -112,7 +113,6 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
                       if (bugunkuPuan > 0) BugunkuPuanRozeti(puan: bugunkuPuan),
-                      if (seri > 0) SeriRozeti(seri: seri),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -153,6 +153,8 @@ class HomeScreen extends ConsumerWidget {
     WidgetRef ref,
     OyunModu mod,
     Map<String, int> skorlar,
+    Map<String, int> puanlar,
+    int seri,
     BugunkuMod? bugunku,
   ) {
     if (mod.zorluklu) {
@@ -164,6 +166,8 @@ class HomeScreen extends ConsumerWidget {
       return OyunKarti(
         mod: mod,
         bugunkuSkor: oynanan >= 0 ? skorlar[altTipler[oynanan]] : null,
+        bugunkuPuan: oynanan >= 0 ? puanlar[altTipler[oynanan]] : null,
+        seri: seri,
         oynananZorluk: oynanan >= 0 ? zorlukAdlari[oynanan] : (bugunku != null ? zorlukAdlari[bugunku.zorluk] : null),
         devamEdiyor: devamEdiyor,
         onTap: () => _modaTiklandi(context, ref, mod),
@@ -172,6 +176,8 @@ class HomeScreen extends ConsumerWidget {
     return OyunKarti(
       mod: mod,
       bugunkuSkor: skorlar[mod.tip],
+      bugunkuPuan: puanlar[mod.tip],
+      seri: seri,
       devamEdiyor: bugunku != null && !bugunku.bitti,
       onTap: () => _modaTiklandi(context, ref, mod),
     );
@@ -227,26 +233,6 @@ class BugunkuPuanRozeti extends StatelessWidget {
             padding: const EdgeInsets.only(left: 12, bottom: 4),
             child: Text('⭐ ${binlik(puan)}', style: Yazi.tebesir(22, renk: Renkler.vurgu)),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// Seri: art arda oyun bitirilen gün sayısı, tebeşirle "🔥 6 gün". Puan değildir.
-class SeriRozeti extends StatelessWidget {
-  final int seri;
-
-  const SeriRozeti({super.key, required this.seri});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: '$seri günlük seri',
-      child: ExcludeSemantics(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, bottom: 4),
-          child: Text('🔥 $seri gün', style: Yazi.tebesir(22, renk: Renkler.vurgu)),
         ),
       ),
     );

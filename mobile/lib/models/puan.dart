@@ -1,12 +1,15 @@
 // Puan ve liderlik tablosu (038_puan_ve_liderlik.sql, CLAUDE.md madde 15).
-// Skor (doğru/kutu/oyuncu sayısı) ayrı kalır; puan liderlik tablosuna giden sayıdır ve sunucuda, oyun bitince yazılır.
-// Puanı sadece oyunu bitiren alır (5/5, 9/9, 12/12, 10/10); kısmi puan yoktur. Süresiz oyun puansızdır, Top 10 hariç.
+// Skor (doğru/kutu/oyuncu sayısı) ayrı kalır; puan liderlik tablosuna giden sayıdır ve sunucuda, oyun bitince yazılır
+// (039_puan_her_dogruya.sql). Her doğru ve her dolu kutu puan getirir. Süresiz oyun puansızdır, Top 10 hariç.
 // Not: services/puanlama.dart "uygulamayı puanla" (Play değerlendirmesi) içindir, bu dosyayla ilgisi yoktur.
 
-// Sunucudaki puan_detay jsonb'si. puan null ise oyun puansızdır; sebep 'suresiz' ya da 'bitirilemedi'.
+// Sunucudaki puan_detay jsonb'si. puan null ise oyun puansızdır (sebep 'suresiz').
 class PuanDetayi {
   final int? puan;
   final String? sebep;
+  final int? taban; // Çarpanlardan önceki puan
+  final bool kusursuz; // 5/5, 9/9, 12/12, 10/10
+  final int? kalanCan; // Top 10
   final num? zorlukCarpani;
   final num? sureCarpani;
   final int? sure; // saniye; Top 10'da null
@@ -16,6 +19,9 @@ class PuanDetayi {
   const PuanDetayi({
     this.puan,
     this.sebep,
+    this.taban,
+    this.kusursuz = false,
+    this.kalanCan,
     this.zorlukCarpani,
     this.sureCarpani,
     this.sure,
@@ -26,6 +32,9 @@ class PuanDetayi {
   factory PuanDetayi.fromJson(Map<String, dynamic> json) => PuanDetayi(
         puan: (json['puan'] as num?)?.toInt(),
         sebep: json['sebep'] as String?,
+        taban: (json['taban'] as num?)?.toInt(),
+        kusursuz: json['kusursuz'] == true,
+        kalanCan: (json['kalan_can'] as num?)?.toInt(),
         zorlukCarpani: json['zorluk_carpani'] as num?,
         sureCarpani: json['sure_carpani'] as num?,
         sure: (json['sure'] as num?)?.toInt(),
@@ -35,9 +44,6 @@ class PuanDetayi {
 
   bool get puansiz => puan == null;
   bool get suresiz => sebep == 'suresiz';
-
-  // Hız bonusu hariç ana puan
-  int? get anaPuan => puan == null ? null : puan! - hizBonusu;
 }
 
 class LiderlikSatiri {
@@ -136,21 +142,22 @@ String takmaAdHataMesaji(String? hint) => switch (hint) {
       _ => 'Takma ad kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.',
     };
 
-// Seçim ekranında gösterilen çarpanlar. Puanı uygulama yazmaz; bu değerler sunucudaki puan_hesapla (038) ile
-// aynı olmalıdır, biri değişirse öbürü de değişir.
-const puanTabani = 100;
+// Seçim ekranında gösterilen çarpanlar ve en yüksek puan. Puanı uygulama yazmaz; bu değerler sunucudaki
+// puan_hesapla (039) ile aynı olmalıdır, biri değişirse öbürü de değişir.
+const enFazlaTaban = {'kesisim': 100, 'bonservis': 60, 'izgara': 100, 'bingo': 100, 'top10': 130};
 const zorlukCarpanlari = {'kolay': 1.0, 'orta': 1.5, 'zor': 2.0};
 const tekModCarpani = 1.5; // Bingo ve Top 10
 const sureCarpanlari = {30: 1.5, 60: 1.25, 90: 1.0};
 const hizBonusuOrani = 0.2;
-const top10Puani = 150;
 
-// Oyunu bitirene verilecek ana puan (hız bonusu hariç). zorluk null: tek modlu oyun. Süresizse null (puansız).
-int? anaPuanHesapla({String? zorluk, int? sure}) {
-  if (sure == null) return null;
+// Seçilen zorluk ve süreyle alınabilecek en yüksek puan (kusursuz ve en hızlı bitiş): taban × zorluk × süre × 1.2,
+// aşağı yuvarlanır. zorluk null: tek modlu oyun. Süresizse null (puansız).
+int? enFazlaPuan({required String oyun, String? zorluk, int? sure}) {
+  final taban = enFazlaTaban[oyun];
+  if (sure == null || taban == null) return null;
   final z = zorluk == null ? tekModCarpani : (zorlukCarpanlari[zorluk] ?? 1.0);
   final s = sureCarpanlari[sure] ?? 1.0;
-  return (puanTabani * z * s).round();
+  return (taban * z * s * (1 + hizBonusuOrani) + 1e-9).floor();
 }
 
 // "1240" -> "1.240"

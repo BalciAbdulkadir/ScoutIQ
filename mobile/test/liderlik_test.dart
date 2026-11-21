@@ -41,11 +41,11 @@ Future<(SahteOyunDeposu, SahteAnalitik)> siralamayiAc(
 }
 
 void main() {
-  testWidgets('kimse yoksa boş tahta ve "tabloya giremedin" yazar', (tester) async {
+  testWidgets('kimse yoksa boş tahta ve "puanlı oyun oynamadın" yazar', (tester) async {
     final (depo, analitik) = await siralamayiAc(tester);
 
     expect(find.text('Bugün tahta boş. İlk puanı sen yaz.'), findsOneWidget);
-    expect(find.text('Bugün tabloya giremedin. Süreli bir oyunu bitir, tabloya gir.'), findsOneWidget);
+    expect(find.text('Bugün puanlı oyun oynamadın. Süreli bir oyun oyna, tabloya gir.'), findsOneWidget);
     expect(depo.liderlikIstekleri, [(LiderlikDonemi.gun, null)]);
     expect(analitik.son('liderlik_acildi'), {'donem': 'gun'});
   });

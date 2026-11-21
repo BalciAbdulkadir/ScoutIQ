@@ -108,24 +108,27 @@ void main() {
   });
 
   group('Ana menü', () {
-    testWidgets('seri varsa "🔥 6 gün" yazar ve hatırlatmalar seriyle kurulur', (tester) async {
+    testWidgets('seri ana menünün üstünde yazmaz, oyunun kutucuğunda yazar; hatırlatmalar genel seriyle kurulur',
+        (tester) async {
       final h = SahteHatirlatma();
       await anaMenuyuAc(tester, oynananlar: {'kesisim_orta': 6}, ekOverridelar: [
         seriProvider.overrideWith((ref) async => 6),
+        seriOyunlarProvider.overrideWith((ref) async => {'kesisim': 4}),
         hatirlatmaProvider.overrideWithValue(h),
       ]);
       await tester.pump();
 
-      expect(find.text('🔥 6 gün'), findsOneWidget);
+      expect(find.text('🔥 6 gün'), findsNothing);
+      expect(find.text('🔥 4'), findsOneWidget);
       expect(h.planlar.last, (seri: 6, bugunBitirdi: true));
       await ekraniKapat(tester);
     });
 
-    testWidgets('seri yoksa rozet görünmez', (tester) async {
-      await anaMenuyuAc(tester, ekOverridelar: [seriProvider.overrideWith((ref) async => 0)]);
+    testWidgets('serisi olmayan oyunda seri yazmaz', (tester) async {
+      await anaMenuyuAc(tester, ekOverridelar: [seriOyunlarProvider.overrideWith((ref) async => {})]);
       await tester.pump();
 
-      expect(find.byType(SeriRozeti), findsNothing);
+      expect(find.textContaining('🔥'), findsNothing);
       await ekraniKapat(tester);
     });
   });

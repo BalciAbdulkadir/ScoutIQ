@@ -223,9 +223,9 @@ String _bosMetni(LiderlikDonemi donem) => switch (donem) {
     };
 
 String _girilmediMetni(LiderlikDonemi donem) => switch (donem) {
-      LiderlikDonemi.gun => 'Bugün tabloya giremedin.',
-      LiderlikDonemi.hafta => 'Bu hafta tabloya giremedin.',
-      LiderlikDonemi.tum => 'Henüz tabloya giremedin.',
+      LiderlikDonemi.gun => 'Bugün puanlı oyun oynamadın.',
+      LiderlikDonemi.hafta => 'Bu hafta puanlı oyun oynamadın.',
+      LiderlikDonemi.tum => 'Henüz puanlı oyun oynamadın.',
     };
 
 class _Tablo extends StatelessWidget {
@@ -409,7 +409,7 @@ class _BenimSatirim extends StatelessWidget {
       ),
       child: ben == null
           ? Text(
-              '${_girilmediMetni(donem)} Süreli bir oyunu bitir, tabloya gir.',
+              '${_girilmediMetni(donem)} Süreli bir oyun oyna, tabloya gir.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Renkler.metinIkincil, fontSize: 14),
             )
@@ -470,12 +470,10 @@ class _Hata extends StatelessWidget {
 // Puanlama kurallarının kısa hâli (sıralama ekranındaki "?")
 Future<void> puanKurallariniGoster(BuildContext context) {
   const satirlar = [
-    'Puanı sadece oyunu bitiren alır: Kesişim ve Bonservis 5/5, Izgara 9/9, Bingo 12/12, Top 10 10/10.',
-    'Puan = 100 × zorluk × süre + hız bonusu.',
-    'Zorluk: Kolay ×1 · Orta ×1.5 · Zor ×2 · Bingo ×1.5',
-    'Süre: 90 sn ×1 · 60 sn ×1.25 · 30 sn ×1.5',
-    'Hız bonusu: kalan süreye göre ana puanın %20\'sine kadar.',
-    'Süresiz oyunlar tabloya girmez. Top 10\'un süresi yoktur ama 10/10 bitirene 150 puan verilir.',
+    'Her doğru cevap ve her dolu kutu puan getirir.',
+    'Zor mod ve kısa süre puanı artırır.',
+    'Oyunu kusursuz ve hızlı bitirene bonus var.',
+    'Süresiz oyunlar tabloya girmez. Top 10 her zaman puanlıdır.',
   ];
   return showModalBottomSheet<void>(
     context: context,
