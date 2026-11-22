@@ -38,6 +38,15 @@ Kurallar `CLAUDE.md` madde 23–28'de. Kısaca:
 Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasaklar. Örnek: 034'ten sonra eski sürüm skoru yazamaz.
 
 - Böyle bir dosyada sıra dosyanın başına yazılır: önce yeni uygulama sürümü Play'de yayınlanır, sonra SQL çalıştırılır.
+- Sıra (041'den beri, zorunlu güncelleme):
+  1. Yeni sürüm Play'de yayınlanır.
+  2. `public.uygulama_surumu.en_dusuk_surum_kodu` yeni sürümün sürüm koduna (`pubspec.yaml`'da `+`'dan sonraki sayı) çekilir. Bu da yeni bir SQL dosyasıyla yapılır, SQL Editor'dan elle değiştirilmez:
+     ```sql
+     update public.uygulama_surumu set en_dusuk_surum_kodu = 2 where id = 1;
+     ```
+     Eski sürümü açan kullanıcı kapatılamayan "Güncelleme gerekli" sayfasını görür. İnterneti olmayan telefon engellenmez.
+  3. Eski sürümü bozan SQL çalıştırılır.
+  Sınırı yükselten dosya ile bozan dosya aynı dosya olabilir; o zaman sınırı yükselten satır dosyanın başındadır.
 - Fonksiyonun adı, parametreleri ya da dönüş alanları değişirse eski sürüm hata alır. Mümkünse yeni bir fonksiyon eklenir, eski fonksiyon bir süre yerinde bırakılır.
 
 ## 4. Yeni oyun ya da yeni oyun fonksiyonu yazarken
@@ -101,11 +110,13 @@ Kurulum ve dağıtım: `backend/CLOUD_RUN.md`.
 
 - **Paket adı:** `com.footylore.app`. İlk yüklemeden sonra değiştirilemez.
 - **İmza dosyaları:** `mobile/android/key.properties` ve `.jks` repoya girmez. Kaybedilirlerse uygulama güncellenemez, yedekleri güvenli bir yerde tutulur.
-  - `key.properties` yoksa release derleme hata vermez, debug anahtarıyla imzalanır. Böyle bir paket Play'e yüklenemez. Play'e yüklemeden önce dosyanın yerinde olduğuna bakılır.
-- **Firebase:** `mobile/android/app/google-services.json` repoda yok. Dosya yoksa derleme sadece uyarı verir ve uygulama Firebase'siz çalışır: Crashlytics ve Analytics veri toplamaz. Play'e yüklenecek derlemede dosyanın yerinde olduğuna bakılır.
+  - `key.properties` yoksa (ya da içindeki `storeFile` bulunamazsa) release paketi (`bundleRelease`, `assembleRelease`) derlenmez: derleme hangi dosyanın eksik olduğunu ve nereye konacağını yazıp durur. Debug derleme ve testler dosyasız çalışır.
+  - `storeFile` yolu tırnaksız ve `/` ile yazılır (`storeFile=D:/keystore/footylore-release.jks`). Java'nın dosya okuması Türkçe karakterleri bozduğu için `.jks` Türkçe karakterli bir klasörde durmaz.
+- **Firebase:** `mobile/android/app/google-services.json` repoda yok. Dosya yoksa debug derleme sadece uyarı verir ve uygulama Firebase'siz çalışır: Crashlytics ve Analytics veri toplamaz. Release paketi dosya yoksa derlenmez.
 - **Sürüm numarası:** Her Play yüklemesinde `mobile/pubspec.yaml`'daki sürümün `+` işaretinden sonraki sayısı (`1.0.0+1` → `1.0.0+2`) bir artırılır. Aynı sayıyla ikinci yükleme kabul edilmez.
 - **Analitik:** Kişisel veri ve oyuncu ismi gönderilmez. Yeni olay eklemeden önce `CLAUDE.md` madde 18'e bakılır.
 - **Gizlilik politikası ve hesap silme sayfası:** Repo kökündeki `web_sitesi/` klasöründedir (`https://footylore.web.app`, Firebase Hosting, `footylore` sitesi). Uygulama yeni bir veri toplamaya başlarsa (yeni tablo, yeni analitik olayı, yeni hizmet sağlayıcı) ya da hesap silme adımları değişirse `web_sitesi/gizlilik.html` ve `web_sitesi/hesap-silme.html` aynı PR'da güncellenir, sayfalardaki "Son güncelleme" tarihi değişir. Sitede JavaScript, çerez ve dış kaynak olmaz (`mobile/test/web_sitesi_test.dart`).
+- **Reklam kimliği:** Uygulamada reklam yok. `AD_ID` ve `ACCESS_ADSERVICES_*` izinleri `AndroidManifest.xml`'de `tools:node="remove"` ile çıkarılır, Analytics reklam kimliği toplamaz (`google_analytics_adid_collection_enabled = false`). Play Console'daki reklam kimliği beyanı "kullanılmıyor"dur. Yeni bir eklenti bu izinleri tekrar eklerse birleştirilmiş manifest'e bakılır (`gradlew :app:processDebugMainManifest`).
 
 ## 8. Git
 
