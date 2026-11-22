@@ -38,6 +38,15 @@ Kurallar `CLAUDE.md` madde 23–28'de. Kısaca:
 Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasaklar. Örnek: 034'ten sonra eski sürüm skoru yazamaz.
 
 - Böyle bir dosyada sıra dosyanın başına yazılır: önce yeni uygulama sürümü Play'de yayınlanır, sonra SQL çalıştırılır.
+- Sıra (041'den beri, zorunlu güncelleme):
+  1. Yeni sürüm Play'de yayınlanır.
+  2. `public.uygulama_surumu.en_dusuk_surum_kodu` yeni sürümün sürüm koduna (`pubspec.yaml`'da `+`'dan sonraki sayı) çekilir. Bu da yeni bir SQL dosyasıyla yapılır, SQL Editor'dan elle değiştirilmez:
+     ```sql
+     update public.uygulama_surumu set en_dusuk_surum_kodu = 2 where id = 1;
+     ```
+     Eski sürümü açan kullanıcı kapatılamayan "Güncelleme gerekli" sayfasını görür. İnterneti olmayan telefon engellenmez.
+  3. Eski sürümü bozan SQL çalıştırılır.
+  Sınırı yükselten dosya ile bozan dosya aynı dosya olabilir; o zaman sınırı yükselten satır dosyanın başındadır.
 - Fonksiyonun adı, parametreleri ya da dönüş alanları değişirse eski sürüm hata alır. Mümkünse yeni bir fonksiyon eklenir, eski fonksiyon bir süre yerinde bırakılır.
 
 ## 4. Yeni oyun ya da yeni oyun fonksiyonu yazarken

@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
+import 'screens/guncelleme_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/analitik.dart';
@@ -83,27 +84,30 @@ class FootyLoreApp extends StatelessWidget {
       title: 'FootyLore',
       debugShowCheckedModeBanner: false,
       theme: uygulamaTemasi(),
-      home: Consumer(
-        builder: (context, ref, child) {
-          final authState = ref.watch(authStateProvider);
+      // Önce sürüm kontrolü (zorunlu güncelleme), sonra giriş
+      home: SurumKapisi(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final authState = ref.watch(authStateProvider);
 
-          return authState.when(
-            data: (data) {
-              final session = data.session;
-              if (session != null) {
-                // Giriş başarılıysa Hub (HomeScreen) ekranına gidiyoruz!
-                return const HomeScreen();
-              }
-              return const LoginScreen();
-            },
-            loading: () => const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, stack) => Scaffold(
-              body: Center(child: Text('Hata: $error')),
-            ),
-          );
-        },
+            return authState.when(
+              data: (data) {
+                final session = data.session;
+                if (session != null) {
+                  // Giriş başarılıysa Hub (HomeScreen) ekranına gidiyoruz!
+                  return const HomeScreen();
+                }
+                return const LoginScreen();
+              },
+              loading: () => const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, stack) => Scaffold(
+                body: Center(child: Text('Hata: $error')),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
