@@ -32,6 +32,41 @@ class _LiderlikScreenState extends ConsumerState<LiderlikScreen> {
 
   LiderlikSecimi get _secim => (_donem, _oyun);
 
+  // Başkasının satırına uzun basınca: onay penceresi, sonra bildirim (041, Play kullanıcı içeriği politikası)
+  Future<void> _bildirmeyiSor(LiderlikSatiri satir) async {
+    final kimlik = satir.kullaniciId;
+    if (!satir.bildirilebilir || kimlik == null) return;
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Renkler.yuzey,
+        title: const Text('Bu adı bildir'),
+        content: Text("'${satir.ad}' uygunsuz bir takma ad mı? Bildirimini inceleyeceğiz."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Renkler.can),
+            child: const Text('Bildir'),
+          ),
+        ],
+      ),
+    );
+    if (onay != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await takmaAdiBildir(ref, kimlik);
+      messenger.showSnackBar(const SnackBar(content: Text('Teşekkürler, inceleyeceğiz.')));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('Bildirim gönderilemedi. Tekrar dene.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sonuc = ref.watch(liderlikProvider(_secim));
@@ -65,7 +100,7 @@ class _LiderlikScreenState extends ConsumerState<LiderlikScreen> {
                   backgroundColor: Renkler.yuzey,
                   onRefresh: () => ref.refresh(liderlikProvider(_secim).future),
                   child: sonuc.hasValue
-                      ? _Tablo(sonuc: sonuc.requireValue, donem: _donem)
+                      ? _Tablo(sonuc: sonuc.requireValue, donem: _donem, onBildir: _bildirmeyiSor)
                       : sonuc.hasError
                           ? _Hata(onTekrar: () => ref.invalidate(liderlikProvider(_secim)))
                           : const _Iskelet(),
@@ -231,8 +266,9 @@ String _girilmediMetni(LiderlikDonemi donem) => switch (donem) {
 class _Tablo extends StatelessWidget {
   final LiderlikSonucu sonuc;
   final LiderlikDonemi donem;
+  final ValueChanged<LiderlikSatiri> onBildir;
 
-  const _Tablo({required this.sonuc, required this.donem});
+  const _Tablo({required this.sonuc, required this.donem, required this.onBildir});
 
   @override
   Widget build(BuildContext context) {
@@ -261,10 +297,13 @@ class _Tablo extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       children: [
-        if (kursulu) ...[_Kursu(key: const ValueKey('kursu'), ilkUc: liste.take(3).toList()), const SizedBox(height: 14)],
+        if (kursulu) ...[
+          _Kursu(key: const ValueKey('kursu'), ilkUc: liste.take(3).toList(), onBildir: onBildir),
+          const SizedBox(height: 14),
+        ],
         for (var i = 0; i < satirlar.length; i++) ...[
           if (i > 0) const KesikCizgi(),
-          _Satir(satir: satirlar[i]),
+          _Satir(satir: satirlar[i], onBildir: onBildir),
         ],
       ],
     );
@@ -273,8 +312,9 @@ class _Tablo extends StatelessWidget {
 
 class _Kursu extends StatelessWidget {
   final List<LiderlikSatiri> ilkUc;
+  final ValueChanged<LiderlikSatiri> onBildir;
 
-  const _Kursu({super.key, required this.ilkUc});
+  const _Kursu({super.key, required this.ilkUc, required this.onBildir});
 
   @override
   Widget build(BuildContext context) {
@@ -282,14 +322,20 @@ class _Kursu extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(child: _KursuBasamagi(satir: ilkUc[1], yukseklik: 54)),
+        Expanded(child: _basamak(ilkUc[1], 54)),
         const SizedBox(width: 8),
-        Expanded(child: _KursuBasamagi(satir: ilkUc[0], yukseklik: 78, birinci: true)),
+        Expanded(child: _basamak(ilkUc[0], 78, birinci: true)),
         const SizedBox(width: 8),
-        Expanded(child: _KursuBasamagi(satir: ilkUc[2], yukseklik: 40)),
+        Expanded(child: _basamak(ilkUc[2], 40)),
       ],
     );
   }
+
+  Widget _basamak(LiderlikSatiri satir, double yukseklik, {bool birinci = false}) => _UzunBasinca(
+        satir: satir,
+        onBildir: onBildir,
+        child: _KursuBasamagi(satir: satir, yukseklik: yukseklik, birinci: birinci),
+      );
 }
 
 class _KursuBasamagi extends StatelessWidget {
@@ -344,10 +390,31 @@ class _KursuBasamagi extends StatelessWidget {
   }
 }
 
+// Başkasının (takma ad seçmiş) satırına uzun basınca bildirme penceresi açılır. Kendi satırı ve "Oyuncu 3FA9" gibi
+// sistemin ürettiği adlar bildirilemez.
+class _UzunBasinca extends StatelessWidget {
+  final LiderlikSatiri satir;
+  final ValueChanged<LiderlikSatiri> onBildir;
+  final Widget child;
+
+  const _UzunBasinca({required this.satir, required this.onBildir, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!satir.bildirilebilir) return child;
+    return InkWell(
+      onLongPress: () => onBildir(satir),
+      borderRadius: BorderRadius.circular(6),
+      child: child,
+    );
+  }
+}
+
 class _Satir extends StatelessWidget {
   final LiderlikSatiri satir;
+  final ValueChanged<LiderlikSatiri> onBildir;
 
-  const _Satir({required this.satir});
+  const _Satir({required this.satir, required this.onBildir});
 
   @override
   Widget build(BuildContext context) {
@@ -386,7 +453,7 @@ class _Satir extends StatelessWidget {
         ],
       ),
     );
-    if (!satir.ben) return icerik;
+    if (!satir.ben) return _UzunBasinca(satir: satir, onBildir: onBildir, child: icerik);
     return TebesirKutusu(kenarRengi: Renkler.vurgu, padding: EdgeInsets.zero, child: icerik);
   }
 }

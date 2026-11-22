@@ -52,8 +52,18 @@ class LiderlikSatiri {
   final int puan;
   final int oyun; // Puanlı (bitirilen) oyun sayısı
   final bool ben;
+  final String? kullaniciId; // Takma ad bildirmek için (041). Kullanıcının alttaki kendi satırında yok.
+  final bool varsayilan; // Ad sistemin ürettiği "Oyuncu 3FA9": bildirilemez
 
-  const LiderlikSatiri({required this.sira, required this.ad, required this.puan, required this.oyun, this.ben = false});
+  const LiderlikSatiri({
+    required this.sira,
+    required this.ad,
+    required this.puan,
+    required this.oyun,
+    this.ben = false,
+    this.kullaniciId,
+    this.varsayilan = false,
+  });
 
   factory LiderlikSatiri.fromJson(Map<String, dynamic> json, {bool? ben}) => LiderlikSatiri(
         sira: (json['sira'] as num).toInt(),
@@ -61,7 +71,12 @@ class LiderlikSatiri {
         puan: (json['puan'] as num).toInt(),
         oyun: (json['oyun'] as num?)?.toInt() ?? 0,
         ben: ben ?? json['ben'] == true,
+        kullaniciId: json['kullanici_id'] as String?,
+        varsayilan: json['varsayilan'] == true,
       );
+
+  // Başkasının seçtiği takma ad bildirilebilir; kendi adı ve sistemin ürettiği ad bildirilemez
+  bool get bildirilebilir => !ben && !varsayilan && kullaniciId != null;
 }
 
 class LiderlikSonucu {
