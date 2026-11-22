@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyun_modu.dart';
 import '../models/puan.dart';
 import '../providers/hub_provider.dart';
+import '../providers/liderlik_provider.dart';
 import '../services/hatirlatma.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
@@ -12,6 +13,7 @@ import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/kullanici_avatari.dart';
 import '../widgets/oyun_karti.dart';
 import '../widgets/logo.dart';
+import '../widgets/takma_ad_sayfasi.dart';
 import '../widgets/tebesir.dart';
 import 'bingo_screen.dart';
 import 'bonservis_screen.dart';
@@ -58,6 +60,11 @@ class HomeScreen extends ConsumerWidget {
       if (guncelSeri == null) return;
       final bugunBitirdi = (ref.read(bugunOynananlarProvider).value ?? const {}).isNotEmpty;
       ref.read(hatirlatmaProvider).planla(seri: guncelSeri, bugunBitirdi: bugunBitirdi).catchError((_) {});
+    });
+
+    // Takma ad bildirildiği için sıfırlandıysa (041) açılışta yeni ad seçmesi istenir; ad seçilene kadar her açılışta
+    ref.listen(profilProvider, (onceki, yeni) {
+      if (yeni.value?.sifirlandi == true && onceki?.value?.sifirlandi != true) takmaAdSifirlandiPenceresi(context);
     });
 
     // Zorluklu oyunun bugün açılmış zorluğu (yarım ya da bitmiş)

@@ -19,6 +19,10 @@ final liderlikProvider = FutureProvider.autoDispose.family<LiderlikSonucu, Lider
 // Kullanıcının takma adı. Takma ad kaydedilince takmaAdiKaydet bunu ve liderlik tablosunu yeniler.
 final profilProvider = FutureProvider.autoDispose<Profil>((ref) => ref.read(oyunDeposuProvider).profilGetir());
 
+// Başkasının takma adını bildirir. Tablo yenilenmez: ad sunucuda üç bildirimden sonra sıfırlanır.
+Future<void> takmaAdiBildir(WidgetRef ref, String kullaniciId) =>
+    ref.read(oyunDeposuProvider).takmaAdBildir(kullaniciId);
+
 // Takma adı kaydeder; sunucu reddederse TakmaAdHatasi fırlatır
 Future<String> takmaAdiKaydet(WidgetRef ref, String ad) async {
   final kaydedilen = await ref.read(oyunDeposuProvider).takmaAdKaydet(ad);

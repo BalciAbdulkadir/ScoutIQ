@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/izgara.dart';
+import 'package:mobile/models/puan.dart';
 import 'package:mobile/providers/hub_provider.dart';
 import 'package:mobile/screens/bingo_screen.dart';
 import 'package:mobile/screens/bonservis_screen.dart';
@@ -14,6 +15,7 @@ import 'package:mobile/screens/profil_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 import 'package:mobile/theme/tema.dart';
 import 'package:mobile/widgets/izgara_zorluk_secimi.dart';
+import 'package:mobile/widgets/takma_ad_sayfasi.dart';
 
 import 'bonservis_test.dart' show sorular;
 import 'izgara_test.dart' show ornekTahta;
@@ -498,5 +500,43 @@ void main() {
     await tester.pump();
     expect(find.text('Süresiz oyunlar tabloya girmez'), findsOneWidget);
     await ekraniKapat(tester);
+  });
+
+  group('takma ad sıfırlandı', () {
+    testWidgets('ad bildirildiği için sıfırlandıysa açılışta yeni ad seçmesi istenir', (tester) async {
+      final depo = SahteOyunDeposu()..profil = const Profil(takmaAd: 'Oyuncu 3FA9', varsayilan: true, sifirlandi: true);
+      await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+      await tester.pump();
+
+      expect(find.text('Takma adın sıfırlandı'), findsOneWidget);
+      expect(find.textContaining('bildirildiği için sıfırlandı, yeni bir ad seç'), findsOneWidget);
+
+      await tester.tap(find.text('Yeni ad seç'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TakmaAdSayfasi), findsOneWidget);
+      await ekraniKapat(tester);
+    });
+
+    testWidgets('"Sonra" denince pencere kapanır, ana menü açık kalır', (tester) async {
+      final depo = SahteOyunDeposu()..profil = const Profil(takmaAd: 'Oyuncu 3FA9', varsayilan: true, sifirlandi: true);
+      await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+      await tester.pump();
+
+      await tester.tap(find.text('Sonra'));
+      await tester.pumpAndSettle();
+      expect(find.text('Takma adın sıfırlandı'), findsNothing);
+      expect(find.byType(TakmaAdSayfasi), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      await ekraniKapat(tester);
+    });
+
+    testWidgets('ad sıfırlanmadıysa pencere çıkmaz', (tester) async {
+      final depo = SahteOyunDeposu()..profil = const Profil(takmaAd: 'kanarya_10', varsayilan: false);
+      await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(depo)]);
+      await tester.pump();
+
+      expect(find.text('Takma adın sıfırlandı'), findsNothing);
+      await ekraniKapat(tester);
+    });
   });
 }
