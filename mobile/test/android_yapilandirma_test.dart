@@ -28,6 +28,23 @@ void main() {
     expect(yoksay, contains('**/*.jks'));
   });
 
+  test('release paketi key.properties ya da google-services.json eksikken derlenmez', () {
+    // Kontrol sadece release paketleme görevlerinde çalışır; debug derleme ve testler dosyasız çalışır
+    for (final gorev in ['assembleRelease', 'bundleRelease']) {
+      expect(gradle, contains('"$gorev"'));
+    }
+    expect(gradle, contains('gradle.taskGraph.whenReady'));
+    expect(gradle, contains('throw GradleException('));
+    expect(gradle, contains('FootyLore release derlemesi durdu'));
+    // Mesaj eksik dosyayı ve nereye konacağını söyler
+    expect(gradle, contains('key.properties yok'));
+    expect(gradle, contains('google-services.json yok'));
+    expect(gradle, contains('anahtarDosyasi.absolutePath'));
+    expect(gradle, contains('firebaseAyari.absolutePath'));
+    // Eskisi gibi uyarı verip debug anahtarıyla Play paketi üretmez
+    expect(gradle, isNot(contains('debug anahtarıyla imzalanıyor')));
+  });
+
   test('release derlemede kod küçültme kapalı (proguard kuralı gerekmesin)', () {
     expect(gradle, contains('isMinifyEnabled = false'));
     expect(gradle, contains('isShrinkResources = false'));
