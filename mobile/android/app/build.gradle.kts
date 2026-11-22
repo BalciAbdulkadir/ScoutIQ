@@ -7,8 +7,8 @@ plugins {
 }
 
 // Release imzası: android/key.properties dosyasından okunur (storeFile, storePassword, keyAlias, keyPassword).
-// key.properties ve .jks dosyaları repoya girmez (android/.gitignore). Dosya yoksa release derleme debug anahtarıyla
-// imzalanır: geliştirme makinelerinde `flutter build` çalışmaya devam eder ama bu paket Play'e yüklenemez.
+// key.properties ve .jks dosyaları repoya girmez (android/.gitignore). Dosya yoksa debug derleme ve testler çalışır;
+// release paketi (bundleRelease, assembleRelease) derlenmeye başlamadan durur (aşağıdaki "Release dosyaları" kontrolü).
 val anahtarDosyasi = rootProject.file("key.properties")
 val anahtar = Properties().apply {
     if (anahtarDosyasi.exists()) anahtarDosyasi.inputStream().use { load(it) }
@@ -16,12 +16,57 @@ val anahtar = Properties().apply {
 val releaseAnahtariVar = anahtarDosyasi.exists()
 
 // Firebase (Crashlytics, Analytics): ayarları Firebase konsolundan indirilen app/google-services.json'dadır.
-// Dosya yoksa Firebase eklentileri uygulanmaz: uygulama derlenir ve Firebase'siz çalışır (main.dart).
+// Dosya yoksa Firebase eklentileri uygulanmaz: debug derlenir ve Firebase'siz çalışır (main.dart). Release durur.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
 } else {
     logger.warn("UYARI: android/app/google-services.json yok, Firebase (Crashlytics, Analytics) kapalı derleniyor.")
+}
+
+// Release dosyaları: Play'e gidecek paket (bundleRelease, assembleRelease ve bunların paketleme görevleri) imza
+// dosyası ya da Firebase ayarı eksikken derlenmez. Eskiden sadece uyarı verip debug anahtarıyla imzalıyordu; o paket
+// Play'e yüklenemez, Firebase'siz paket de çökme ve analitik toplamaz. Debug derleme ve testler bu kontrole girmez.
+val releaseGorevleri = setOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle")
+
+fun releaseEksikleri(): List<String> {
+    val eksikler = mutableListOf<String>()
+    if (!anahtarDosyasi.exists()) {
+        eksikler += "- key.properties yok. Release imzası bu dosyadan okunur (storeFile, storePassword, keyAlias, " +
+            "keyPassword). Dosyayı şuraya koy: ${anahtarDosyasi.absolutePath}"
+    } else {
+        val yol = anahtar.getProperty("storeFile")?.trim()
+        if (yol.isNullOrEmpty()) {
+            eksikler += "- key.properties içinde storeFile satırı yok. .jks dosyasının yolunu yaz " +
+                "(tırnaksız, / ile; ör. storeFile=D:/keystore/footylore-release.jks): ${anahtarDosyasi.absolutePath}"
+        } else if (!rootProject.file(yol).exists()) {
+            eksikler += "- key.properties'teki storeFile bulunamadı: ${rootProject.file(yol).absolutePath}. " +
+                ".jks dosyasını oraya koy ya da yolu düzelt (tırnaksız, / ile; Türkçe karakterli klasör kullanma)."
+        }
+        for (alan in listOf("storePassword", "keyAlias", "keyPassword")) {
+            if (anahtar.getProperty(alan).isNullOrBlank()) {
+                eksikler += "- key.properties içinde $alan satırı yok ya da boş: ${anahtarDosyasi.absolutePath}"
+            }
+        }
+    }
+    val firebaseAyari = file("google-services.json")
+    if (!firebaseAyari.exists()) {
+        eksikler += "- google-services.json yok. Firebase konsolundan (Proje ayarları > Android uygulaması " +
+            "com.footylore.app) indirip şuraya koy: ${firebaseAyari.absolutePath}"
+    }
+    return eksikler
+}
+
+gradle.taskGraph.whenReady {
+    val releaseDerleniyor = allTasks.any { it.project == project && it.name in releaseGorevleri }
+    if (!releaseDerleniyor) return@whenReady
+    val eksikler = releaseEksikleri()
+    if (eksikler.isNotEmpty()) {
+        throw GradleException(
+            (listOf("", "FootyLore release derlemesi durdu: Play'e gidecek paket için dosya eksik.") + eksikler +
+                listOf("Debug derleme (flutter run) bu dosyalar olmadan da çalışır.")).joinToString(System.lineSeparator())
+        )
+    }
 }
 
 android {
@@ -58,10 +103,11 @@ android {
 
     buildTypes {
         release {
+            // key.properties yoksa release paketi yukarıdaki kontrolde durur. Debug anahtarı sadece release
+            // yapılandırması gereken ama paket üretmeyen görevler (signingReport gibi) için yer tutar.
             signingConfig = if (releaseAnahtariVar) {
                 signingConfigs.getByName("release")
             } else {
-                logger.warn("UYARI: android/key.properties yok, release derleme debug anahtarıyla imzalanıyor (Play'e yüklenemez).")
                 signingConfigs.getByName("debug")
             }
             // Kod küçültme kapalı: açılırsa Supabase ve google_sign_in için proguard kuralları gerekir
