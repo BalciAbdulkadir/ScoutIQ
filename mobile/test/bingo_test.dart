@@ -45,14 +45,21 @@ BingoNotifier notifier(ProviderContainer c, [int? sure]) => c.read(bingoProvider
 
 void main() {
   group('Kart', () {
-    test('sıradaki oyuncu: son gelenden sonraki yerleşmemiş ilk oyuncu, deste başa döner', () {
-      expect(bingoSiradaki(desteBoyutu: 4, yerlesenler: {}, son: 0), 1);
-      expect(bingoSiradaki(desteBoyutu: 4, yerlesenler: {}, son: 4), 1);
-      expect(bingoSiradaki(desteBoyutu: 4, yerlesenler: {1, 2}, son: 4), 3);
-      expect(bingoSiradaki(desteBoyutu: 4, yerlesenler: {1, 3, 4}, son: 2), 2);
-      expect(bingoSiradaki(desteBoyutu: 4, yerlesenler: {1, 2, 3, 4}, son: 2), isNull);
-    });
+    test('görülmemiş oyuncunun yeri boş okunur, sıra numaraları değişmez', () {
+      final kart = BingoKarti.oku({
+        ...ornekKart,
+        'oyuncular': [
+          {'isim': 'Oyuncu 1'},
+          null,
+          {'isim': 'Oyuncu 3'},
+        ],
+      })!;
 
+      expect(kart.deste, hasLength(3));
+      expect(kart.deste[1], isNull);
+      expect(kart.deste[2]!.isim, 'Oyuncu 3');
+      expect(kart.oyuncuyla(2, const BingoOyuncusu(isim: 'Oyuncu 2')).deste[1]!.isim, 'Oyuncu 2');
+    });
 
     test('soru verisinden 12 kutu ve deste okunur, kart 4 satır 3 sütundur', () {
       final kart = BingoKarti.oku(ornekKart)!;
@@ -121,6 +128,29 @@ void main() {
       expect(durum(c).hucreler[0]!.isim, 'Oyuncu 1');
       expect(durum(c).siradaki!.isim, 'Oyuncu 4');
       expect(depo.kayitAcSayisi, 0);
+    });
+
+    test('açık oyunda destenin görülmemiş oyuncuları telefona gelmez', () async {
+      final (c, _) = await kartiAc((d) => d
+        ..kayit = {'skor': 1, 'durum': 'basladi'}
+        ..bingoHamleListesi = [
+          const BingoHamlesi(sira: 1, hucre: 0, dogru: true),
+          const BingoHamlesi(sira: 2, dogru: false),
+        ]);
+
+      final deste = durum(c).kart!.deste;
+      expect([for (var i = 0; i < 3; i++) deste[i]!.isim], ['Oyuncu 1', 'Oyuncu 2', 'Oyuncu 3']);
+      expect(deste.skip(3), everyElement(isNull));
+    });
+
+    test('sıradaki oyuncu hamlenin cevabıyla gelir', () async {
+      final (c, _) = await kartiAc();
+      expect(durum(c).kart!.deste[1], isNull);
+
+      await notifier(c).pasGec();
+
+      expect(durum(c).siradaki!.isim, 'Oyuncu 2');
+      expect(durum(c).kart!.deste[2], isNull);
     });
 
     test('deste dönmüşken yarım kalan kart doğru oyuncuyla açılır', () async {
@@ -207,7 +237,7 @@ void main() {
     });
 
     test('dolu kutuya oyuncu konmaz, sunucuya istek gitmez', () async {
-      final (c, depo) = await kartiAc((d) => d.bingoEslesmeleri = {1: [0], 2: [0]});
+      final (c, depo) = await kartiAc((d) => d.bingoEslesmeleri = {1: [0], 2: [0, 5]});
 
       await notifier(c).yerlestir(0);
       await notifier(c).yerlestir(0);
@@ -250,17 +280,6 @@ void main() {
       expect(depo.bingoHamleIstekleri.map((h) => h.sira), [1, 2, 3, 4, 5, 6]);
     });
 
-    test('sunucu sıradaki oyuncuyu söylemezse uygulama aynı kuralla bulur', () async {
-      final (c, _) = await kartiAc((d) => d.bingoSiradakiGonderir = false);
-
-      await notifier(c).yerlestir(0); // 1. oyuncu yerleşti
-      for (var i = 0; i < 15; i++) {
-        await notifier(c).pasGec(); // 2..16
-      }
-
-      expect(durum(c).siradaki!.isim, 'Oyuncu 2');
-    });
-
     test('bağlantı hatasında hamle sayılmaz, mesaj döner', () async {
       final (c, _) = await kartiAc((d) => d.bingoHamleHataVerir = true);
 
@@ -285,22 +304,24 @@ void main() {
 
   group('Süre', () {
     test('yeni oyunda seçilen süre sunucuda başlatılır', () async {
-      final (c, depo) = await kartiAc((d) => d..oyunSureToplam = 60..oyunSureKalan = 60, 60);
+      final (c, depo) = await kartiAc(null, 60);
 
-      expect(depo.oyunSureIstekleri, [60]);
+      expect(depo.acilisIstekleri, [(oyunTipi: testOyunTipi, sure: 60)]);
+      expect(depo.oyunSureToplam, 60);
       expect(durum(c, 60).sureSaniye, 60);
       expect(durum(c, 60).bitisZamani, isNotNull);
     });
 
-    test('uygulama kapalıyken süre dolduysa kart açılırken kapatılır', () async {
+    test('uygulama kapalıyken süre dolduysa kartı sunucu açılışta kapatır', () async {
       final (c, depo) = await kartiAc((d) => d
         ..kayit = {'skor': 0, 'durum': 'basladi'}
-        ..oyunSureToplam = 30
+        ..oyunSureToplam = 60
         ..oyunSureKalan = 0);
 
       expect(durum(c).durum, BingoDurumu.bitti);
       expect(durum(c).sureDoldu, isTrue);
-      expect(depo.bingoPesSayisi, 1);
+      expect(depo.kayit!['durum'], 'tamamlandi');
+      expect(depo.bingoPesSayisi, 0);
     });
 
     test('sunucu süreyi dolmuş bulursa hamle sayılmaz, oyun biter', () async {

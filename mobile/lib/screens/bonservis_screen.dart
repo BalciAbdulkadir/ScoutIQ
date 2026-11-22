@@ -128,7 +128,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 OyunIlerlemesi(
-                  soruSayisi: durum.sorular.length,
+                  soruSayisi: durum.soruSayisi,
                   mevcutSoru: durum.soruIndex,
                   sonuclar: durum.sonuclar,
                   renk: Renkler.bonservis,
@@ -232,10 +232,10 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
 
     return OyunBitisEkrani(
       paylas: _paylas(durum),
-      skor: '$dogruSayisi/${durum.sorular.length}',
+      skor: '$dogruSayisi/${durum.soruSayisi}',
       skorAciklamasi: 'doğru',
       puan: PuanKarti(oyunTipi: widget.oyunTipi),
-      baslik: durum.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, durum.sorular.length),
+      baslik: durum.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, durum.soruSayisi),
       renk: Renkler.bonservis,
       ozetSatirlari: [
         // Süre dolduysa cevaplanmayan sorular da boş işaretle gösterilir
@@ -253,7 +253,7 @@ class _BonservisScreenState extends ConsumerState<BonservisScreen> {
       oyunTipi: widget.oyunTipi,
       metin: (seri, puan) => bonservisPaylasimi(
         sonuclar: durum.sonuclar,
-        soruSayisi: durum.sorular.isEmpty ? 5 : durum.sorular.length,
+        soruSayisi: durum.soruSayisi,
         zorluk: oyun.zorluk,
         sure: widget.sure,
         seri: seri,

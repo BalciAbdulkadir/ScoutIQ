@@ -12,7 +12,8 @@ const _ayni = Object();
 
 class BonservisState {
   final BonservisDurumu durum;
-  final List<BonservisSorusu> sorular;
+  final List<BonservisSorusu> sorular; // Gelen sorular: cevaplananlar + sıradaki; oyun bitince hepsi (040_oyun_ac.sql)
+  final int soruSayisi; // Toplam soru sayısı (ilerleme çubuğu ve özet için)
   final int soruIndex;
   final int skor; // Puan: her doğru tahmin 2 puan
   final List<bool> sonuclar; // Cevaplanan soruların doğru/yanlış sonucu, ilerleme çubuğu için
@@ -26,6 +27,7 @@ class BonservisState {
   const BonservisState({
     this.durum = BonservisDurumu.yukleniyor,
     this.sorular = const [],
+    this.soruSayisi = 5,
     this.soruIndex = 0,
     this.skor = 0,
     this.sonuclar = const [],
@@ -38,12 +40,13 @@ class BonservisState {
   });
 
   BonservisSorusu? get soru => soruIndex < sorular.length ? sorular[soruIndex] : null;
-  bool get sonSoru => soruIndex == sorular.length - 1;
+  bool get sonSoru => soruIndex >= soruSayisi - 1;
   bool get tahminEdilebilir => durum == BonservisDurumu.oynaniyor && !gonderiliyor && sonCevapDogru == null;
 
   BonservisState copyWith({
     BonservisDurumu? durum,
     List<BonservisSorusu>? sorular,
+    int? soruSayisi,
     int? soruIndex,
     int? skor,
     List<bool>? sonuclar,
@@ -57,6 +60,7 @@ class BonservisState {
     return BonservisState(
       durum: durum ?? this.durum,
       sorular: sorular ?? this.sorular,
+      soruSayisi: soruSayisi ?? this.soruSayisi,
       soruIndex: soruIndex ?? this.soruIndex,
       skor: skor ?? this.skor,
       sonuclar: sonuclar ?? this.sonuclar,
@@ -136,8 +140,8 @@ class BonservisNotifier extends Notifier<BonservisState> {
       if (!ref.mounted) return;
 
       state = switch (acilis) {
-        Oynanabilir(:final sorular, :final tarih, :final skor, :final ilerleme, :final kalanSaniye) =>
-          _devamDurumu(bonservisSorulariniOku(sorular), tarih, skor, ilerleme, kalanSaniye),
+        Oynanabilir(:final sorular, :final soruSayisi, :final tarih, :final skor, :final ilerleme, :final kalanSaniye) =>
+          _devamDurumu(bonservisSorulariniOku(sorular), soruSayisi, tarih, skor, ilerleme, kalanSaniye),
         ZatenOynandi(:final skor, :final ilerleme) => state.copyWith(
             durum: BonservisDurumu.zatenOynandi, skor: skor, sonuclar: [for (final c in ilerleme) c['dogru'] == true]),
         OyunYok() => state.copyWith(durum: BonservisDurumu.oyunYok),
@@ -149,7 +153,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
         if (acilis.yeni) _olaylar.basladi(sure: sure);
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
         final sureDoldu = acilis.kalanSaniye != null && acilis.kalanSaniye! <= 0;
-        if (sureDoldu || state.sonuclar.length >= state.sorular.length) {
+        if (sureDoldu || state.sonuclar.length >= state.soruSayisi) {
           await _kapat(sureDoldu: sureDoldu);
         } else if (state.sonuclar.isNotEmpty) {
           // Yarım kalan oyunda cevaplanmış soruların bedelleri bitiş özeti için
@@ -165,6 +169,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
   // Oyun açılınca kurulan durum. Yarım kalan oyun kaldığı sorudan devam eder.
   BonservisState _devamDurumu(
     List<BonservisSorusu> sorular,
+    int soruSayisi,
     String tarih,
     int skor,
     List<Map<String, dynamic>> ilerleme,
@@ -173,6 +178,7 @@ class BonservisNotifier extends Notifier<BonservisState> {
     return state.copyWith(
       durum: BonservisDurumu.oynaniyor,
       sorular: sorular,
+      soruSayisi: soruSayisi,
       tarih: tarih,
       soruIndex: sorular.isEmpty ? 0 : ilerleme.length.clamp(0, sorular.length - 1),
       skor: skor,
@@ -197,18 +203,19 @@ class BonservisNotifier extends Notifier<BonservisState> {
       if (sonuc.sureDoldu) {
         // Süre sunucuda dolmuştu: tahmin sayılmadı, oyun o anki skorla bitti
         state = state.copyWith(durum: BonservisDurumu.bitti, sureDoldu: true, skor: sonuc.skor, gonderiliyor: false);
-        await _bedelleriYukle();
+        await _bitisOzetiniYukle();
         return null;
       }
 
       final bedel = sonuc.rakipBonservis;
+      final siradaki = sonuc.siradakiSoru;
       state = state.copyWith(
-        sorular: bedel == null
-            ? null
-            : [
-                for (var i = 0; i < state.sorular.length; i++)
-                  i == state.soruIndex ? state.sorular[i].rakipBedeliyle(bedel) : state.sorular[i],
-              ],
+        sorular: [
+          for (var i = 0; i < state.sorular.length; i++)
+            i == state.soruIndex && bedel != null ? state.sorular[i].rakipBedeliyle(bedel) : state.sorular[i],
+          // Sıradaki soru cevabın içinde gelir: sorular tek tek açılır
+          if (siradaki != null && !sonuc.bitti) ...bonservisSorulariniOku([siradaki]),
+        ],
         skor: sonuc.skor,
         sonuclar: [...state.sonuclar, sonuc.dogru],
         sonCevapDogru: sonuc.dogru,
@@ -231,7 +238,8 @@ class BonservisNotifier extends Notifier<BonservisState> {
   void devamEt() {
     if (state.durum != BonservisDurumu.oynaniyor || state.sonCevapDogru == null) return;
 
-    if (state.sonSoru) {
+    // Sıradaki soru gelmediyse oyun devam edemez
+    if (state.sonSoru || state.soruIndex + 1 >= state.sorular.length) {
       state = state.copyWith(durum: BonservisDurumu.bitti);
       return;
     }
@@ -261,6 +269,24 @@ class BonservisNotifier extends Notifier<BonservisState> {
     if (!ref.mounted) return;
 
     state = state.copyWith(durum: BonservisDurumu.bitti, sureDoldu: sureDoldu, gonderiliyor: false);
+    await _bitisOzetiniYukle();
+  }
+
+  // Bitiş özeti: süre dolduysa gelmemiş sorular da gösterilir (bitmiş oyunda sunucu bütün soruları döndürür),
+  // sonra sağdaki oyuncuların bedelleri. İkisi de ek bilgidir, gelmezse özet yine gösterilir.
+  Future<void> _bitisOzetiniYukle() async {
+    if (state.sorular.length < state.soruSayisi) {
+      final ham = await bitmisOyununSorulari(_depo, _oyunTipi);
+      if (!ref.mounted) return;
+      if (ham != null && ham.length >= state.sorular.length) {
+        final gelen = bonservisSorulariniOku(ham);
+        // Açılmış bedeller korunur; eski sorulardaki sağdaki bedel soru verisinden gelir
+        state = state.copyWith(sorular: [
+          for (var i = 0; i < gelen.length; i++)
+            i < state.sorular.length && state.sorular[i].rakip.toplamBonservis != null ? state.sorular[i] : gelen[i],
+        ]);
+      }
+    }
     await _bedelleriYukle();
   }
 

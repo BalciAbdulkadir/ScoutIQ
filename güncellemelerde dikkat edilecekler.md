@@ -4,16 +4,17 @@ Bu liste, şimdiye kadar yaşanan sorunlardan ve verilen kararlardan çıkarıld
 
 ---
 
-## 1. `oyuncular` tablosuna yeni kolon eklerken
+## 1. `oyuncular` ya da `kulupler` tablosuna yeni kolon eklerken
 
-036'dan beri uygulama `oyuncular` tablosunu kolon kolon verilen izinlerle okuyor. `toplam_bonservis` kolonu kapalı, çünkü Bonservis'in cevabını ele veriyor.
+040'tan beri bu iki tabloda uygulama sadece gereken kolonları okuyabilir: `oyuncular`'da `id`, `isim`, `uyruk`, `foto_url`; `kulupler`'de `id`, `isim`, `logo_url`. Piyasa değeri, bilinirlik, kademe gibi soru üretimine ait kolonlar kapalı.
 
-- `oyuncular`'a eklenen yeni bir kolonu uygulama **otomatik olarak okuyamaz.**
-- Uygulama yeni kolonu okuyacaksa (doğrudan ya da `oyuncu_ara` gibi kullanıcının yetkisiyle çalışan bir fonksiyon içinden), kolonu ekleyen SQL dosyasına şu satır yazılır:
+- Yeni eklenen kolon **kimseye açık değildir.** Uygulama okumayacaksa hiçbir şey yazılmaz.
+- Uygulama yeni kolonu okuyacaksa (doğrudan ya da kullanıcının yetkisiyle çalışan bir fonksiyon içinden), kolonu ekleyen SQL dosyasına izin satırı yazılır ve nedeni dosyanın yorumuna eklenir:
   ```sql
   grant select (yeni_kolon) on public.oyuncular to authenticated;
   ```
 - Kolon cevabı ele veriyorsa (bedel, kademe, kulüp sayısı gibi) bu izin **verilmez.** Kolonu sadece sunucu fonksiyonları okur.
+- `oyuncu_ara` 040'tan beri `security definer`'dır, kolon izinlerinden etkilenmez.
 - Kontrol:
   ```sql
   select has_column_privilege('authenticated', 'public.oyuncular', 'yeni_kolon', 'select');
@@ -42,12 +43,14 @@ Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasakl
 ## 4. Yeni oyun ya da yeni oyun fonksiyonu yazarken
 
 **Cevap telefona gitmez:**
-- `gunluk_oyunlar.soru_verisi`'ni giriş yapmış herkes okuyabilir. Cevap ya da cevabı ele veren bilgi (sağdaki oyuncunun bedeli, Kesişim'in hedef oyuncusu, sorunun kademesi) soru verisine yazılmaz.
+- `gunluk_oyunlar.soru_verisi` oyunu açan kullanıcıya `oyun_ac`'tan gelir. Cevap ya da cevabı ele veren bilgi (sağdaki oyuncunun bedeli, Kesişim'in hedef oyuncusu, sorunun kademesi) soru verisine yazılmaz.
 - Böyle bilgiler RLS'i açık ama politikası olmayan ayrı bir tabloda tutulur (`bonservis_cevaplari`, `kesisim_hedefleri`, `top10_cevaplari` gibi).
 - Soru verisinde bir **id** varsa, o id ile okunabilen tablolarda cevabı ele veren bir kolon olup olmadığına bakılır. Bonservis'te açık buradan doğdu: oyuncunun id'si soruda vardı, `oyuncular.toplam_bonservis` de herkese açıktı.
 
 **Cevap ve skor sunucuda kontrol edilir:**
-- Cevap ve skor `security definer` fonksiyonlarla yazılır. İstemci `kullanici_oyun_gecmisi`'ni güncelleyemez, sadece boş kayıt açar (`CLAUDE.md` madde 16).
+- Cevap ve skor `security definer` fonksiyonlarla yazılır. İstemci `kullanici_oyun_gecmisi`'ne yazamaz, kayıt da açamaz (`CLAUDE.md` madde 16).
+- Oyun sadece `oyun_ac` ile açılır (040): soru, kayıt ve süre aynı anda oluşur. `gunluk_oyunlar.soru_verisi`'ni uygulama doğrudan okuyamaz. Yeni oyun tipi `oyun_ac`'taki tip ve süre listelerine eklenir.
+- Açık oyunda henüz sırası gelmemiş soru gönderilmez. Kesişim ve Bonservis'te sıradaki soru cevap fonksiyonunun dönüşündedir, Bingo'da sıradaki oyuncu `bingo_hamle`'nin dönüşündedir. Sorular tek tek gelen yeni bir oyun yazılırsa aynı düzen kullanılır.
 - Cevabı kontrol eden ya da cevap döndüren her fonksiyon:
   - `auth.uid()` boşsa hata verir.
   - Kullanıcının o oyun için açık (`basladi`) kaydı yoksa cevap vermez.

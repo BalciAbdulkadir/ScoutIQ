@@ -4,35 +4,32 @@ import 'package:mobile/models/bingo.dart';
 import 'package:mobile/models/bonservis_sorusu.dart';
 import 'package:mobile/models/kesisim.dart';
 import 'package:mobile/models/izgara.dart';
+import 'package:mobile/models/oyun_paketi.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/models/puan.dart';
 import 'package:mobile/models/top10.dart';
 import 'package:mobile/services/oyun_deposu.dart';
 
 // Testler için bellekte çalışan depo. Supabase'e bağlanmaz, yapılan çağrıları kaydeder.
+// oyunAc, 040_oyun_ac.sql'deki oyun_ac fonksiyonunun basit bir kopyasıdır: kayıt yoksa açar ve seçilen süreyi başlatır,
+// açık oyunda sırası gelmemiş soruları ve Bingo'da görülmemiş oyuncuları göndermez.
 class SahteOyunDeposu implements OyunDeposu {
   @override
   String? kullaniciId = 'kullanici-1';
 
   String tarih = '2026-10-23';
-  bool tarihHataVerir = false;
   bool oyunYuklemeHataVerir = false;
 
   // Kullanıcının o günkü kaydı: {'skor': int, 'durum': String}
   Map<String, dynamic>? kayit;
-  // Kayıttaki ilerleme (cevaplanan sorular). oyunKaydi kayda ekleyerek döndürür.
+  // Kayıttaki ilerleme (cevaplanan sorular)
   List<Map<String, dynamic>> ilerleme = [];
 
-  // Kesişim/Bonservis süresi: başlatılan toplam süre ve sunucuya göre kalan süre (saniye). null: süresiz.
+  // Kesişim/Bonservis/Bingo süresi: başlatılan toplam süre ve sunucuya göre kalan süre (saniye). null: süresiz.
   int? oyunSureToplam;
   int? oyunSureKalan;
-  final List<int?> oyunSureIstekleri = [];
-  bool oyunSureHataVerir = false;
 
-  // kayitAc çağrıldığında başka bir cihazın kaydı atmış gibi davranılsın mı
-  bool kayitAcCakisir = false;
-
-  // kayitAc çağrıldığında kullanıcı bu oyunu bugün başka bir zorlukta oynamış gibi davranılsın mı
+  // oyunAc yeni kayıt açarken kullanıcı bu oyunu bugün başka bir zorlukta oynamış gibi davranılsın mı
   bool baskaModOynandi = false;
 
   Map<String, dynamic>? oyun = {
@@ -82,10 +79,8 @@ class SahteOyunDeposu implements OyunDeposu {
   // Izgara süresi: başlatılan toplam süre ve sunucuya göre kalan süre (saniye). null: süresiz.
   int? izgaraSureToplam;
   int? izgaraSureKalan;
-  final List<int?> sureBaslatmaIstekleri = [];
   // Doluysa sunucu süre dolmuş gibi tahmini reddeder
   bool izgaraSuresiDoldu = false;
-  bool izgaraSureHataVerir = false;
 
   // Kulüp ID'si -> logo (Kesişim'de logosu olmayan eski sorular için)
   Map<String, String> logolar = {};
@@ -94,8 +89,6 @@ class SahteOyunDeposu implements OyunDeposu {
   // Bingo: destedeki sıra (1'den) -> oyuncunun uyduğu kutular. Listede olmayan oyuncu hiçbir kutuya uymaz.
   Map<int, List<int>> bingoEslesmeleri = {1: [0], 2: [5, 6]};
   int bingoDesteBoyutu = 16;
-  // Sunucunun hamleden sonra bildirdiği sıradaki oyuncu: false ise eski sunucu gibi göndermez, uygulama kendisi bulur
-  bool bingoSiradakiGonderir = true;
   int bingoKutuSayisi = 12;
   // Sunucudaki hamleler (uygulama yeniden açılınca okunur)
   List<BingoHamlesi> bingoHamleListesi = [];
@@ -120,54 +113,95 @@ class SahteOyunDeposu implements OyunDeposu {
   int top10PesSayisi = 0;
 
   // Çağrı kayıtları
-  int kayitAcSayisi = 0;
+  final List<({String oyunTipi, int? sure})> acilisIstekleri = []; // oyunAc çağrıları
+  int kayitAcSayisi = 0; // oyunAc'ın açtığı yeni kayıtlar
   int cevapKontrolSayisi = 0;
   final List<String> arananlar = [];
   // Sunucunun yazdığı skorlar (034_skor_sunucuda.sql: skor artık sadece sunucuda yazılır)
   final List<({int skor, bool bitti})> yazilanSkorlar = [];
-  final List<String> istenenOyunTipleri = []; // gununOyunu ile istenen oyun tipleri
-  final List<String> acilanKayitTipleri = []; // kayitAc ile açılan oyun tipleri
+  final List<String> istenenOyunTipleri = []; // oyunAc ile istenen oyun tipleri
+  final List<String> acilanKayitTipleri = []; // oyunAc'ın yeni kayıt açtığı oyun tipleri
 
   @override
-  Future<String> oyunTarihi() async {
-    if (tarihHataVerir) throw Exception('bağlantı yok');
-    return tarih;
-  }
+  Future<String> oyunTarihi() async => tarih;
 
   @override
-  Future<Map<String, dynamic>?> oyunKaydi(String kullaniciId, String oyunTipi, String tarih) async =>
-      kayit == null ? null : {...kayit!, 'ilerleme': ilerleme};
-
-  @override
-  Future<OyunSuresiDurumu?> oyunSureyiBaslat(String oyunTipi, String tarih, {int? sure}) async {
-    oyunSureIstekleri.add(sure);
-    if (oyunSureHataVerir) throw Exception('bağlantı yok');
-    // Gerçek sunucu gibi: süre sadece açık ve süresi olmayan kayda bir kez verilir
-    if (sure != null && kayit?['durum'] == 'basladi' && oyunSureToplam == null) {
-      oyunSureToplam = sure;
-      oyunSureKalan = sure;
-    }
-    final toplam = oyunSureToplam;
-    return toplam == null ? null : OyunSuresiDurumu(toplam: toplam, kalan: oyunSureKalan ?? toplam);
-  }
-
-  @override
-  Future<Map<String, dynamic>?> gununOyunu(String oyunTipi, String tarih) async {
+  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure}) async {
     istenenOyunTipleri.add(oyunTipi);
+    acilisIstekleri.add((oyunTipi: oyunTipi, sure: sure));
     if (oyunYuklemeHataVerir) throw Exception('bağlantı yok');
-    return oyun;
+    final oyun = this.oyun;
+    if (oyun == null) return OyunPaketi(durum: OyunPaketiDurumu.yok, tarih: tarih);
+
+    final izgara = oyunTipi.startsWith('izgara');
+    var yeni = false;
+    if (kayit == null) {
+      if (baskaModOynandi) throw BaskaModOynandi();
+      kayitAcSayisi++;
+      acilanKayitTipleri.add(oyunTipi);
+      kayit = {'skor': 0, 'durum': 'basladi'};
+      yeni = true;
+      // Süre kayıtla aynı anda başlar
+      if (sure != null && izgara) {
+        izgaraSureToplam = sure;
+        izgaraSureKalan = sure;
+      } else if (sure != null) {
+        oyunSureToplam = sure;
+        oyunSureKalan = sure;
+      }
+    }
+
+    final toplam = izgara ? izgaraSureToplam : oyunSureToplam;
+    final kalan = toplam == null ? null : (izgara ? izgaraSureKalan : oyunSureKalan) ?? toplam;
+    var sureDoldu = false;
+    if (kayit!['durum'] == 'basladi' && kalan != null && kalan <= 0) {
+      // Oyun kapalıyken süre dolmuş: kayıt kapatılır
+      kayit = {...kayit!, 'durum': 'tamamlandi'};
+      sureDoldu = true;
+    }
+    final acik = kayit!['durum'] == 'basladi';
+
+    Object? veri = oyun['soru_verisi'];
+    int? soruSayisi;
+    int? siradaki;
+    if (veri is List) {
+      soruSayisi = veri.length;
+      if (acik) veri = [for (final soru in veri.take(ilerleme.length + 1)) _bedelsiz(soru)];
+    } else if (oyunTipi.startsWith('bingo') && veri is Map<String, dynamic> && acik) {
+      siradaki = _bingoSiradaki;
+      final gorulen = {for (final h in bingoHamleListesi) h.oyuncu, ?siradaki};
+      final deste = veri['oyuncular'] as List;
+      veri = {
+        ...veri,
+        'oyuncular': [for (var i = 0; i < deste.length; i++) gorulen.contains(i + 1) ? deste[i] : null],
+      };
+    }
+
+    return OyunPaketi(
+      durum: acik ? OyunPaketiDurumu.acik : OyunPaketiDurumu.bitti,
+      yeni: yeni,
+      oyunId: oyun['id'] as String,
+      tarih: tarih,
+      skor: _kayitSkoru,
+      ilerleme: ilerleme,
+      sure: toplam,
+      kalan: sureDoldu ? 0 : kalan,
+      sureDoldu: sureDoldu,
+      soruSayisi: soruSayisi,
+      siradaki: siradaki,
+      soruVerisi: veri,
+    );
   }
 
-  @override
-  Future<void> kayitAc({required String kullaniciId, required String oyunId, required String oyunTipi, required String tarih}) async {
-    kayitAcSayisi++;
-    acilanKayitTipleri.add(oyunTipi);
-    if (baskaModOynandi) throw BaskaModOynandi();
-    if (kayitAcCakisir) {
-      kayit = {'skor': 4, 'durum': 'basladi'};
-      throw KayitZatenVar();
-    }
-    kayit = {'skor': 0, 'durum': 'basladi'};
+  // Açık oyunda sağdaki oyuncunun bedeli gönderilmez (eski Bonservis soruları)
+  static Object? _bedelsiz(Object? soru) =>
+      soru is Map<String, dynamic> ? ({...soru}..remove('oyuncu_b_bonservis')) : soru;
+
+  // Sıradaki soru (cevaplanan soru sayısı kadar ilerlemiş): oyun bitmediyse
+  Map<String, dynamic>? _siradakiSoru(bool bitti) {
+    final sorular = (oyun?['soru_verisi'] as List?) ?? const [];
+    if (bitti || ilerleme.length >= sorular.length) return null;
+    return _bedelsiz(sorular[ilerleme.length]) as Map<String, dynamic>?;
   }
 
   @override
@@ -213,7 +247,7 @@ class SahteOyunDeposu implements OyunDeposu {
     ilerleme = [...ilerleme, {'dogru': dogru, 'cevap': isim}];
     final bitti = ilerleme.length >= _soruSayisi;
     _skoruYaz(skor, bitti);
-    return KesisimCevapSonucu(dogru: dogru, skor: skor, bitti: bitti);
+    return KesisimCevapSonucu(dogru: dogru, skor: skor, bitti: bitti, siradakiSoru: _siradakiSoru(bitti));
   }
 
   // 034_skor_sunucuda.sql'deki bonservis_tahmin fonksiyonunun basit bir kopyası. Bedeller soru verisinden okunur.
@@ -233,7 +267,8 @@ class SahteOyunDeposu implements OyunDeposu {
     ilerleme = [...ilerleme, {'dogru': dogru}];
     final bitti = ilerleme.length >= _soruSayisi;
     _skoruYaz(skor, bitti);
-    return BonservisTahminSonucu(dogru: dogru, rakipBonservis: rakip, skor: skor, bitti: bitti);
+    return BonservisTahminSonucu(
+        dogru: dogru, rakipBonservis: rakip, skor: skor, bitti: bitti, siradakiSoru: _siradakiSoru(bitti));
   }
 
   // Sunucudaki bonservis_cevaplari tablosu: testler doldurmazsa soru verisindeki eski usul bedel kullanılır
@@ -307,19 +342,6 @@ class SahteOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<OyunSuresiDurumu?> izgaraSureyiBaslat(String oyunId, {int? sure}) async {
-    sureBaslatmaIstekleri.add(sure);
-    if (izgaraSureHataVerir) throw Exception('fonksiyon yok');
-    // Süre bir kez başlatılır, sonradan değiştirilemez
-    if (sure != null && izgaraSureToplam == null) {
-      izgaraSureToplam = sure;
-      izgaraSureKalan = sure;
-    }
-    if (izgaraSureToplam == null) return null;
-    return OyunSuresiDurumu(toplam: izgaraSureToplam!, kalan: izgaraSureKalan!);
-  }
-
-  @override
   Future<int> izgaraPesEt(String oyunId) async {
     izgaraPesSayisi++;
     final skor = izgaraTahminListesi.where((t) => t.hucre != null).length;
@@ -346,11 +368,23 @@ class SahteOyunDeposu implements OyunDeposu {
 
   Set<int> get _bingoYerlesenler => {for (final h in bingoHamleListesi) if (h.dogru) h.oyuncu};
 
-  int? get _bingoSiradaki => bingoSiradaki(
-        desteBoyutu: bingoDesteBoyutu,
-        yerlesenler: _bingoYerlesenler,
-        son: bingoHamleListesi.isEmpty ? 0 : bingoHamleListesi.last.oyuncu,
-      );
+  // 023_bingo_sinirsiz_pas.sql'deki bingo_siradaki: son gelen oyuncudan sonraki, henüz yerleşmemiş ilk oyuncu;
+  // destenin sonundan başa dönülür. Yerleşmemiş oyuncu kalmadıysa null.
+  int? get _bingoSiradaki {
+    final son = bingoHamleListesi.isEmpty ? 0 : bingoHamleListesi.last.oyuncu;
+    for (var adim = 1; adim <= bingoDesteBoyutu; adim++) {
+      final sira = (son + adim - 1) % bingoDesteBoyutu + 1;
+      if (!_bingoYerlesenler.contains(sira)) return sira;
+    }
+    return null;
+  }
+
+  // Destedeki oyuncu (soru verisinden): sunucu sıradaki oyuncuyu hamlenin cevabında gönderir
+  BingoOyuncusu? _bingoOyuncusu(int? sira) {
+    final deste = (oyun?['soru_verisi'] as Map<String, dynamic>?)?['oyuncular'] as List?;
+    if (sira == null || deste == null || sira < 1 || sira > deste.length) return null;
+    return BingoOyuncusu.fromJson(deste[sira - 1] as Map<String, dynamic>);
+  }
 
   // 023_bingo_sinirsiz_pas.sql'deki bingo_hamle fonksiyonunun basit bir kopyası: destede sıra döner, yanlış kutu
   // kaydedilmez. Kalan oyuncuların hiçbiri boş kutulara uymuyorsa oyun biter.
@@ -366,7 +400,8 @@ class SahteOyunDeposu implements OyunDeposu {
     final oyuncu = _bingoSiradaki!;
     final dogru = hucre != null && (bingoEslesmeleri[oyuncu] ?? const []).contains(hucre);
     if (hucre != null && !dogru) {
-      return BingoHamleSonucu(dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: false, siradaki: oyuncu);
+      return BingoHamleSonucu(
+          dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: false, siradaki: oyuncu, siradakiOyuncu: _bingoOyuncusu(oyuncu));
     }
     bingoHamleListesi.add(BingoHamlesi(sira: sira, oyuncu: oyuncu, hucre: hucre, dogru: dogru));
 
@@ -383,7 +418,8 @@ class SahteOyunDeposu implements OyunDeposu {
       hucre: hucre,
       skor: _bingoSkoru,
       bitti: bitti,
-      siradaki: bitti || !bingoSiradakiGonderir ? null : _bingoSiradaki,
+      siradaki: bitti ? null : _bingoSiradaki,
+      siradakiOyuncu: bitti ? null : _bingoOyuncusu(_bingoSiradaki),
     );
   }
 

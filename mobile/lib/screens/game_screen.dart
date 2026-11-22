@@ -90,7 +90,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           OyunIlerlemesi(
-            soruSayisi: state.questions.length,
+            soruSayisi: state.soruSayisi,
             mevcutSoru: state.currentIndex,
             sonuclar: state.sonuclar,
             renk: Renkler.kesisim,
@@ -161,7 +161,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       oyunTipi: widget.oyunTipi,
       metin: (seri, puan) => kesisimPaylasimi(
         sonuclar: state.sonuclar,
-        soruSayisi: state.questions.isEmpty ? 5 : state.questions.length,
+        soruSayisi: state.soruSayisi,
         zorluk: oyun.zorluk,
         sure: widget.sure,
         seri: seri,
@@ -203,10 +203,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     return OyunBitisEkrani(
       paylas: _paylas(state),
-      skor: '$dogruSayisi/${state.questions.length}',
+      skor: '$dogruSayisi/${state.soruSayisi}',
       skorAciklamasi: 'doğru',
       puan: PuanKarti(oyunTipi: widget.oyunTipi),
-      baslik: state.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, state.questions.length),
+      baslik: state.sureDoldu ? 'Süre doldu' : bitisBasligi(dogruSayisi, state.soruSayisi),
       renk: Renkler.kesisim,
       ozetSatirlari: [
         for (var i = 0; i < state.questions.length; i++)

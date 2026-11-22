@@ -99,6 +99,27 @@ void main() {
     });
   });
 
+  group('Sorular tek tek gelir', () {
+    test('başta sadece ilk soru gelir, sağdaki oyuncunun bedeli olmadan', () async {
+      final (c, _) = await oyunuBaslat();
+
+      expect(durum(c).sorular, hasLength(1));
+      expect(durum(c).soruSayisi, 5);
+      expect(durum(c).soru!.rakip.toplamBonservis, isNull);
+    });
+
+    test('sıradaki soru tahminin cevabıyla gelir', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      await notifier(c).tahminEt(dahaFazla: dogruTahminler[0]);
+      notifier(c).devamEt();
+
+      expect(durum(c).sorular, hasLength(2));
+      expect(durum(c).soru!.referans.isim, 'Kane');
+      expect(depo.acilisIstekleri, hasLength(1));
+    });
+  });
+
   group('Bedel sunucuda', () {
     // Yeni sorularda sağdaki oyuncunun bedeli soru verisinde yoktur, sunucudaki bonservis_cevaplari'ndadır
     SahteOyunDeposu yeniUsul(SahteOyunDeposu d) => d
