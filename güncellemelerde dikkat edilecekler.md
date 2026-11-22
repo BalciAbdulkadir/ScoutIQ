@@ -114,6 +114,7 @@ Kurulum ve dağıtım: `backend/CLOUD_RUN.md`.
 - **Firebase:** `mobile/android/app/google-services.json` repoda yok. Dosya yoksa derleme sadece uyarı verir ve uygulama Firebase'siz çalışır: Crashlytics ve Analytics veri toplamaz. Play'e yüklenecek derlemede dosyanın yerinde olduğuna bakılır.
 - **Sürüm numarası:** Her Play yüklemesinde `mobile/pubspec.yaml`'daki sürümün `+` işaretinden sonraki sayısı (`1.0.0+1` → `1.0.0+2`) bir artırılır. Aynı sayıyla ikinci yükleme kabul edilmez.
 - **Analitik:** Kişisel veri ve oyuncu ismi gönderilmez. Yeni olay eklemeden önce `CLAUDE.md` madde 18'e bakılır.
+- **Reklam kimliği:** Uygulamada reklam yok. `AD_ID` ve `ACCESS_ADSERVICES_*` izinleri `AndroidManifest.xml`'de `tools:node="remove"` ile çıkarılır, Analytics reklam kimliği toplamaz (`google_analytics_adid_collection_enabled = false`). Play Console'daki reklam kimliği beyanı "kullanılmıyor"dur. Yeni bir eklenti bu izinleri tekrar eklerse birleştirilmiş manifest'e bakılır (`gradlew :app:processDebugMainManifest`).
 
 ## 8. Git
 
