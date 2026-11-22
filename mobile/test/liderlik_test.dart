@@ -225,6 +225,37 @@ void main() {
       expect(depo.bildirilenler, isEmpty);
     });
 
+    testWidgets('sunucu reddederse sebebi yazar (ör. yeterince gün oynamamış)', (tester) async {
+      final (depo, _) = await siralamayiAc(tester, liderlik: bildirmeTablosu);
+      depo.bildirmeReddi = bildirimHataMesaji('bildirim_icin_erken');
+
+      await tester.longPress(find.text('kotu_ad'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bildir'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ad bildirmek için en az 3 farklı gün oyun bitirmiş olman gerekir.'), findsOneWidget);
+      expect(find.text('Teşekkürler, inceleyeceğiz.'), findsNothing);
+    });
+
+    test('profil sıfırlanma bilgisini okur; eski sunucu göndermezse sıfırlanmamış sayılır', () {
+      final sifirlanmis = Profil.fromJson(
+          {'takma_ad': 'Oyuncu 3FA9', 'varsayilan': true, 'degistirilebilir_tarih': null, 'sifirlandi': true});
+      expect(sifirlanmis.sifirlandi, isTrue);
+      expect(sifirlanmis.degistirilebilir(DateTime.now()), isTrue);
+
+      final eski = Profil.fromJson({'takma_ad': 'kanarya_10', 'varsayilan': false, 'degistirilebilir_tarih': null});
+      expect(eski.sifirlandi, isFalse);
+    });
+
+    test('sunucu ipuçları Türkçe mesaja çevrilir', () {
+      expect(takmaAdHataMesaji('takma_ad_kilitli'), 'Takma adını değiştiremezsin');
+      expect(takmaAdHataMesaji('takma_ad_sifirlanmis'), contains('bildirildiği için kullanılamaz'));
+      expect(bildirimHataMesaji('varsayilan_ad'), 'Bu ad bildirilemez.');
+      expect(bildirimHataMesaji('kendini_bildiremez'), 'Kendi adını bildiremezsin.');
+      expect(bildirimHataMesaji(null), 'Bildirim gönderilemedi. Tekrar dene.');
+    });
+
     testWidgets('bildirim gönderilemezse mesaj çıkar', (tester) async {
       final (depo, _) = await siralamayiAc(tester, liderlik: bildirmeTablosu);
       depo.bildirmeHataVerir = true;

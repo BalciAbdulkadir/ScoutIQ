@@ -108,7 +108,8 @@ abstract class OyunDeposu {
   // Takma adı kaydeder, kaydedilen adı döndürür. Sunucu reddederse TakmaAdHatasi fırlatır.
   Future<String> takmaAdKaydet(String ad);
 
-  // Başkasının takma adını uygunsuz diye bildirir (041). Farklı 3 kişi bildirince sunucu kullanıcıyı tablodan gizler.
+  // Başkasının takma adını uygunsuz diye bildirir (041). Farklı 3 kişi aynı adı bildirince sunucu adı sıfırlar
+  // (kullanıcı tabloda varsayılan adla kalır). Sunucu reddederse TakmaAdHatasi fırlatır.
   Future<void> takmaAdBildir(String kullaniciId);
 }
 
@@ -362,7 +363,11 @@ class SupabaseOyunDeposu implements OyunDeposu {
 
   @override
   Future<void> takmaAdBildir(String kullaniciId) async {
-    await _supabase.rpc('takma_ad_bildir', params: {'p_kullanici': kullaniciId});
+    try {
+      await _supabase.rpc('takma_ad_bildir', params: {'p_kullanici': kullaniciId});
+    } on PostgrestException catch (e) {
+      throw TakmaAdHatasi(bildirimHataMesaji(e.hint));
+    }
   }
 }
 

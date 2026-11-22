@@ -503,6 +503,7 @@ class SahteOyunDeposu implements OyunDeposu {
   final List<String> kaydedilenTakmaAdlar = [];
   final List<String> bildirilenler = [];
   bool bildirmeHataVerir = false;
+  String? bildirmeReddi; // Doluysa takmaAdBildir sunucu reddi gibi bu mesajla TakmaAdHatasi fırlatır
 
   @override
   Future<PuanDetayi?> puanGetir(String oyunTipi, {String? tarih}) async {
@@ -532,6 +533,7 @@ class SahteOyunDeposu implements OyunDeposu {
   @override
   Future<void> takmaAdBildir(String kullaniciId) async {
     if (bildirmeHataVerir) throw Exception('bağlantı yok');
+    if (bildirmeReddi != null) throw TakmaAdHatasi(bildirmeReddi!);
     bildirilenler.add(kullaniciId);
   }
 }

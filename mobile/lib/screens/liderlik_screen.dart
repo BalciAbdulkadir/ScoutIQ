@@ -62,8 +62,10 @@ class _LiderlikScreenState extends ConsumerState<LiderlikScreen> {
     try {
       await takmaAdiBildir(ref, kimlik);
       messenger.showSnackBar(const SnackBar(content: Text('Teşekkürler, inceleyeceğiz.')));
+    } on TakmaAdHatasi catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.mesaj)));
     } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('Bildirim gönderilemedi. Tekrar dene.')));
+      messenger.showSnackBar(SnackBar(content: Text(bildirimHataMesaji(null))));
     }
   }
 
