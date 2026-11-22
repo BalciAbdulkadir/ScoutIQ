@@ -83,12 +83,12 @@ Future<OyunAcilisi> gunlukOyunuAc(OyunDeposu depo, String oyunTipi, {int? sure})
   );
 }
 
-// Bitmiş oyunun bütün soruları (bitiş özeti için): sunucu bitmiş oyunda soru verisinin tamamını döndürür.
-// Gelmezse null; özet o ana kadar gelen sorularla gösterilir.
-Future<List<dynamic>?> bitmisOyununSorulari(OyunDeposu depo, String oyunTipi) async {
+// Bitmiş oyunun bütün soruları (bitiş özeti için). Oyun id'siyle okunur, oyunAc çağrılmaz: oyun 00.00'dan önce
+// başlayıp süre 00.00'dan sonra dolarsa oyunAc yeni günün oyununu açardı (yeni günde o zorluğa süresiz kayıt,
+// 042_bitmis_oyun_sorulari.sql). Gelmezse null; özet o ana kadar gelen sorularla gösterilir.
+Future<List<dynamic>?> bitmisOyununSorulari(OyunDeposu depo, String oyunId) async {
   try {
-    final paket = await depo.oyunAc(oyunTipi);
-    return paket.bitti && paket.soruVerisi is List ? paket.soruVerisi as List<dynamic> : null;
+    return await depo.bitmisOyunSorulari(oyunId);
   } catch (_) {
     return null;
   }
