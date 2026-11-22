@@ -174,7 +174,7 @@ namespace ScoutIQ.API.Jobs
             try
             {
                 gecmis = (await HepsiniOku<Top10SorusuKaydi>("oyun_id, tarih, sablon, anahtar, eksen", g => g.OyunId,
-                        s => s.Filter("tarih", Operator.GreaterThanOrEqual, baslangic)))
+                        s => s.Filter("tarih", Operator.GreaterThanOrEqual, baslangic), anahtarKolon: "oyun_id"))
                     .Select(g => new Top10SoruSecici.Gecmis(g.Sablon, g.Anahtar, g.Eksen, g.Tarih.Date))
                     .ToList();
             }
@@ -868,8 +868,9 @@ namespace ScoutIQ.API.Jobs
         // id sırasıyla, her istekte son okunan id'den sonrası istenerek parça parça okunur. Atlamalı (offset) sayfalama
         // kullanılmaz: PostgREST son sayfada toplam satır sayısını tahminle hesaplayıp gerçekte var olan satırları
         // "yok" sayabiliyor (PGRST103), bu yüzden son sayfadaki kayıtlar kayboluyordu.
+        // anahtarKolon: birincil anahtarı id olmayan tablolarda (top10_sorulari) sıralanacak kolon; idSec bu kolonu döndürür.
         private async Task<List<T>> HepsiniOku<T>(string kolonlar, Func<T, string> idSec,
-            Func<IPostgrestTable<T>, IPostgrestTable<T>>? filtre = null) where T : BaseModel, new()
+            Func<IPostgrestTable<T>, IPostgrestTable<T>>? filtre = null, string anahtarKolon = "id") where T : BaseModel, new()
         {
             var tumu = new List<T>();
             string? sonId = null;
@@ -878,9 +879,9 @@ namespace ScoutIQ.API.Jobs
             {
                 IPostgrestTable<T> sorgu = _supabaseClient.From<T>().Select(kolonlar);
                 if (filtre != null) sorgu = filtre(sorgu);
-                if (sonId != null) sorgu = sorgu.Filter("id", Operator.GreaterThan, sonId);
+                if (sonId != null) sorgu = sorgu.Filter(anahtarKolon, Operator.GreaterThan, sonId);
 
-                var sayfa = (await sorgu.Order("id", Ordering.Ascending).Limit(SayfaBoyutu).Get()).Models;
+                var sayfa = (await sorgu.Order(anahtarKolon, Ordering.Ascending).Limit(SayfaBoyutu).Get()).Models;
                 tumu.AddRange(sayfa);
                 if (sayfa.Count < SayfaBoyutu) return tumu;
                 sonId = idSec(sayfa[^1]);
