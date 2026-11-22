@@ -8,7 +8,8 @@ import '../services/oyun_deposu.dart';
 
 class GameState {
   final String status; // 'loading', 'playing', 'completed', 'already_played', 'no_game', 'error'
-  final List<dynamic> questions;
+  final List<dynamic> questions; // Gelen sorular: cevaplananlar + sıradaki; oyun bitince hepsi (040_oyun_ac.sql)
+  final int soruSayisi; // Toplam soru sayısı (ilerleme çubuğu ve özet için)
   final int currentIndex;
   final int score;
   final String? lastGuessStatus;
@@ -28,6 +29,7 @@ class GameState {
     this.ornekCevaplar = const {},
     this.status = 'loading',
     this.questions = const [],
+    this.soruSayisi = 5,
     this.currentIndex = 0,
     this.score = 0,
     this.lastGuessStatus,
@@ -42,6 +44,7 @@ class GameState {
   GameState copyWith({
     String? status,
     List<dynamic>? questions,
+    int? soruSayisi,
     int? currentIndex,
     int? score,
     String? lastGuessStatus,
@@ -61,6 +64,7 @@ class GameState {
       ornekCevaplar: ornekCevaplar ?? this.ornekCevaplar,
       status: status ?? this.status,
       questions: questions ?? this.questions,
+      soruSayisi: soruSayisi ?? this.soruSayisi,
       currentIndex: currentIndex ?? this.currentIndex,
       score: score ?? this.score,
       lastGuessStatus: lastGuessStatus ?? this.lastGuessStatus,
@@ -135,10 +139,19 @@ class GameNotifier extends Notifier<GameState> {
       if (!ref.mounted) return;
 
       state = switch (acilis) {
-        Oynanabilir(:final oyunId, :final sorular, :final tarih, :final skor, :final ilerleme, :final kalanSaniye) =>
+        Oynanabilir(
+          :final oyunId,
+          :final sorular,
+          :final soruSayisi,
+          :final tarih,
+          :final skor,
+          :final ilerleme,
+          :final kalanSaniye
+        ) =>
           state.copyWith(
             status: 'playing',
             questions: sorular,
+            soruSayisi: soruSayisi,
             gameId: oyunId,
             tarih: tarih,
             // Yarım kalan oyun kaldığı sorudan devam eder
@@ -158,7 +171,7 @@ class GameNotifier extends Notifier<GameState> {
         if (acilis.yeni) _olaylar.basladi(sure: sure);
         // Oyun kapalıyken süre dolmuşsa ya da bütün sorular cevaplanmış ama kayıt kapanmamışsa oyun bitirilir
         final sureDoldu = acilis.kalanSaniye != null && acilis.kalanSaniye! <= 0;
-        if (sureDoldu || state.sonuclar.length >= state.questions.length) {
+        if (sureDoldu || state.sonuclar.length >= state.soruSayisi) {
           await _kapat(sureDoldu: sureDoldu);
           return;
         }
@@ -221,9 +234,12 @@ class GameNotifier extends Notifier<GameState> {
         // Süre sunucuda dolmuştu: cevap sayılmadı, oyun o anki skorla bitti
         state = state.copyWith(status: 'completed', sureDoldu: true, score: sonuc.skor, gonderiliyor: true);
       } else {
-        final bitti = sonuc.bitti || state.currentIndex + 1 >= state.questions.length;
+        final siradaki = sonuc.siradakiSoru;
+        // Sıradaki soru cevabın içinde gelir; gelmediyse oyun devam edemez
+        final bitti = sonuc.bitti || state.currentIndex + 1 >= state.soruSayisi || siradaki == null;
         state = state.copyWith(
           status: bitti ? 'completed' : 'playing',
+          questions: bitti ? null : [...state.questions, siradaki],
           currentIndex: bitti ? state.currentIndex : state.currentIndex + 1,
           score: sonuc.skor,
           lastGuessStatus: sonuc.dogru ? 'correct' : 'wrong',
@@ -245,7 +261,7 @@ class GameNotifier extends Notifier<GameState> {
     }
 
     // Bitiş ekranı açıldı; yanlış cevap varsa özette gösterilecek doğru cevapları getiriyoruz
-    if (state.status == 'completed') await _ornekCevaplariYukle();
+    if (state.status == 'completed') await _bitisOzetiniYukle();
     return null;
   }
 
@@ -270,13 +286,24 @@ class GameNotifier extends Notifier<GameState> {
     if (!ref.mounted) return;
 
     state = state.copyWith(status: 'completed', sureDoldu: sureDoldu);
+    await _bitisOzetiniYukle();
+  }
+
+  // Bitiş özeti: süre dolduysa gelmemiş sorular da gösterilir (bitmiş oyunda sunucu bütün soruları döndürür),
+  // yanlış ya da boş kalan sorular için örnek doğru cevaplar. İkisi de ek bilgidir, gelmezse özet yine gösterilir.
+  Future<void> _bitisOzetiniYukle() async {
+    if (state.questions.length < state.soruSayisi) {
+      final sorular = await bitmisOyununSorulari(_depo, _oyunTipi);
+      if (!ref.mounted) return;
+      if (sorular != null && sorular.length >= state.questions.length) state = state.copyWith(questions: sorular);
+    }
     await _ornekCevaplariYukle();
   }
 
   // Örnek doğru cevaplar özete ek bilgidir: gelmezse özet yine gösterilir, hata kullanıcıya yansıtılmaz.
   // Sadece yanlış ya da cevaplanmamış soru varsa gerekir.
   Future<void> _ornekCevaplariYukle() async {
-    if (state.sonuclar.length == state.questions.length && !state.sonuclar.contains(false)) return;
+    if (state.sonuclar.length >= state.soruSayisi && !state.sonuclar.contains(false)) return;
     try {
       final ornekler = await _depo.kesisimOrnekCevaplar(state.gameId!);
       if (!ref.mounted) return;

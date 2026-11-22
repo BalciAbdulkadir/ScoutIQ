@@ -1,4 +1,4 @@
-// 3x3 Izgara oyununun verileri. Tahta gunluk_oyunlar.soru_verisi'nden okunur (biçim: 011_izgara.sql).
+// 3x3 Izgara oyununun verileri. Tahta oyun_ac'ın soru verisinden okunur (biçim: 011_izgara.sql, 040_oyun_ac.sql).
 
 const izgaraBoyutu = 3;
 
@@ -6,19 +6,6 @@ const izgaraBoyutu = 3;
 // Bir Izgara ekranını açan seçim. Süre sadece yeni başlanan tahtada kullanılır;
 // yarım kalan tahtanın süresi sunucudan okunur.
 typedef IzgaraAcilisi = ({IzgaraZorlugu zorluk, int? sure});
-
-// Süreli oyunun (Izgara, Kesişim, Bonservis) sunucudaki süre durumu
-class OyunSuresiDurumu {
-  final int toplam; // Seçilen süre (saniye)
-  final int kalan; // Sunucuya göre kalan süre (saniye)
-
-  const OyunSuresiDurumu({required this.toplam, required this.kalan});
-
-  static OyunSuresiDurumu? oku(Object? json) {
-    if (json is! Map<String, dynamic>) return null;
-    return OyunSuresiDurumu(toplam: (json['sure'] as num).toInt(), kalan: (json['kalan'] as num).toInt());
-  }
-}
 
 // Kolay, orta ve zor ayrı oyunlardır; her biri günde bir kez oynanır
 enum IzgaraZorlugu {

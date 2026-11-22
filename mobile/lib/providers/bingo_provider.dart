@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bingo.dart';
-import '../models/izgara.dart' show OyunSuresiDurumu;
-import '../providers/hub_provider.dart';
+import '../models/oyun_paketi.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
 import 'puan_provider.dart';
@@ -101,7 +100,9 @@ class BingoState {
 // Bingo oyunu. Destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
 // Yanlış kutuya konan oyuncu gitmez, ceza da yoktur: başka kutu denenebilir. Oyuncu sadece doğru kutuya konunca
 // ya da pas geçilince sıradakine geçilir. Pas sınırsızdır: destede sıra döner, pas geçilen oyuncu tekrar gelir
-// (bingoSiradaki). Kutuya yerleşen oyuncu bir daha gelmez.
+// (sıradaki oyuncuyu sunucu söyler, 023_bingo_sinirsiz_pas.sql). Kutuya yerleşen oyuncu bir daha gelmez.
+// Deste telefona baştan inmez: açık oyunda sadece görülmüş oyuncular gelir, sıradaki oyuncu hamlenin cevabındadır
+// (040_oyun_ac.sql).
 // Hamleler sunucuda tutulduğu için yarıda bırakılan kart tekrar açılınca kaldığı yerden devam eder; skor istemciden alınmaz.
 // Oyun bütün kutular dolunca, pes edilince ya da süre dolunca biter. Kalan oyuncuların hiçbiri boş kutulara uymuyorsa
 // sunucu oyunu bitirir.
@@ -152,81 +153,44 @@ class BingoNotifier extends Notifier<BingoState> {
 
   Future<void> _yukle() async {
     try {
-      final kullaniciId = _depo.kullaniciId;
-      if (kullaniciId == null) {
+      if (_depo.kullaniciId == null) {
         state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: oturumYokMesaji);
         return;
       }
 
-      String tarih;
+      // Kart, kayıt ve süre tek çağrıyla açılır (040_oyun_ac.sql): kayıt yoksa açılır ve seçilen süre aynı anda başlar;
+      // varsa (devam eden ya da bitmiş) kart hamlelerden kurulur. Açık oyunda deste sadece görülmüş oyuncuları taşır,
+      // sıradaki oyuncuyu sunucu söyler.
+      final OyunPaketi paket;
       try {
-        tarih = await _depo.oyunTarihi();
-      } catch (_) {
-        tarih = bugununTarihi();
+        paket = await _depo.oyunAc(secim.oyunTipi, sure: secim.sure);
+      } on BaskaModOynandi {
+        if (!ref.mounted) return;
+        state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: baskaZorlukMesaji);
+        return;
       }
-
-      final oyun = await _depo.gununOyunu(secim.oyunTipi, tarih);
-      final kart = BingoKarti.oku(oyun?['soru_verisi']);
+      final kart = BingoKarti.oku(paket.soruVerisi);
       if (!ref.mounted) return;
-      if (oyun == null || kart == null) {
+      if (paket.durum == OyunPaketiDurumu.yok || paket.oyunId == null || kart == null) {
         state = state.copyWith(durum: BingoDurumu.oyunYok);
         return;
       }
-      final oyunId = oyun['id'] as String;
-
-      // Kayıt yoksa oyun 'basladi' olarak açılır; varsa (devam eden ya da bitmiş) kart hamlelerden kurulur
-      var kayit = await _depo.oyunKaydi(kullaniciId, secim.oyunTipi, tarih);
-      var yeni = false;
-      if (kayit == null) {
-        try {
-          await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: secim.oyunTipi, tarih: tarih);
-          kayit = {'durum': 'basladi'};
-          yeni = true;
-          _olaylar.basladi(sure: secim.sure);
-        } on KayitZatenVar {
-          // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
-          kayit = await _depo.oyunKaydi(kullaniciId, secim.oyunTipi, tarih) ?? {'durum': 'basladi'};
-        } on BaskaModOynandi {
-          if (!ref.mounted) return;
-          state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: baskaZorlukMesaji);
-          return;
-        }
-      }
+      final oyunId = paket.oyunId!;
+      if (paket.yeni) _olaylar.basladi(sure: secim.sure);
 
       final hamleler = await _depo.bingoHamleleri(oyunId);
       if (!ref.mounted) return;
 
       final yerlesenHamleler = [
         for (final h in hamleler)
-          if (h.dogru && h.hucre != null && h.oyuncu >= 1 && h.oyuncu <= kart.deste.length) h,
+          if (h.dogru && h.hucre != null && h.oyuncu >= 1 && h.oyuncu <= kart.deste.length && kart.deste[h.oyuncu - 1] != null)
+            h,
       ];
-      final hucreler = {for (final h in yerlesenHamleler) h.hucre!: kart.deste[h.oyuncu - 1]};
+      final hucreler = {for (final h in yerlesenHamleler) h.hucre!: kart.deste[h.oyuncu - 1]!};
       final yerlesenler = {for (final h in yerlesenHamleler) h.oyuncu};
-      final siradakiSira = bingoSiradaki(
-        desteBoyutu: kart.deste.length,
-        yerlesenler: yerlesenler,
-        son: hamleler.isEmpty ? 0 : hamleler.last.oyuncu,
-      );
-      var bitti = kayit['durum'] == 'tamamlandi' || hucreler.length >= kart.hucreSayisi || siradakiSira == null;
-
-      // Süre: yeni oyunda seçilen süre başlatılır, yarım kalan oyunda sunucudaki kalan süre okunur
-      OyunSuresiDurumu? sure;
-      if (!bitti) {
-        try {
-          sure = await _depo.oyunSureyiBaslat(secim.oyunTipi, tarih, sure: yeni ? secim.sure : null);
-        } catch (_) {
-          // Sunucuya sorulamazsa yeni oyun seçilen süreyle cihazda sayılır, yarım kalan oyun süresiz açılır
-          if (yeni && secim.sure != null) sure = OyunSuresiDurumu(toplam: secim.sure!, kalan: secim.sure!);
-        }
-        if (!ref.mounted) return;
-      }
-      final sureDoldu = sure != null && sure.kalan <= 0;
-      if (sureDoldu) {
-        // Uygulama kapalıyken süre dolmuş: kart o anki skorla kapatılır
-        await _depo.bingoPesEt(oyunId);
-        if (!ref.mounted) return;
-        bitti = true;
-      }
+      final siradakiSira = paket.siradaki;
+      final bitti = paket.bitti || hucreler.length >= kart.hucreSayisi || siradakiSira == null;
+      final kalan = paket.kalan;
 
       state = state.copyWith(
         durum: bitti ? BingoDurumu.bitti : BingoDurumu.oynaniyor,
@@ -234,11 +198,12 @@ class BingoNotifier extends Notifier<BingoState> {
         oyunId: oyunId,
         hucreler: hucreler,
         hamleSayisi: hamleler.length,
-        siradakiSira: () => siradakiSira,
+        siradakiSira: () => bitti ? null : siradakiSira,
         yerlesenler: yerlesenler,
-        sureSaniye: sure?.toplam,
-        bitisZamani: sure == null || sureDoldu ? null : DateTime.now().add(Duration(seconds: sure.kalan)),
-        sureDoldu: sureDoldu,
+        sureSaniye: paket.sure,
+        bitisZamani: bitti || kalan == null ? null : DateTime.now().add(Duration(seconds: kalan)),
+        // Uygulama kapalıyken süre dolmuş: sunucu kartı o anki skorla kapattı
+        sureDoldu: paket.sureDoldu,
       );
       if (bitti) await _ornekCevaplariYukle();
     } catch (_) {
@@ -280,14 +245,14 @@ class BingoNotifier extends Notifier<BingoState> {
     }
     // Yanlış kutu hamle sayılmaz: oyuncu sırada kalır
     final kaydedildi = !sonuc.sureDoldu && !(hucre != null && !sonuc.dogru);
-    // Sıradaki oyuncuyu sunucu söyler; söylemezse aynı kuralla burada bulunur
-    final siradakiSira = kaydedildi
-        ? sonuc.siradaki ??
-            bingoSiradaki(desteBoyutu: state.kart!.deste.length, yerlesenler: yerlesenler, son: oyuncuSira)
-        : oyuncuSira;
+    // Sıradaki oyuncuyu sunucu söyler; oyuncunun kendisi de cevapla gelir (deste baştan telefona inmez)
+    final siradakiSira = kaydedildi ? sonuc.siradaki : oyuncuSira;
+    final siradakiOyuncu = sonuc.siradakiOyuncu;
+    final kart = siradakiSira != null && siradakiOyuncu != null ? state.kart!.oyuncuyla(siradakiSira, siradakiOyuncu) : null;
 
     state = state.copyWith(
       durum: sonuc.bitti ? BingoDurumu.bitti : BingoDurumu.oynaniyor,
+      kart: kart,
       hucreler: hucreler,
       yerlesenler: yerlesenler,
       hamleSayisi: kaydedildi ? state.hamleSayisi + 1 : state.hamleSayisi,

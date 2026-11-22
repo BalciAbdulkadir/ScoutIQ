@@ -1,5 +1,7 @@
-// Bingo oyununun verileri. Kart ve deste gunluk_oyunlar.soru_verisi'nden okunur (biçim: 020_bingo.sql).
+// Bingo oyununun verileri. Kart ve deste oyun_ac'ın soru verisinden okunur (biçim: 020_bingo.sql, 040_oyun_ac.sql).
 // Hangi oyuncunun hangi kutuya uyduğu soru verisinde yoktur; hamleler sunucuda kontrol edilir.
+// Açık oyunda deste sadece görülmüş oyuncuları taşır (yerleşmiş, pas geçilmiş ve sıradaki); görülmemiş oyuncunun yeri
+// null'dır. Sıradaki oyuncuyu sunucu söyler, her hamlenin cevabında gelir. Oyun bitince destenin tamamı gelir.
 
 // Kartın kutu sayısı: günün kartı 12 kutudur (4 satır, 3 sütun, 021_bingo_tek_mod.sql). Tek modlu Bingo'dan önce
 // üretilmiş 16 kutulu (4x4) kartlar da okunur.
@@ -49,10 +51,10 @@ class BingoOyuncusu {
   }
 }
 
-// Günün kartı: 12 kategori ve sırayla gelecek oyuncular
+// Günün kartı: 12 kategori ve destedeki oyuncular (destedeki sırayla; henüz görülmemiş oyuncu null)
 class BingoKarti {
   final List<BingoKategorisi> hucreler;
-  final List<BingoOyuncusu> deste;
+  final List<BingoOyuncusu?> deste;
 
   const BingoKarti({required this.hucreler, required this.deste});
 
@@ -70,20 +72,16 @@ class BingoKarti {
     if (hucreler is! List || !bingoKutuSayilari.contains(hucreler.length) || deste is! List || deste.isEmpty) return null;
     return BingoKarti(
       hucreler: hucreler.cast<Map<String, dynamic>>().map(BingoKategorisi.fromJson).toList(),
-      deste: deste.cast<Map<String, dynamic>>().map(BingoOyuncusu.fromJson).toList(),
+      deste: [for (final o in deste) o is Map<String, dynamic> ? BingoOyuncusu.fromJson(o) : null],
     );
   }
-}
 
-// Destede sıra döner (023_bingo_sinirsiz_pas.sql'deki bingo_siradaki ile aynı): son gelen oyuncudan sonraki,
-// henüz yerleşmemiş ilk oyuncu; destenin sonundan başa dönülür. Pas geçilen oyuncu böylece sırası gelince tekrar gelir.
-// Sıralar 1'den başlar; son 0 ise henüz oyuncu gelmemiştir. Yerleşmemiş oyuncu kalmadıysa null.
-int? bingoSiradaki({required int desteBoyutu, required Set<int> yerlesenler, required int son}) {
-  for (var adim = 1; adim <= desteBoyutu; adim++) {
-    final sira = (son + adim - 1) % desteBoyutu + 1;
-    if (!yerlesenler.contains(sira)) return sira;
+  // Destenin sira. oyuncusu (1'den) eklenmiş kart: sunucu sıradaki oyuncuyu hamlenin cevabında gönderir.
+  // Oyuncu zaten biliniyorsa kart değişmez.
+  BingoKarti oyuncuyla(int sira, BingoOyuncusu oyuncu) {
+    if (sira < 1 || sira > deste.length || deste[sira - 1] != null) return this;
+    return BingoKarti(hucreler: hucreler, deste: [for (var i = 0; i < deste.length; i++) i == sira - 1 ? oyuncu : deste[i]]);
   }
-  return null;
 }
 
 // bingo_hamleleri tablosundaki bir satır. hucre null: pas.
@@ -113,7 +111,8 @@ class BingoHamleSonucu {
   final int skor;
   final bool bitti;
   final bool sureDoldu; // Süre dolduğu için hamle kabul edilmedi, oyun bitti
-  final int? siradaki; // Sunucuya göre sıradaki oyuncunun destedeki sırası; eski sunucu göndermez
+  final int? siradaki; // Sunucuya göre sıradaki oyuncunun destedeki sırası; oyuncu kalmadıysa null
+  final BingoOyuncusu? siradakiOyuncu; // Sıradaki oyuncunun kendisi (040_oyun_ac.sql)
 
   const BingoHamleSonucu({
     required this.dogru,
@@ -122,6 +121,7 @@ class BingoHamleSonucu {
     required this.bitti,
     this.sureDoldu = false,
     this.siradaki,
+    this.siradakiOyuncu,
   });
 
   factory BingoHamleSonucu.fromJson(Map<String, dynamic> json) {
@@ -132,6 +132,9 @@ class BingoHamleSonucu {
       bitti: json['bitti'] == true,
       sureDoldu: json['sure_doldu'] == true,
       siradaki: (json['siradaki'] as num?)?.toInt(),
+      siradakiOyuncu: json['siradaki_oyuncu'] is Map<String, dynamic>
+          ? BingoOyuncusu.fromJson(json['siradaki_oyuncu'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

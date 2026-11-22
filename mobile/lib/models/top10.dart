@@ -1,4 +1,4 @@
-// Top 10 oyununun verileri. Soru gunluk_oyunlar.soru_verisi'nden okunur (biçim: 029_top10.sql).
+// Top 10 oyununun verileri. Soru oyun_ac'ın soru verisinden okunur (biçim: 029_top10.sql, 040_oyun_ac.sql).
 // Cevaplar soru verisinde yoktur; tahminler sunucuda kontrol edilir, liste oyun bitince açılır.
 
 const top10Boyu = 10;

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/izgara.dart';
+import '../models/oyun_paketi.dart';
 import '../models/oyuncu_oneri.dart';
-import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
 import 'puan_provider.dart';
@@ -127,75 +127,42 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
 
   Future<void> _yukle() async {
     try {
-      final kullaniciId = _depo.kullaniciId;
-      if (kullaniciId == null) {
+      if (_depo.kullaniciId == null) {
         state = state.copyWith(durum: IzgaraDurumu.hata, hataMesaji: oturumYokMesaji);
         return;
       }
 
-      String tarih;
+      // Tahta, kayıt ve süre tek çağrıyla açılır (040_oyun_ac.sql): kayıt yoksa açılır ve seçilen süre aynı anda başlar;
+      // varsa (devam eden ya da bitmiş) tahta tahminlerden kurulur, süre sunucudaki kalan süredir
+      final OyunPaketi paket;
       try {
-        tarih = await _depo.oyunTarihi();
-      } catch (_) {
-        tarih = bugununTarihi();
+        paket = await _depo.oyunAc(zorluk.oyunTipi, sure: acilis.sure);
+      } on BaskaModOynandi {
+        if (!ref.mounted) return;
+        state = state.copyWith(durum: IzgaraDurumu.hata, hataMesaji: baskaIzgaraMesaji);
+        return;
       }
-
-      final oyun = await _depo.gununOyunu(zorluk.oyunTipi, tarih);
-      final tahta = IzgaraTahtasi.oku(oyun?['soru_verisi']);
+      final tahta = IzgaraTahtasi.oku(paket.soruVerisi);
       if (!ref.mounted) return;
-      if (oyun == null || tahta == null) {
+      if (paket.durum == OyunPaketiDurumu.yok || paket.oyunId == null || tahta == null) {
         state = state.copyWith(durum: IzgaraDurumu.oyunYok);
         return;
       }
-      final oyunId = oyun['id'] as String;
-
-      // Kayıt yoksa oyun 'basladi' olarak açılır; varsa (devam eden ya da bitmiş) tahta tahminlerden kurulur
-      var kayit = await _depo.oyunKaydi(kullaniciId, zorluk.oyunTipi, tarih);
-      var yeniBasladi = false;
-      if (kayit == null) {
-        try {
-          await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: zorluk.oyunTipi, tarih: tarih);
-          kayit = {'durum': 'basladi'};
-          yeniBasladi = true;
-          _olaylar.basladi(sure: acilis.sure);
-        } on KayitZatenVar {
-          // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
-          kayit = await _depo.oyunKaydi(kullaniciId, zorluk.oyunTipi, tarih) ?? {'durum': 'basladi'};
-        } on BaskaModOynandi {
-          if (!ref.mounted) return;
-          state = state.copyWith(durum: IzgaraDurumu.hata, hataMesaji: baskaIzgaraMesaji);
-          return;
-        }
-      }
+      final oyunId = paket.oyunId!;
+      if (paket.yeni) _olaylar.basladi(sure: acilis.sure);
 
       final tahminler = await _depo.izgaraTahminleri(oyunId);
       if (!ref.mounted) return;
 
-      var bitti = kayit['durum'] == 'tamamlandi' || tahminler.where((t) => t.hucre != null).length >= izgaraBoyutu * izgaraBoyutu;
-
-      // Süre: yeni tahtada seçilen süre başlatılır, yarım kalan tahtada sunucudaki kalan süre okunur
-      OyunSuresiDurumu? sure;
-      if (!bitti) {
-        try {
-          sure = await _depo.izgaraSureyiBaslat(oyunId, sure: yeniBasladi ? acilis.sure : null);
-        } catch (_) {
-          // Süre öğrenilemezse (ör. 013 henüz çalıştırılmamışsa) tahta süresiz açılır, oyun engellenmez
-        }
-        if (!ref.mounted) return;
-      }
-      final sureDoldu = sure != null && sure.kalan <= 0;
-      if (sureDoldu) {
-        // Uygulama kapalıyken süre dolmuş: tahta o anki skorla kapatılır
-        await _depo.izgaraPesEt(oyunId);
-        if (!ref.mounted) return;
-        bitti = true;
-      }
+      final bitti = paket.bitti || tahminler.where((t) => t.hucre != null).length >= izgaraBoyutu * izgaraBoyutu;
+      final kalan = paket.kalan;
 
       state = state.copyWith(
         durum: bitti ? IzgaraDurumu.bitti : IzgaraDurumu.oynaniyor,
-        sureSaniye: sure?.toplam,
-        bitisZamani: sure == null || sureDoldu ? null : DateTime.now().add(Duration(seconds: sure.kalan)),
-        sureDoldu: sureDoldu,
+        sureSaniye: paket.sure,
+        bitisZamani: bitti || kalan == null ? null : DateTime.now().add(Duration(seconds: kalan)),
+        // Uygulama kapalıyken süre dolmuş: sunucu tahtayı o anki skorla kapattı
+        sureDoldu: paket.sureDoldu,
         tahta: tahta,
         oyunId: oyunId,
         hucreler: {

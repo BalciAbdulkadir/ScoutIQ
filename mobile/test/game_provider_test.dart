@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/oyuncu_oneri.dart';
 import 'package:mobile/providers/game_provider.dart';
-import 'package:mobile/providers/hub_provider.dart';
 import 'package:mobile/services/gunluk_oyun.dart' show baskaZorlukMesaji;
 import 'package:mobile/services/oyun_deposu.dart';
 
@@ -49,9 +48,27 @@ void main() {
       final (c, depo) = await oyunuBaslat();
 
       expect(durum(c).status, 'playing');
-      expect(durum(c).questions, hasLength(5));
       expect(depo.kayitAcSayisi, 1);
       expect(depo.kayit, {'skor': 0, 'durum': 'basladi'});
+    });
+
+    test('sorular tek tek gelir: başta sadece ilk soru, toplam soru sayısı ayrı', () async {
+      final (c, _) = await oyunuBaslat();
+
+      expect(durum(c).questions, hasLength(1));
+      expect(durum(c).questions[0]['kulup_a'], 'Kulüp A0');
+      expect(durum(c).soruSayisi, 5);
+    });
+
+    test('sıradaki soru cevabın içinde gelir', () async {
+      final (c, depo) = await oyunuBaslat();
+
+      await notifier(c).makeGuess(yanlisOyuncu);
+
+      expect(durum(c).questions, hasLength(2));
+      expect(durum(c).questions[1]['kulup_a'], 'Kulüp A1');
+      expect(durum(c).currentIndex, 1);
+      expect(depo.acilisIstekleri, hasLength(1)); // Ayrı bir istek atılmaz
     });
 
     test('seçilen zorluğun günlük oyunu açılır', () async {
@@ -59,6 +76,12 @@ void main() {
 
       expect(depo.istenenOyunTipleri, [testOyunTipi]);
       expect(depo.acilanKayitTipleri, [testOyunTipi]);
+    });
+
+    test('kayıt, süre ve soru tek çağrıyla açılır', () async {
+      final (_, depo) = await oyunuBaslat(null, 60);
+
+      expect(depo.acilisIstekleri, [(oyunTipi: testOyunTipi, sure: 60)]);
     });
 
     test('bugün başka bir zorluk oynandıysa oyun açılmaz, nedeni söylenir', () async {
@@ -81,13 +104,6 @@ void main() {
       expect(durum(c).tarih, '2030-01-15');
     });
 
-    test('sunucudan tarih alınamazsa Türkiye saatine göre yerel tarih kullanılır', () async {
-      final (c, _) = await oyunuBaslat((d) => d.tarihHataVerir = true);
-
-      expect(durum(c).status, 'playing');
-      expect(durum(c).tarih, bugununTarihi());
-    });
-
     test('oturum yoksa hata mesajı gösterilir', () async {
       final (c, depo) = await oyunuBaslat((d) => d.kullaniciId = null);
 
@@ -107,6 +123,11 @@ void main() {
   group('Kulüp logoları', () {
     test('logosu olmayan eski sorularda logolar kulüp kimliğinden tamamlanır', () async {
       final (c, depo) = await oyunuBaslat((d) {
+        // İlk soru cevaplanmış: iki soru birden gelir
+        d.kayit = {'skor': 0, 'durum': 'basladi'};
+        d.ilerleme = [
+          {'dogru': false, 'cevap': 'Mesut Özil'},
+        ];
         d.oyun = {
           'id': 'oyun-1',
           'soru_verisi': [
@@ -186,12 +207,6 @@ void main() {
       expect(durum(c).currentIndex, 2);
     });
 
-    test('oyun aynı anda başka cihazda başlatıldıysa o kayıtla devam edilir', () async {
-      final (c, _) = await oyunuBaslat((d) => d.kayitAcCakisir = true);
-
-      expect(durum(c).status, 'playing');
-      expect(durum(c).score, 4);
-    });
   });
 
   group('Cevap kontrolü', () {
@@ -394,7 +409,7 @@ void main() {
       final once = DateTime.now();
       final (c, depo) = await oyunuBaslat(null, 30);
 
-      expect(depo.oyunSureIstekleri, [30]);
+      expect(depo.oyunSureToplam, 30);
       final kalan = durum(c).bitisZamani!.difference(once).inSeconds;
       expect(kalan, inInclusiveRange(29, 30));
     });
@@ -408,9 +423,10 @@ void main() {
         ];
         d.oyunSureToplam = 60;
         d.oyunSureKalan = 25;
-      });
+      }, 30);
 
-      expect(depo.oyunSureIstekleri, [null]);
+      // Yeni seçilen süre yok sayılır, saat sıfırlanmaz
+      expect(depo.oyunSureToplam, 60);
       expect(durum(c).status, 'playing');
       expect(durum(c).currentIndex, 1);
       expect(durum(c).bitisZamani!.difference(once).inSeconds, inInclusiveRange(24, 25));
@@ -430,13 +446,8 @@ void main() {
       expect(durum(c).sureDoldu, isTrue);
       expect(durum(c).score, 2);
       expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
-    });
-
-    test('süre sunucuda başlatılamazsa yeni oyun seçilen süreyle cihazda sayılır', () async {
-      final (c, _) = await oyunuBaslat((d) => d.oyunSureHataVerir = true, 60);
-
-      expect(durum(c).status, 'playing');
-      expect(durum(c).bitisZamani, isNotNull);
+      // Sunucu kaydı kapattığı için bütün sorular gelir, özette cevaplanmayanlar da görünür
+      expect(durum(c).questions, hasLength(5));
     });
 
     test('süre dolunca oyun o anki skorla biter, kayıt kilitlenir ve cevaplanmayanların doğru cevabı gelir', () async {
@@ -450,6 +461,8 @@ void main() {
       expect(durum(c).score, 2);
       expect(depo.kayit, {'skor': 2, 'durum': 'tamamlandi'});
       expect(durum(c).ornekCevaplar, isNotEmpty);
+      // Gelmemiş sorular oyun bitince gelir (bitiş özeti için)
+      expect(durum(c).questions, hasLength(5));
     });
 
     test('cevap gönderilirken süre dolarsa bildirim yok sayılır, cevap işlenir', () async {

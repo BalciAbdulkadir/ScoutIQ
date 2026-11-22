@@ -218,7 +218,8 @@ void main() {
     test('yeni tahtada seçilen süre sunucuda başlatılır', () async {
       final (c, depo) = await tahtayiAc(null, 60);
 
-      expect(depo.sureBaslatmaIstekleri, [60]);
+      expect(depo.acilisIstekleri, [(oyunTipi: 'izgara_kolay', sure: 60)]);
+      expect(depo.izgaraSureToplam, 60);
       expect(durum(c).sureSaniye, 60);
       final kalan = durum(c).bitisZamani!.difference(DateTime.now()).inSeconds;
       expect(kalan, inInclusiveRange(58, 60));
@@ -231,13 +232,14 @@ void main() {
         d.izgaraSureKalan = 25;
       }, 30);
 
-      expect(depo.sureBaslatmaIstekleri, [null]);
+      // Seçilen 30 sn yok sayılır, saat sıfırlanmaz
+      expect(depo.izgaraSureToplam, 90);
       expect(durum(c).sureSaniye, 90);
       final kalan = durum(c).bitisZamani!.difference(DateTime.now()).inSeconds;
       expect(kalan, inInclusiveRange(23, 25));
     });
 
-    test('uygulama kapalıyken süre dolduysa tahta açılınca kapatılır', () async {
+    test('uygulama kapalıyken süre dolduysa tahtayı sunucu açılışta kapatır', () async {
       final (c, depo) = await tahtayiAc((d) {
         d.kayit = {'skor': 2, 'durum': 'basladi'};
         d.izgaraSureToplam = 30;
@@ -246,14 +248,8 @@ void main() {
 
       expect(durum(c).durum, IzgaraDurumu.bitti);
       expect(durum(c).sureDoldu, isTrue);
-      expect(depo.izgaraPesSayisi, 1);
-    });
-
-    test('süre sunucudan alınamazsa tahta süresiz açılır', () async {
-      final (c, _) = await tahtayiAc((d) => d.izgaraSureHataVerir = true, 60);
-
-      expect(durum(c).durum, IzgaraDurumu.oynaniyor);
-      expect(durum(c).bitisZamani, isNull);
+      expect(depo.kayit!['durum'], 'tamamlandi');
+      expect(depo.izgaraPesSayisi, 0);
     });
 
     test('sayaç sıfırlanınca oyun o anki skorla biter', () async {

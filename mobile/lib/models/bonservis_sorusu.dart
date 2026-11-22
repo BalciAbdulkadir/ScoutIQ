@@ -54,13 +54,15 @@ List<BonservisSorusu> bonservisSorulariniOku(List<dynamic> soruVerisi) {
   ];
 }
 
-// bonservis_tahmin fonksiyonunun cevabı (034_skor_sunucuda.sql). Skor ve ilerleme sunucuda yazılır.
+// bonservis_tahmin fonksiyonunun cevabı (034_skor_sunucuda.sql, 040_oyun_ac.sql). Skor ve ilerleme sunucuda yazılır.
 class BonservisTahminSonucu {
   final bool dogru;
   final int? rakipBonservis; // Tahmin edilen oyuncunun bedeli; süre dolduysa null
   final int skor; // Sunucudaki güncel skor
   final bool bitti; // Son soru cevaplandı, kayıt kapandı
   final bool sureDoldu; // Süre dolmuştu: tahmin kabul edilmedi, oyun o anki skorla bitti
+  // Oyun bitmediyse sıradaki soru (soru verisi biçiminde): sorular tek tek gelir
+  final Map<String, dynamic>? siradakiSoru;
 
   const BonservisTahminSonucu({
     required this.dogru,
@@ -68,6 +70,7 @@ class BonservisTahminSonucu {
     required this.skor,
     required this.bitti,
     this.sureDoldu = false,
+    this.siradakiSoru,
   });
 
   factory BonservisTahminSonucu.fromJson(Map<String, dynamic> json) {
@@ -77,6 +80,7 @@ class BonservisTahminSonucu {
       skor: (json['skor'] as num).toInt(),
       bitti: json['bitti'] == true,
       sureDoldu: json['sure_doldu'] == true,
+      siradakiSoru: json['siradaki_soru'] as Map<String, dynamic>?,
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/oyun_paketi.dart';
 import '../models/oyuncu_oneri.dart';
 import '../models/top10.dart';
-import '../providers/hub_provider.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
 import 'puan_provider.dart';
@@ -117,45 +117,27 @@ class Top10Notifier extends Notifier<Top10State> {
 
   Future<void> _yukle() async {
     try {
-      final kullaniciId = _depo.kullaniciId;
-      if (kullaniciId == null) {
+      if (_depo.kullaniciId == null) {
         state = state.copyWith(durum: Top10Durumu.hata, hataMesaji: oturumYokMesaji);
         return;
       }
 
-      String tarih;
-      try {
-        tarih = await _depo.oyunTarihi();
-      } catch (_) {
-        tarih = bugununTarihi();
-      }
-
-      final oyun = await _depo.gununOyunu(oyunTipi, tarih);
-      final soru = Top10Sorusu.oku(oyun?['soru_verisi']);
+      // Soru ve kayıt tek çağrıyla açılır (040_oyun_ac.sql). Top 10 süresizdir. Kayıt varsa (devam eden ya da bitmiş)
+      // liste tahminlerden kurulur.
+      final paket = await _depo.oyunAc(oyunTipi);
+      final soru = Top10Sorusu.oku(paket.soruVerisi);
       if (!ref.mounted) return;
-      if (oyun == null || soru == null) {
+      if (paket.durum == OyunPaketiDurumu.yok || paket.oyunId == null || soru == null) {
         state = state.copyWith(durum: Top10Durumu.oyunYok);
         return;
       }
-      final oyunId = oyun['id'] as String;
-
-      // Kayıt yoksa oyun 'basladi' olarak açılır; varsa (devam eden ya da bitmiş) liste tahminlerden kurulur
-      var kayit = await _depo.oyunKaydi(kullaniciId, oyunTipi, tarih);
-      if (kayit == null) {
-        try {
-          await _depo.kayitAc(kullaniciId: kullaniciId, oyunId: oyunId, oyunTipi: oyunTipi, tarih: tarih);
-          kayit = {'durum': 'basladi'};
-          _olaylar.basladi();
-        } on KayitZatenVar {
-          // Aynı anda başka bir cihazda açılmış: o kayıtla devam ediliyor
-          kayit = await _depo.oyunKaydi(kullaniciId, oyunTipi, tarih) ?? {'durum': 'basladi'};
-        }
-      }
+      final oyunId = paket.oyunId!;
+      if (paket.yeni) _olaylar.basladi();
 
       final tahminler = await _depo.top10Tahminleri(oyunId);
       if (!ref.mounted) return;
       final yanlisSayisi = tahminler.where((t) => t.sira == null).length;
-      final bitti = kayit['durum'] == 'tamamlandi' ||
+      final bitti = paket.bitti ||
           tahminler.where((t) => t.sira != null).length >= top10Boyu ||
           yanlisSayisi >= top10Can;
 
