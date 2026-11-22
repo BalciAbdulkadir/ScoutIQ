@@ -7,7 +7,7 @@ import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 
 // Takma ad seçimi (alt sayfa). Sıralamada bu ad görünür; Google adı ve fotoğrafı gösterilmez.
-// Kurallar sunucudadır (038 takma_ad_kaydet): 3-16 karakter, harf/rakam/_/., benzersiz, küfürsüz, 7 günde bir.
+// Kurallar sunucudadır (takma_ad_kaydet, 038 ve 041): 3-16 karakter, harf/rakam/_/., benzersiz, küfürsüz, 7 günde bir.
 // Kaydedilirse true döner.
 Future<bool> takmaAdSayfasiniAc(BuildContext context, {String? mevcut}) async {
   final kaydedildi = await showModalBottomSheet<bool>(
@@ -17,6 +17,29 @@ Future<bool> takmaAdSayfasiniAc(BuildContext context, {String? mevcut}) async {
     builder: (context) => TakmaAdSayfasi(mevcut: mevcut),
   );
   return kaydedildi ?? false;
+}
+
+// Takma ad bildirildiği için sıfırlandı (041): kullanıcı tabloda varsayılan adla duruyor, yeni ad seçmesi istenir
+Future<void> takmaAdSifirlandiPenceresi(BuildContext context) async {
+  final sec = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Renkler.yuzey,
+      title: const Text('Takma adın sıfırlandı'),
+      content: const Text(
+        'Takma adın bildirildiği için sıfırlandı, yeni bir ad seç. Puanın ve sıralamadaki yerin duruyor.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          style: TextButton.styleFrom(foregroundColor: Renkler.metinIkincil),
+          child: const Text('Sonra'),
+        ),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yeni ad seç')),
+      ],
+    ),
+  );
+  if (sec == true && context.mounted) await takmaAdSayfasiniAc(context);
 }
 
 class TakmaAdSayfasi extends ConsumerStatefulWidget {

@@ -501,6 +501,9 @@ class SahteOyunDeposu implements OyunDeposu {
   Profil profil = const Profil(takmaAd: 'Oyuncu 3FA9', varsayilan: true);
   String? takmaAdHatasi; // Doluysa takmaAdKaydet bu mesajla reddeder
   final List<String> kaydedilenTakmaAdlar = [];
+  final List<String> bildirilenler = [];
+  bool bildirmeHataVerir = false;
+  String? bildirmeReddi; // Doluysa takmaAdBildir sunucu reddi gibi bu mesajla TakmaAdHatasi fırlatır
 
   @override
   Future<PuanDetayi?> puanGetir(String oyunTipi, {String? tarih}) async {
@@ -525,5 +528,12 @@ class SahteOyunDeposu implements OyunDeposu {
     kaydedilenTakmaAdlar.add(ad);
     profil = Profil(takmaAd: ad, varsayilan: false, degistirilebilirTarih: DateTime.now().add(const Duration(days: 7)));
     return ad;
+  }
+
+  @override
+  Future<void> takmaAdBildir(String kullaniciId) async {
+    if (bildirmeHataVerir) throw Exception('bağlantı yok');
+    if (bildirmeReddi != null) throw TakmaAdHatasi(bildirmeReddi!);
+    bildirilenler.add(kullaniciId);
   }
 }

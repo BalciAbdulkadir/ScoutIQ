@@ -52,8 +52,18 @@ class LiderlikSatiri {
   final int puan;
   final int oyun; // Puanlı (bitirilen) oyun sayısı
   final bool ben;
+  final String? kullaniciId; // Takma ad bildirmek için (041). Kullanıcının alttaki kendi satırında yok.
+  final bool varsayilan; // Ad sistemin ürettiği "Oyuncu 3FA9": bildirilemez
 
-  const LiderlikSatiri({required this.sira, required this.ad, required this.puan, required this.oyun, this.ben = false});
+  const LiderlikSatiri({
+    required this.sira,
+    required this.ad,
+    required this.puan,
+    required this.oyun,
+    this.ben = false,
+    this.kullaniciId,
+    this.varsayilan = false,
+  });
 
   factory LiderlikSatiri.fromJson(Map<String, dynamic> json, {bool? ben}) => LiderlikSatiri(
         sira: (json['sira'] as num).toInt(),
@@ -61,7 +71,12 @@ class LiderlikSatiri {
         puan: (json['puan'] as num).toInt(),
         oyun: (json['oyun'] as num?)?.toInt() ?? 0,
         ben: ben ?? json['ben'] == true,
+        kullaniciId: json['kullanici_id'] as String?,
+        varsayilan: json['varsayilan'] == true,
       );
+
+  // Başkasının seçtiği takma ad bildirilebilir; kendi adı ve sistemin ürettiği ad bildirilemez
+  bool get bildirilebilir => !ben && !varsayilan && kullaniciId != null;
 }
 
 class LiderlikSonucu {
@@ -110,8 +125,9 @@ class Profil {
   final String takmaAd;
   final bool varsayilan;
   final DateTime? degistirilebilirTarih; // Bu tarihten önce takma ad değiştirilemez
+  final bool sifirlandi; // Takma ad bildirildiği için sıfırlandı (041); yeni ad seçilene kadar true
 
-  const Profil({required this.takmaAd, required this.varsayilan, this.degistirilebilirTarih});
+  const Profil({required this.takmaAd, required this.varsayilan, this.degistirilebilirTarih, this.sifirlandi = false});
 
   factory Profil.fromJson(Map<String, dynamic> json) => Profil(
         takmaAd: json['takma_ad'] as String,
@@ -119,6 +135,7 @@ class Profil {
         degistirilebilirTarih: json['degistirilebilir_tarih'] == null
             ? null
             : DateTime.tryParse(json['degistirilebilir_tarih'] as String)?.toLocal(),
+        sifirlandi: json['sifirlandi'] == true,
       );
 
   bool degistirilebilir(DateTime simdi) => degistirilebilirTarih == null || !simdi.isBefore(degistirilebilirTarih!);
@@ -139,7 +156,17 @@ String takmaAdHataMesaji(String? hint) => switch (hint) {
       'takma_ad_yasakli' => 'Bu takma ad kullanılamaz',
       'takma_ad_alinmis' => 'Bu takma ad alınmış',
       'takma_ad_erken' => 'Takma adını 7 günde bir değiştirebilirsin',
+      'takma_ad_kilitli' => 'Takma adını değiştiremezsin',
+      'takma_ad_sifirlanmis' => 'Bu ad bildirildiği için kullanılamaz, başka bir ad seç',
       _ => 'Takma ad kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.',
+    };
+
+// Takma ad bildirilemedi (041): sunucunun hata ipucundan Türkçe mesaj
+String bildirimHataMesaji(String? hint) => switch (hint) {
+      'bildirim_icin_erken' => 'Ad bildirmek için en az 3 farklı gün oyun bitirmiş olman gerekir.',
+      'varsayilan_ad' => 'Bu ad bildirilemez.',
+      'kendini_bildiremez' => 'Kendi adını bildiremezsin.',
+      _ => 'Bildirim gönderilemedi. Tekrar dene.',
     };
 
 // Seçim ekranında gösterilen çarpanlar ve en yüksek puan. Puanı uygulama yazmaz; bu değerler sunucudaki
