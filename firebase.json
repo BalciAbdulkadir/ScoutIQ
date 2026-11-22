@@ -1,0 +1,24 @@
+{
+  "hosting": [
+    {
+      "target": "footylore",
+      "public": "web_sitesi",
+      "cleanUrls": true,
+      "trailingSlash": false,
+      "ignore": ["**/.*"],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+            },
+            { "key": "X-Content-Type-Options", "value": "nosniff" },
+            { "key": "Referrer-Policy", "value": "no-referrer" }
+          ]
+        }
+      ]
+    }
+  ]
+}

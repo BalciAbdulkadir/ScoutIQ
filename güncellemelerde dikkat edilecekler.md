@@ -105,6 +105,7 @@ Kurulum ve dağıtım: `backend/CLOUD_RUN.md`.
 - **Firebase:** `mobile/android/app/google-services.json` repoda yok. Dosya yoksa derleme sadece uyarı verir ve uygulama Firebase'siz çalışır: Crashlytics ve Analytics veri toplamaz. Play'e yüklenecek derlemede dosyanın yerinde olduğuna bakılır.
 - **Sürüm numarası:** Her Play yüklemesinde `mobile/pubspec.yaml`'daki sürümün `+` işaretinden sonraki sayısı (`1.0.0+1` → `1.0.0+2`) bir artırılır. Aynı sayıyla ikinci yükleme kabul edilmez.
 - **Analitik:** Kişisel veri ve oyuncu ismi gönderilmez. Yeni olay eklemeden önce `CLAUDE.md` madde 18'e bakılır.
+- **Gizlilik politikası ve hesap silme sayfası:** Repo kökündeki `web_sitesi/` klasöründedir (`https://footylore.web.app`, Firebase Hosting, `footylore` sitesi). Uygulama yeni bir veri toplamaya başlarsa (yeni tablo, yeni analitik olayı, yeni hizmet sağlayıcı) ya da hesap silme adımları değişirse `web_sitesi/gizlilik.html` ve `web_sitesi/hesap-silme.html` aynı PR'da güncellenir, sayfalardaki "Son güncelleme" tarihi değişir. Sitede JavaScript, çerez ve dış kaynak olmaz (`mobile/test/web_sitesi_test.dart`).
 
 ## 8. Git
 

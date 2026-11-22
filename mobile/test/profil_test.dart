@@ -74,7 +74,7 @@ void main() {
     expect(find.text('Gizlilik politikası'), findsOneWidget);
     expect(find.text('Çıkış yap'), findsOneWidget);
     expect(find.text('Hesabımı sil'), findsOneWidget);
-    expect(gizlilikPolitikasiAdresi, startsWith('https://'));
+    expect(gizlilikPolitikasiAdresi, 'https://footylore.web.app/gizlilik');
   });
 
   testWidgets('çıkış onay sorar, vazgeçince oturum açık kalır', (tester) async {
