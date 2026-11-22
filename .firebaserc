@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "scoutiq-511311"
+  },
+  "targets": {
+    "scoutiq-511311": {
+      "hosting": {
+        "footylore": ["footylore"]
+      }
+    }
+  }
+}

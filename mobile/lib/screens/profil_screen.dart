@@ -12,8 +12,8 @@ import '../widgets/kullanici_avatari.dart';
 import '../widgets/takma_ad_sayfasi.dart';
 import '../widgets/tebesir.dart';
 
-// Gizlilik politikasının yayınlandığı sayfa
-const gizlilikPolitikasiAdresi = 'https://footylore.app/gizlilik';
+// Gizlilik politikasının yayınlandığı sayfa (repo kökündeki web_sitesi/, Firebase Hosting'deki footylore sitesi)
+const gizlilikPolitikasiAdresi = 'https://footylore.web.app/gizlilik';
 
 // Hesap sayfası: giriş yapılan hesap, çıkış, gizlilik politikası ve hesap silme (Google Play zorunluluğu).
 // Çıkış ya da silme sonrası oturum kapanınca uygulama giriş ekranına döner (main.dart oturumu dinler);
