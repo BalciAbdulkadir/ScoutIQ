@@ -275,8 +275,8 @@ class BonservisNotifier extends Notifier<BonservisState> {
   // Bitiş özeti: süre dolduysa gelmemiş sorular da gösterilir (bitmiş oyunda sunucu bütün soruları döndürür),
   // sonra sağdaki oyuncuların bedelleri. İkisi de ek bilgidir, gelmezse özet yine gösterilir.
   Future<void> _bitisOzetiniYukle() async {
-    if (state.sorular.length < state.soruSayisi) {
-      final ham = await bitmisOyununSorulari(_depo, _oyunTipi);
+    if (state.sorular.length < state.soruSayisi && _oyunId != null) {
+      final ham = await bitmisOyununSorulari(_depo, _oyunId!);
       if (!ref.mounted) return;
       if (ham != null && ham.length >= state.sorular.length) {
         final gelen = bonservisSorulariniOku(ham);

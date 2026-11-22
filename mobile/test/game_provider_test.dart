@@ -465,6 +465,41 @@ void main() {
       expect(durum(c).questions, hasLength(5));
     });
 
+    test('bitiş özetinin soruları oyun id\'siyle gelir, oyun yeniden açılmaz', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+
+      await notifier(c).sureDoldu();
+
+      expect(depo.bitmisOyunIstekleri, ['oyun-1']);
+      expect(depo.acilisIstekleri, hasLength(1));
+    });
+
+    test('gece yarısı: süre 00.00\'dan sonra dolarsa özet dünün sorularıyla gelir, yeni günün oyunu açılmaz', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      await notifier(c).makeGuess(dogruOyuncu);
+      depo.geceYarisiGecti();
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).status, 'completed');
+      expect(durum(c).questions, hasLength(5));
+      expect(durum(c).questions[4]['kulup_a'], 'Kulüp A4');
+      // Yeni günün oyununa kayıt açılmadı: kullanıcı yeni günde o zorluğa kilitlenmez
+      expect(depo.acilisIstekleri, hasLength(1));
+      expect(depo.kayitAcSayisi, 1);
+    });
+
+    test('bitmiş oyunun soruları alınamazsa özet gelen sorularla gösterilir', () async {
+      final (c, depo) = await oyunuBaslat(null, 30);
+      depo.bitmisOyunHataVerir = true;
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).status, 'completed');
+      expect(durum(c).questions, hasLength(1));
+      expect(depo.acilisIstekleri, hasLength(1));
+    });
+
     test('cevap gönderilirken süre dolarsa bildirim yok sayılır, cevap işlenir', () async {
       final (c, depo) = await oyunuBaslat(null, 30);
       depo.skorYazBekletici = Completer<void>();

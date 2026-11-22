@@ -58,7 +58,7 @@ Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasakl
 
 **Cevap ve skor sunucuda kontrol edilir:**
 - Cevap ve skor `security definer` fonksiyonlarla yazılır. İstemci `kullanici_oyun_gecmisi`'ne yazamaz, kayıt da açamaz (`CLAUDE.md` madde 16).
-- Oyun sadece `oyun_ac` ile açılır (040): soru, kayıt ve süre aynı anda oluşur. `gunluk_oyunlar.soru_verisi`'ni uygulama doğrudan okuyamaz. Yeni oyun tipi `oyun_ac`'taki tip ve süre listelerine eklenir.
+- Oyun sadece `oyun_ac` ile açılır (040): soru, kayıt ve süre aynı anda oluşur. `oyun_ac` oyunu id'siyle değil "bugünün oyunu" diye bulur ve kayıt yoksa açar. Bu yüzden oyun açılmışken (bitiş özeti, bitmiş oyunun soruları, örnek cevaplar) `oyun_ac` tekrar çağrılmaz; veri oyun id'siyle, hiçbir şey açmayan bir fonksiyondan okunur (`bitmis_oyun_sorulari`, 042). Yoksa 00.00'dan önce başlayıp sonra biten oyunda yeni günün oyunu açılır. `gunluk_oyunlar.soru_verisi`'ni uygulama doğrudan okuyamaz. Yeni oyun tipi `oyun_ac`'taki tip ve süre listelerine eklenir.
 - Açık oyunda henüz sırası gelmemiş soru gönderilmez. Kesişim ve Bonservis'te sıradaki soru cevap fonksiyonunun dönüşündedir, Bingo'da sıradaki oyuncu `bingo_hamle`'nin dönüşündedir. Sorular tek tek gelen yeni bir oyun yazılırsa aynı düzen kullanılır.
 - Cevabı kontrol eden ya da cevap döndüren her fonksiyon:
   - `auth.uid()` boşsa hata verir.

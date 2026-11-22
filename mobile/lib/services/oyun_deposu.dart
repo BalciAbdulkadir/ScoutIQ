@@ -28,6 +28,10 @@ abstract class OyunDeposu {
   // Kullanıcı bu oyunun bugün başka bir modunu açtıysa BaskaModOynandi fırlatır.
   Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure});
 
+  // Bitmiş oyunun bütün soruları (042_bitmis_oyun_sorulari.sql): oyun id'siyle okunur, hiçbir şey açmaz ve süre
+  // başlatmaz. Kullanıcının bu oyundaki kaydı bitmediyse null.
+  Future<List<dynamic>?> bitmisOyunSorulari(String oyunId);
+
   Future<List<OyuncuOneri>> oyuncuAra(String metin);
 
   // Kesişim ve Bonservis: cevap sunucuda kontrol edilir, skor ve ilerleme sunucuda yazılır (034_skor_sunucuda.sql).
@@ -133,6 +137,12 @@ class SupabaseOyunDeposu implements OyunDeposu {
       if (e.hint == 'oyun_gunde_bir') throw BaskaModOynandi();
       rethrow;
     }
+  }
+
+  @override
+  Future<List<dynamic>?> bitmisOyunSorulari(String oyunId) async {
+    final sonuc = await _supabase.rpc('bitmis_oyun_sorulari', params: {'p_oyun_id': oyunId});
+    return sonuc is List ? sonuc : null;
   }
 
   @override

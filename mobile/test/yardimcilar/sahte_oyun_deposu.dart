@@ -193,6 +193,34 @@ class SahteOyunDeposu implements OyunDeposu {
     );
   }
 
+  // bitmis_oyun_sorulari (042): oyun id'siyle okunur, hiçbir şey açmaz. Gece yarısını geçen testlerde yeni günün oyunu
+  // `oyun`a konur, eski günün soruları gecmisOyunlar'dan okunur (oyun id -> soru verisi).
+  final Map<String, Object?> gecmisOyunlar = {};
+  final List<String> bitmisOyunIstekleri = [];
+  bool bitmisOyunHataVerir = false;
+
+  @override
+  Future<List<dynamic>?> bitmisOyunSorulari(String oyunId) async {
+    bitmisOyunIstekleri.add(oyunId);
+    if (bitmisOyunHataVerir) throw Exception('bağlantı yok');
+    if (kayit?['durum'] != 'tamamlandi') return null;
+    final veri = oyun?['id'] == oyunId ? oyun!['soru_verisi'] : gecmisOyunlar[oyunId];
+    return veri is List ? veri : null;
+  }
+
+  // Gece yarısı: gün değişir, bugünün oyunu artık başka bir oyundur. Önceki günün soruları gecmisOyunlar'da kalır.
+  void geceYarisiGecti() {
+    final eski = oyun;
+    if (eski != null) gecmisOyunlar[eski['id'] as String] = eski['soru_verisi'];
+    tarih = '2026-10-24';
+    oyun = {
+      'id': 'oyun-yeni-gun',
+      'soru_verisi': [
+        for (var i = 0; i < 5; i++) {'kulup_a': 'Yeni Gün A$i', 'kulup_b': 'Yeni Gün B$i'},
+      ],
+    };
+  }
+
   // Açık oyunda sağdaki oyuncunun bedeli gönderilmez (eski Bonservis soruları)
   static Object? _bedelsiz(Object? soru) =>
       soru is Map<String, dynamic> ? ({...soru}..remove('oyuncu_b_bonservis')) : soru;

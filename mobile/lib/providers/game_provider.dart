@@ -293,7 +293,7 @@ class GameNotifier extends Notifier<GameState> {
   // yanlış ya da boş kalan sorular için örnek doğru cevaplar. İkisi de ek bilgidir, gelmezse özet yine gösterilir.
   Future<void> _bitisOzetiniYukle() async {
     if (state.questions.length < state.soruSayisi) {
-      final sorular = await bitmisOyununSorulari(_depo, _oyunTipi);
+      final sorular = await bitmisOyununSorulari(_depo, state.gameId!);
       if (!ref.mounted) return;
       if (sorular != null && sorular.length >= state.questions.length) state = state.copyWith(questions: sorular);
     }

@@ -178,6 +178,20 @@ void main() {
       expect(durum(c).sorular.every((s) => s.rakip.toplamBonservis != null), isTrue);
     });
 
+    test('gece yarısı: süre 00.00\'dan sonra dolarsa özet dünün sorularıyla gelir, yeni günün oyunu açılmaz', () async {
+      final (c, depo) = await oyunuBaslat(yeniUsul, 30);
+      final dununOyunu = depo.oyun!['id'];
+      final dununSorulari = depo.oyun!['soru_verisi'] as List;
+      depo.geceYarisiGecti();
+
+      await notifier(c).sureDoldu();
+
+      expect(durum(c).sorular, hasLength(dununSorulari.length));
+      expect(depo.bitmisOyunIstekleri, [dununOyunu]);
+      expect(depo.acilisIstekleri, hasLength(1));
+      expect(depo.kayitAcSayisi, 1);
+    });
+
     test('yarım kalan oyunda cevaplanmış soruların bedelleri yüklenir, sıradakinin bedeli gizli kalır', () async {
       final (c, _) = await oyunuBaslat((d) {
         yeniUsul(d);
