@@ -130,7 +130,7 @@ class YerelHatirlatma implements Hatirlatma {
         notificationDetails: ayrinti,
         // Tam saatinde çalması gerekmiyor: tam zamanlı alarm izni istenmez, Android birkaç dakika kaydırabilir
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        title: 'FootyLore',
+        // Başlık yok: Android uygulama adını (FootyLore) zaten bildirimin üstüne yazar, başlık olunca iki kez görünüyordu
         body: h.metin,
       );
     }

@@ -54,7 +54,7 @@ Kaynak: *ScoutIQ Günlük Futbol Zekası MVP Raporu v2.0*. Bu belgede olmayan bi
 17. **Hesap silme:** Uygulama içinden (profil fotoğrafı → Hesap → Hesabımı sil, iki adımlı onay). Kullanıcının bütün satırları ve `auth.users` kaydı silinir.
 18. **Analitik ve çökme takibi:** Firebase Crashlytics ve Analytics. Kişisel veri ve oyuncu ismi gönderilmez; olaylar: `oyun_basladi`, `oyun_bitti` (bitiş sebebi: tamamlandi/pes/sure_doldu/can_bitti), `oyun_yarida_birakildi`, `sonuc_paylasildi`, `bildirim_acildi`, `liderlik_acildi` (dönem: gun/hafta/tum). `oyun_bitti` olayına `puan` (sayı, puansız oyunda gönderilmez) parametresi eklenir. Debug derlemede gönderilmez.
 19. **Sonuç paylaşımı:** Her bitiş ekranında "Sonucu paylaş"; metin cevap ele vermez (renkli kareler, skor, seri ve Play linki).
-20. **Akşam hatırlatması:** Yerel bildirim, sunucu yok. O gün hiç oyun bitirilmediyse 20.00'de (Europe/Istanbul). Bildirim izni ilk oyun bitince istenir; Hesap sayfasından kapatılabilir.
+20. **Akşam hatırlatması:** Yerel bildirim, sunucu yok. O gün hiç oyun bitirilmediyse 20.00'de (Europe/Istanbul). Bildirim izni ilk oyun bittikten sonra ana menüde, önce uygulamanın tahta temalı sayfasıyla bir kez sorulur ("Bildirimleri aç" / "Şimdi değil"); Android'in kendi izin penceresi sadece "Bildirimleri aç"a dokununca açılır. Bildirim çubuğunda beyaz top simgesi ve tahta yeşili vurgu kullanılır. Hesap sayfasından kapatılabilir.
 21. **Puanla isteği:** Play'in kendi penceresi; 3 farklı gün oyun bitirildikten sonra, iyi sonuçlu (en yüksek skorun en az %70'i) bir oyunun bitişinde bir kez.
 22. **Oyun kuralları:** Her oyunda ilk dokunuşta örnekli kurallar; oyun ekranındaki "?" düğmesi kuralları tekrar açar.
 
