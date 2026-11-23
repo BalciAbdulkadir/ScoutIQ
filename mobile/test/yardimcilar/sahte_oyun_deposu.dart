@@ -428,8 +428,24 @@ class SahteOyunDeposu implements OyunDeposu {
     final oyuncu = _bingoSiradaki!;
     final dogru = hucre != null && (bingoEslesmeleri[oyuncu] ?? const []).contains(hucre);
     if (hucre != null && !dogru) {
+      // Süreli oyunda 2 saniye ceza (043); ceza süreyi bitirirse oyun biter
+      int? kalan;
+      if (oyunSureToplam != null) {
+        kalan = ((oyunSureKalan ?? oyunSureToplam!) - 2).clamp(0, 1 << 30);
+        oyunSureKalan = kalan;
+        if (kalan == 0) {
+          kayit = {...?kayit, 'skor': _bingoSkoru, 'durum': 'tamamlandi'};
+          return BingoHamleSonucu(dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: true, sureDoldu: true, kalan: 0);
+        }
+      }
       return BingoHamleSonucu(
-          dogru: false, hucre: hucre, skor: _bingoSkoru, bitti: false, siradaki: oyuncu, siradakiOyuncu: _bingoOyuncusu(oyuncu));
+          dogru: false,
+          hucre: hucre,
+          skor: _bingoSkoru,
+          bitti: false,
+          siradaki: oyuncu,
+          siradakiOyuncu: _bingoOyuncusu(oyuncu),
+          kalan: kalan);
     }
     bingoHamleListesi.add(BingoHamlesi(sira: sira, oyuncu: oyuncu, hucre: hucre, dogru: dogru));
 

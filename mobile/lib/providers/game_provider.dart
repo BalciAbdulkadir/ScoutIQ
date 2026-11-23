@@ -80,7 +80,7 @@ class GameState {
 
 // Kesişim oyunu. Her zorluk ayrı bir günlük oyundur: kesisim_kolay, kesisim_orta ya da kesisim_zor.
 // Cevap sunucuda kontrol edilir; skor (doğru cevap 2 puan) ve ilerleme sunucuda yazılır (034_skor_sunucuda.sql).
-// Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
+// Süre seçildiyse (40, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 class GameNotifier extends Notifier<GameState> {
   final GunlukOyunSecimi secim;

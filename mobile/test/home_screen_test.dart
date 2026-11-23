@@ -121,16 +121,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 · SÜRE SEÇ'), findsOneWidget);
-    await tester.tap(find.text('30'));
+    await tester.tap(find.text('40'));
     await tester.pump();
-    await tester.tap(find.text('ORTA · 30 SN BAŞLA'));
+    await tester.tap(find.text('ORTA · 40 SN BAŞLA'));
     await tester.pumpAndSettle();
 
     final ekran = tester.widget<GameScreen>(find.byType(GameScreen));
     expect(ekran.oyunTipi, 'kesisim_orta');
-    expect(ekran.sure, 30);
+    expect(ekran.sure, 40);
     expect(depo.istenenOyunTipleri, ['kesisim_orta']);
-    expect(find.text('0:30'), findsOneWidget);
+    expect(find.text('0:40'), findsOneWidget);
     await ekraniKapat(tester);
   });
 
@@ -185,7 +185,8 @@ void main() {
 
     expect(find.text('2 · SÜRE SEÇ'), findsOneWidget);
     expect(find.text('∞'), findsOneWidget);
-    expect(find.text('30'), findsOneWidget);
+    expect(find.text('40'), findsOneWidget);
+    expect(find.text('30'), findsNothing);
     expect(find.text('60'), findsOneWidget);
     expect(find.text('90'), findsOneWidget);
     // Süre seçilmeden başlanamaz
@@ -338,7 +339,7 @@ void main() {
     await ekraniKapat(tester);
   });
 
-  testWidgets('Bingo\'ya dokununca zorluk sorulmaz, 30 saniyesiz süre seçilir ve kart açılır', (tester) async {
+  testWidgets('Bingo\'ya dokununca zorluk sorulmaz, 40 saniyesiz süre seçilir ve kart açılır', (tester) async {
     await anaMenuyuAc(tester, ekOverridelar: [oyunDeposuProvider.overrideWithValue(SahteOyunDeposu())]);
 
     expect(find.text('YAKINDA'), findsNothing);
@@ -348,7 +349,7 @@ void main() {
     await kurallariGec(tester);
     expect(find.text('1 · ZORLUK SEÇ'), findsNothing);
     expect(find.text('∞'), findsOneWidget);
-    expect(find.text('30'), findsNothing);
+    expect(find.text('40'), findsNothing);
     expect(find.text('60'), findsOneWidget);
     expect(find.text('90'), findsOneWidget);
 
@@ -492,7 +493,7 @@ void main() {
     expect(find.text('puansız'), findsOneWidget);
     expect(find.text('Süre seç, puanını gör'), findsOneWidget);
 
-    await tester.tap(find.text('30'));
+    await tester.tap(find.text('40'));
     await tester.pump();
     expect(find.text('En fazla 360 puan'), findsOneWidget);
 

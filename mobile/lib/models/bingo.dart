@@ -113,6 +113,8 @@ class BingoHamleSonucu {
   final bool sureDoldu; // Süre dolduğu için hamle kabul edilmedi, oyun bitti
   final int? siradaki; // Sunucuya göre sıradaki oyuncunun destedeki sırası; oyuncu kalmadıysa null
   final BingoOyuncusu? siradakiOyuncu; // Sıradaki oyuncunun kendisi (040_oyun_ac.sql)
+  // Süreli oyunda yanlış kutudan sonra kalan süre (saniye): 2 saniye ceza düşülmüştür (043). Diğer hamlelerde null.
+  final int? kalan;
 
   const BingoHamleSonucu({
     required this.dogru,
@@ -122,6 +124,7 @@ class BingoHamleSonucu {
     this.sureDoldu = false,
     this.siradaki,
     this.siradakiOyuncu,
+    this.kalan,
   });
 
   factory BingoHamleSonucu.fromJson(Map<String, dynamic> json) {
@@ -135,6 +138,7 @@ class BingoHamleSonucu {
       siradakiOyuncu: json['siradaki_oyuncu'] is Map<String, dynamic>
           ? BingoOyuncusu.fromJson(json['siradaki_oyuncu'] as Map<String, dynamic>)
           : null,
+      kalan: (json['kalan'] as num?)?.toInt(),
     );
   }
 }

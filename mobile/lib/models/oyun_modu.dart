@@ -63,10 +63,11 @@ const _oyuncuZorluklari = [
   'Ünlü, bilinen ve az bilinen oyuncular',
 ];
 
-// Oyun başlarken seçilen süre. Oyunların çoğunda dört seçenek de vardır; Bingo'da 30 saniye yoktur, Top 10 süresizdir.
+// Oyun başlarken seçilen süre. Oyunların çoğunda dört seçenek de vardır; Bingo'da 40 saniye yoktur, Top 10 süresizdir.
+// 30 saniye 23 Kasım 2026'da 40 saniye oldu (043_sure_40_bingo_ceza.sql).
 enum OyunSuresi {
   suresiz(null, 'Süresiz'),
-  saniye30(30, '30 sn'),
+  saniye40(40, '40 sn'),
   saniye60(60, '60 sn'),
   saniye90(90, '90 sn');
 
@@ -162,7 +163,7 @@ const List<OyunModu> oyunModlari = [
           'Desteden oyuncular sırayla gelir, her birini uyduğu kutuya koy.',
       kurallar: [
         'Gelen oyuncuyu kariyerine uyan kutuya dokunarak yerleştir. Uyan kutu yoksa pas geç.',
-        'Yanlış kutuya dokunursan oyuncu gitmez, ceza da yok. Başka kutu deneyebilirsin.',
+        'Yanlış kutuya dokunursan oyuncu gitmez, başka kutu deneyebilirsin. Süreli oyunda her yanlış kutu 2 saniye götürür.',
         'Pas sınırsız. Pas geçtiğin oyuncu sırası gelince tekrar gelir; kutuya yerleşen oyuncu bir daha gelmez.',
         'Arada hiçbir kutuya uymayan oyuncular da gelir, onları pas geç. Kart her zaman tamamen doldurulabilir.',
         'Zorluk modu yok, herkes aynı kartı oynar. Oyun kart dolunca, pes edince ya da süre bitince sona erer.',

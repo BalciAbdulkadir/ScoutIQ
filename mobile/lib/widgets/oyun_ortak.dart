@@ -273,7 +273,8 @@ class OzetSatiri extends StatelessWidget {
   }
 }
 
-// Geri sayım: süreli oyunlarda (Izgara, Kesişim, Bonservis) gösterilir. Sayaç sadece gösterir ve sıfıra inince
+// Geri sayım: süreli oyunlarda (Izgara, Kesişim, Bonservis, Bingo) gösterilir. Bitiş anı değişirse (Bingo'da yanlış kutu
+// cezası) bir sonraki tıkta yeni ana göre sayar. Sayaç sadece gösterir ve sıfıra inince
 // haber verir. Cevap gönderilirken süre dolarsa bildirim reddedilir, sayaç sıfırda kaldıkça tekrar denenir.
 class SureSayaci extends StatefulWidget {
   final DateTime bitisZamani;

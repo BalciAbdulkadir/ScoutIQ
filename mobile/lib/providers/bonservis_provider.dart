@@ -76,7 +76,7 @@ class BonservisState {
 
 // Bonservis oyunu: her soruda bir oyuncunun bedeli görünür, diğerininki için "daha fazla / daha az" tahmin edilir.
 // Yanlış tahminde oyun bitmez, beş sorunun hepsi oynanır. Her doğru tahmin 2 puan (en fazla 10).
-// Süre seçildiyse (30, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
+// Süre seçildiyse (40, 60 ya da 90 saniye) bütün sorular içindir; dolunca oyun o anki skorla biter.
 // Oyundan çıkınca oyun bitmez: süre sunucuda işlemeye devam eder, oyun tekrar açılınca kaldığı sorudan sürer.
 // Her zorluk ayrı bir günlük oyundur: bonservis_kolay, bonservis_orta ya da bonservis_zor.
 // Tahmin sunucuda kontrol edilir; skor ve ilerleme sunucuda yazılır. Tahmin edilen oyuncunun bedeli soruyla gelmez,

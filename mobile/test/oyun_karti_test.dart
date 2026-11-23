@@ -111,7 +111,7 @@ void main() {
     expect(kesisim.oyunTipleri, ['kesisim_kolay', 'kesisim_orta', 'kesisim_zor']);
   });
 
-  test('süre seçenekleri süresiz, 30, 60 ve 90 saniyedir', () {
-    expect(OyunSuresi.values.map((s) => s.saniye), [null, 30, 60, 90]);
+  test('süre seçenekleri süresiz, 40, 60 ve 90 saniyedir', () {
+    expect(OyunSuresi.values.map((s) => s.saniye), [null, 40, 60, 90]);
   });
 }

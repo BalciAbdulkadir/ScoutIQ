@@ -27,6 +27,7 @@ class BingoState {
   final int? sureSaniye; // Süreli oyunda seçilen toplam süre; süresizse null
   final DateTime? bitisZamani; // Süreli oyunda sürenin dolacağı an (cihaz saatine göre)
   final bool sureDoldu; // Oyun süre dolduğu için bitti
+  final int cezaSayisi; // Süreli oyunda yanlış kutu cezası (2 sn) sayısı: sayacın yanındaki "−2 sn" her artışta görünür
 
   const BingoState({
     this.durum = BingoDurumu.yukleniyor,
@@ -43,6 +44,7 @@ class BingoState {
     this.sureSaniye,
     this.bitisZamani,
     this.sureDoldu = false,
+    this.cezaSayisi = 0,
   });
 
   // Skor dolu kutu sayısıdır
@@ -77,6 +79,7 @@ class BingoState {
     int? sureSaniye,
     DateTime? bitisZamani,
     bool? sureDoldu,
+    int? cezaSayisi,
   }) {
     return BingoState(
       durum: durum ?? this.durum,
@@ -93,12 +96,14 @@ class BingoState {
       sureSaniye: sureSaniye ?? this.sureSaniye,
       bitisZamani: bitisZamani ?? this.bitisZamani,
       sureDoldu: sureDoldu ?? this.sureDoldu,
+      cezaSayisi: cezaSayisi ?? this.cezaSayisi,
     );
   }
 }
 
 // Bingo oyunu. Destedeki oyuncular sırayla gelir; kullanıcı her oyuncuyu uyduğu kutuya koyar ya da pas geçer.
-// Yanlış kutuya konan oyuncu gitmez, ceza da yoktur: başka kutu denenebilir. Oyuncu sadece doğru kutuya konunca
+// Yanlış kutuya konan oyuncu gitmez, başka kutu denenebilir. Süreli oyunda her yanlış kutu süreden 2 saniye düşer
+// (043_sure_40_bingo_ceza.sql; süreyi sunucu tutar, sayaç sunucunun döndürdüğü kalan süreye göre düzeltilir). Oyuncu sadece doğru kutuya konunca
 // ya da pas geçilince sıradakine geçilir. Pas sınırsızdır: destede sıra döner, pas geçilen oyuncu tekrar gelir
 // (sıradaki oyuncuyu sunucu söyler, 023_bingo_sinirsiz_pas.sql). Kutuya yerleşen oyuncu bir daha gelmez.
 // Deste telefona baştan inmez: açık oyunda sadece görülmüş oyuncular gelir, sıradaki oyuncu hamlenin cevabındadır
@@ -243,7 +248,15 @@ class BingoNotifier extends Notifier<BingoState> {
       hucreler[sonuc.hucre!] = oyuncu;
       yerlesenler.add(oyuncuSira);
     }
-    // Yanlış kutu hamle sayılmaz: oyuncu sırada kalır
+    // Yanlış kutu hamle sayılmaz: oyuncu sırada kalır. Süreli oyunda 2 saniye ceza: sayaç sunucunun kalan süresine
+    // göre düzeltilir (cevap gelmediyse 2 saniye düşülür)
+    final yanlis = hucre != null && !sonuc.dogru && !sonuc.sureDoldu;
+    final ceza = yanlis && state.bitisZamani != null;
+    final bitisZamani = !ceza
+        ? null
+        : sonuc.kalan != null
+            ? DateTime.now().add(Duration(seconds: sonuc.kalan!))
+            : state.bitisZamani!.subtract(const Duration(seconds: 2));
     final kaydedildi = !sonuc.sureDoldu && !(hucre != null && !sonuc.dogru);
     // Sıradaki oyuncuyu sunucu söyler; oyuncunun kendisi de cevapla gelir (deste baştan telefona inmez)
     final siradakiSira = kaydedildi ? sonuc.siradaki : oyuncuSira;
@@ -260,6 +273,8 @@ class BingoNotifier extends Notifier<BingoState> {
       sonHamle: sonuc.sureDoldu ? null : (oyuncu: oyuncu, hucre: hucre, dogru: sonuc.dogru),
       gonderiliyor: false,
       sureDoldu: sonuc.sureDoldu,
+      bitisZamani: bitisZamani,
+      cezaSayisi: ceza ? state.cezaSayisi + 1 : null,
     );
 
     if (sonuc.bitti) await _ornekCevaplariYukle();

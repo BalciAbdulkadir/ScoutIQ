@@ -207,7 +207,7 @@ void main() {
       expect(durum(c).sonHamle!.dogru, isFalse);
       expect(durum(c).yanlisKutu, 3);
 
-      // Ceza yok: aynı oyuncu doğru kutuya konabilir
+      // Süresiz oyunda ceza yok: aynı oyuncu doğru kutuya konabilir
       await notifier(c).yerlestir(0);
 
       expect(depo.bingoHamleIstekleri, [(sira: 1, hucre: 3), (sira: 1, hucre: 0)]);
@@ -322,6 +322,49 @@ void main() {
       expect(durum(c).sureDoldu, isTrue);
       expect(depo.kayit!['durum'], 'tamamlandi');
       expect(depo.bingoPesSayisi, 0);
+    });
+
+    test('süreli oyunda yanlış kutu 2 saniye götürür, pas geçmek götürmez', () async {
+      final (c, depo) = await kartiAc(null, 60);
+      final ilk = durum(c, 60).bitisZamani!;
+      expect(durum(c, 60).cezaSayisi, 0);
+
+      await notifier(c, 60).yerlestir(3); // yanlış
+      final sonra = durum(c, 60).bitisZamani!;
+      // Sayaç sunucunun döndürdüğü kalan süreye (58 sn) göre düzeltilir
+      expect(depo.oyunSureKalan, 58);
+      expect(ilk.difference(sonra).inMilliseconds, inInclusiveRange(1500, 2500));
+      expect(durum(c, 60).cezaSayisi, 1);
+
+      await notifier(c, 60).pasGec();
+      expect(durum(c, 60).bitisZamani, sonra);
+      expect(durum(c, 60).cezaSayisi, 1);
+
+      await notifier(c, 60).yerlestir(3); // Oyuncu 2 için de yanlış
+      expect(depo.oyunSureKalan, 56);
+      expect(durum(c, 60).cezaSayisi, 2);
+    });
+
+    test('süresiz oyunda yanlış kutu süre götürmez', () async {
+      final (c, _) = await kartiAc();
+
+      await notifier(c).yerlestir(3);
+
+      expect(durum(c).bitisZamani, isNull);
+      expect(durum(c).cezaSayisi, 0);
+    });
+
+    test('ceza süreyi bitirirse oyun o anki skorla biter', () async {
+      final (c, depo) = await kartiAc((d) => d
+        ..kayit = {'skor': 0, 'durum': 'basladi'}
+        ..oyunSureToplam = 60
+        ..oyunSureKalan = 2);
+
+      await notifier(c).yerlestir(3);
+
+      expect(durum(c).durum, BingoDurumu.bitti);
+      expect(durum(c).sureDoldu, isTrue);
+      expect(depo.kayit!['durum'], 'tamamlandi');
     });
 
     test('sunucu süreyi dolmuş bulursa hamle sayılmaz, oyun biter', () async {

@@ -174,7 +174,7 @@ String bildirimHataMesaji(String? hint) => switch (hint) {
 const enFazlaTaban = {'kesisim': 100, 'bonservis': 60, 'izgara': 100, 'bingo': 100, 'top10': 130};
 const zorlukCarpanlari = {'kolay': 1.0, 'orta': 1.5, 'zor': 2.0};
 const tekModCarpani = 1.5; // Bingo ve Top 10
-const sureCarpanlari = {30: 1.5, 60: 1.25, 90: 1.0};
+const sureCarpanlari = {40: 1.5, 60: 1.25, 90: 1.0};
 const hizBonusuOrani = 0.2;
 
 // Seçilen zorluk ve süreyle alınabilecek en yüksek puan (kusursuz ve en hızlı bitiş): taban × zorluk × süre × 1.2,
