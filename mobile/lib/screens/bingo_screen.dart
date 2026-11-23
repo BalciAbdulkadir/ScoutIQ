@@ -136,6 +136,7 @@ class BingoScreen extends ConsumerWidget {
             children: [
               const Spacer(),
               if (state.bitisZamani != null) ...[
+                CezaIsareti(sayi: state.cezaSayisi),
                 SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),
                 const SizedBox(width: 12),
               ],
@@ -504,6 +505,54 @@ class _OyuncuIcerigi extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Süreli Bingo'da yanlış kutu cezası: sayacın solunda kırmızı "−2 sn" belirip yukarı kayarak kaybolur.
+// sayi her arttığında (yeni ceza) yeniden oynar; ilk çizimde görünmez.
+class CezaIsareti extends StatefulWidget {
+  final int sayi;
+
+  const CezaIsareti({super.key, required this.sayi});
+
+  @override
+  State<CezaIsareti> createState() => _CezaIsaretiState();
+}
+
+class _CezaIsaretiState extends State<CezaIsareti> with SingleTickerProviderStateMixin {
+  late final _animasyon = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100), value: 1);
+
+  @override
+  void didUpdateWidget(CezaIsareti eski) {
+    super.didUpdateWidget(eski);
+    if (widget.sayi > eski.sayi) _animasyon.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _animasyon.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animasyon,
+      builder: (context, _) {
+        final t = _animasyon.value;
+        if (t >= 1) return const SizedBox.shrink();
+        return Opacity(
+          opacity: t < 0.6 ? 1 : (1 - t) / 0.4,
+          child: Transform.translate(
+            offset: Offset(0, -10 * t),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text('−2 sn', style: Yazi.tebesir(16, renk: Renkler.hata)),
+            ),
+          ),
+        );
+      },
     );
   }
 }

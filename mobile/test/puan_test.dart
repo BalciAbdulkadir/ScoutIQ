@@ -121,7 +121,7 @@ void main() {
     });
 
     test('seçim ekranındaki en yüksek puan: taban × zorluk × süre × 1.2, aşağı yuvarlanır', () {
-      expect(enFazlaPuan(oyun: 'kesisim', zorluk: 'zor', sure: 30), 360);
+      expect(enFazlaPuan(oyun: 'kesisim', zorluk: 'zor', sure: 40), 360);
       expect(enFazlaPuan(oyun: 'kesisim', zorluk: 'kolay', sure: 90), 120);
       expect(enFazlaPuan(oyun: 'bonservis', zorluk: 'orta', sure: 60), 135); // 60 × 1.5 × 1.25 × 1.2
       expect(enFazlaPuan(oyun: 'izgara', zorluk: 'orta', sure: 60), 225);
