@@ -5,7 +5,8 @@ import 'puanlama.dart';
 
 // Bir oyun oynanırken bitince yapılanlar (oyunların provider'ları çağırır; bitmiş oyunu açmak sayılmaz):
 // - Bugünün akşam hatırlatması silinir: bugün bir oyun bitti
-// - Bildirim izni ilk biten oyundan sonra bir kez istenir (açılışta değil)
+// (Bildirim izni burada istenmez: ilk oyun bittikten sonra ana menüde uygulamanın kendi sayfasıyla sorulur,
+//  widgets/bildirim_izni_sayfasi.dart)
 // - 3 farklı gün oyun bitirildikten sonra iyi sonuçlu bir oyunda bir kez "uygulamayı puanla" sorulur
 class OyunSonu {
   final Hatirlatma _hatirlatma;
@@ -17,9 +18,6 @@ class OyunSonu {
   Future<void> oyunBitti({required String gunlukOyunTipi, required int skor}) async {
     try {
       await _hatirlatma.bugunuIptalEt();
-      if (await _hatirlatma.acikMi() && !await _hatirlatma.izinSoruldu()) {
-        await _hatirlatma.izinIste();
-      }
     } catch (_) {
       // Hatırlatma oyunu asla bozmasın
     }

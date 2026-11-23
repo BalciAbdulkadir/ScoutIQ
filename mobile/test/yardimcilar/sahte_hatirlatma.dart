@@ -5,6 +5,7 @@ class SahteHatirlatma implements Hatirlatma {
   bool acik = true;
   bool izinSorulduMu = false;
   int izinIstekSayisi = 0;
+  bool izinVarMi = false; // Telefon izin veriyor mu
   int bugunIptalSayisi = 0;
   final List<({int seri, bool bugunBitirdi})> planlar = [];
 
@@ -32,4 +33,10 @@ class SahteHatirlatma implements Hatirlatma {
 
   @override
   Future<bool> izinSoruldu() async => izinSorulduMu;
+
+  @override
+  Future<void> izinSorulduIsaretle() async => izinSorulduMu = true;
+
+  @override
+  Future<bool> izinVar() async => izinVarMi;
 }

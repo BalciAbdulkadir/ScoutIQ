@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_veri;
 import 'package:timezone/timezone.dart' as tz;
+import '../theme/renkler.dart';
 
 // Akşam hatırlatması: kullanıcı o gün hiç oyun bitirmediyse 20.00'de (Türkiye saati) yerel bildirim.
 // Sunucu yoktur, bildirimler telefonda kurulur. Önümüzdeki 7 günün her biri için ayrı bildirim kurulur:
@@ -13,6 +14,11 @@ import 'package:timezone/timezone.dart' as tz;
 const hatirlatmaSaati = 20;
 const hatirlatmaGunSayisi = 7;
 const _hatirlatmaKanali = 'gunluk_hatirlatma';
+
+// Bildirim çubuğundaki görünüm: beyaz top simgesi (res/drawable/ic_bildirim.xml; Android sadece şeklini kullanır)
+// ve tahta yeşili vurgu. Simge adı koddan okunduğu için res/raw/keep.xml release küçültmesinde silinmesini engeller.
+const bildirimSimgesi = 'ic_bildirim';
+const bildirimRengi = Renkler.arkaPlanAcik;
 
 // Kurulacak tek bir bildirim. id günün tarihidir (yyyyMMdd): o günün bildirimi tarihten bulunup silinir.
 typedef PlanliHatirlatma = ({int id, tz.TZDateTime zaman, String metin});
@@ -51,11 +57,17 @@ abstract class Hatirlatma {
   // Bugün bir oyun bitti: bugünün bildirimi silinir
   Future<void> bugunuIptalEt();
 
-  // Android 13+ bildirim izni. İzin daha önce istendiyse tekrar sorulmaz (sistem de göstermez).
+  // Android 13+ bildirim izni (sistemin penceresi). İzin daha önce reddedildiyse sistem pencereyi tekrar göstermeyebilir.
   Future<void> izinIste();
 
-  // İzin ilk oyun bitince bir kez istenir: istendiyse true
+  // İzin, ilk oyun bittikten sonra ana menüde uygulamanın kendi sayfasıyla bir kez sorulur: sorulduysa true
   Future<bool> izinSoruldu();
+
+  // Sayfa gösterilmeden işaretlenir: izin zaten var ya da kullanıcı "Şimdi değil" dedi
+  Future<void> izinSorulduIsaretle();
+
+  // Telefon bu uygulamanın bildirimlerine izin veriyor mu (Android 12 ve öncesinde her zaman true)
+  Future<bool> izinVar();
 }
 
 // Telefonun bildirimleriyle çalışır (flutter_local_notifications). Tercihler cihazda saklanır.
@@ -73,7 +85,7 @@ class YerelHatirlatma implements Hatirlatma {
     tz_veri.initializeTimeZones();
     _istanbul = tz.getLocation('Europe/Istanbul');
     await _eklenti.initialize(
-      settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      settings: const InitializationSettings(android: AndroidInitializationSettings(bildirimSimgesi)),
       onDidReceiveNotificationResponse: (_) => acildi(),
     );
     final acilis = await _eklenti.getNotificationAppLaunchDetails();
@@ -106,6 +118,8 @@ class YerelHatirlatma implements Hatirlatma {
         _hatirlatmaKanali,
         'Günlük hatırlatma',
         channelDescription: 'O gün oyun oynamadıysan akşam 20.00\'de hatırlatır',
+        icon: bildirimSimgesi,
+        color: bildirimRengi,
       ),
     );
     final plan = hatirlatmaPlani(simdi: tz.TZDateTime.now(_istanbul), seri: seri, bugunBitirdi: bugunBitirdi);
@@ -133,6 +147,12 @@ class YerelHatirlatma implements Hatirlatma {
 
   @override
   Future<bool> izinSoruldu() async => (await SharedPreferences.getInstance()).getBool(_izinAnahtari) ?? false;
+
+  @override
+  Future<void> izinSorulduIsaretle() async => (await SharedPreferences.getInstance()).setBool(_izinAnahtari, true);
+
+  @override
+  Future<bool> izinVar() async => await _android?.areNotificationsEnabled() ?? true;
 }
 
 // Bildirim kurulamayan ortamlarda (testler) ya da eklenti açılamazsa: tercihi bellekte tutar, bildirim kurmaz
@@ -157,6 +177,13 @@ class BosHatirlatma implements Hatirlatma {
 
   @override
   Future<bool> izinSoruldu() async => _izinSoruldu;
+
+  @override
+  Future<void> izinSorulduIsaretle() async => _izinSoruldu = true;
+
+  // Bildirim kurulamayan ortamda sorulacak bir şey yok: sayfa açılmaz
+  @override
+  Future<bool> izinVar() async => true;
 }
 
 // main.dart eklenti açılabildiyse YerelHatirlatma ile ezer

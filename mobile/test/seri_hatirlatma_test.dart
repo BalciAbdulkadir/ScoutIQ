@@ -62,7 +62,7 @@ void main() {
   });
 
   group('Oyun bitince', () {
-    test('bugünün hatırlatması silinir, bildirim izni ilk oyunda bir kez istenir', () async {
+    test('bugünün hatırlatması silinir; sistemin izin penceresi oyun bitince açılmaz (ana menü sorar)', () async {
       final h = SahteHatirlatma();
       final sonu = OyunSonu(h, PuanlamaIstegi(BellekPuanlamaDeposu(), const BosPuanlamaPenceresi()));
 
@@ -70,7 +70,7 @@ void main() {
       await sonu.oyunBitti(gunlukOyunTipi: 'bingo', skor: 9);
 
       expect(h.bugunIptalSayisi, 2);
-      expect(h.izinIstekSayisi, 1);
+      expect(h.izinIstekSayisi, 0);
     });
 
     test('hatırlatma kapalıysa izin istenmez', () async {
@@ -102,7 +102,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(h.bugunIptalSayisi, 1);
-      expect(h.izinIstekSayisi, 1);
+      expect(h.izinIstekSayisi, 0);
     });
   });
 

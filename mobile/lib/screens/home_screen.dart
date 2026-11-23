@@ -8,6 +8,7 @@ import '../providers/liderlik_provider.dart';
 import '../services/hatirlatma.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
+import '../widgets/bildirim_izni_sayfasi.dart';
 import '../widgets/gunluk_kart.dart';
 import '../widgets/izgara_zorluk_secimi.dart';
 import '../widgets/kullanici_avatari.dart';
@@ -66,6 +67,13 @@ class HomeScreen extends ConsumerWidget {
     ref.listen(profilProvider, (onceki, yeni) {
       if (yeni.value?.sifirlandi == true && onceki?.value?.sifirlandi != true) takmaAdSifirlandiPenceresi(context);
     });
+
+    // Bildirim izni: bugün bir oyun bittiyse (ilk biten oyundan sonra) uygulamanın kendi sayfasıyla bir kez sorulur
+    if (skorlar.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) bildirimIzniniSor(context, ref);
+      });
+    }
 
     // Zorluklu oyunun bugün açılmış zorluğu (yarım ya da bitmiş)
     BugunkuMod? bugunku(OyunModu mod) {
