@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release küçültmesi kodda adıyla geçen kaynakları göremez: bildirim simgesi (lib/services/hatirlatma.dart) silinmesin -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_bildirim" />
