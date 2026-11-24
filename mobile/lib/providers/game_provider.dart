@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/oyuncu_oneri.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/hata_kaydi.dart';
 import 'puan_provider.dart';
 import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
@@ -94,6 +95,13 @@ class GameNotifier extends Notifier<GameState> {
 
   late OyunDeposu _depo;
 
+  // Açılışta ya da hamlede gelen beklenmeyen hata Crashlytics'e gider (services/hata_kaydi.dart); kullanıcıya
+  // gösterilen mesaj değişmez. build'de alınır: hata geldiğinde ekran kapanmış olabilir.
+  late HataKaydi _hatalar;
+
+  void _hataKaydet(Object hata, StackTrace iz, OyunIslemi islem) =>
+      _hatalar.oyunHatasi(hata, iz, islem: islem, oyunTipi: secim.oyunTipi, sure: secim.sure);
+
   // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
   late OyunOlaylari _olaylar;
   bool _oynaniyor = false;
@@ -126,6 +134,7 @@ class GameNotifier extends Notifier<GameState> {
   @override
   GameState build() {
     _depo = ref.read(oyunDeposuProvider);
+    _hatalar = ref.read(hataKaydiProvider);
     // Veriyi build bittikten sonra yüklüyoruz: _initGame state'i hemen değiştirirse (örneğin oturum yoksa)
     // build'in döndürdüğü başlangıç durumu o değişikliğin üzerine yazmasın
     _olaylariDinle();
@@ -177,7 +186,8 @@ class GameNotifier extends Notifier<GameState> {
         }
         await _eksikLogolariTamamla();
       }
-    } catch (e) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.acilis);
       if (!ref.mounted) return;
       state = state.copyWith(status: 'error', hataMesaji: yuklemeHataMesaji);
     }
@@ -254,7 +264,8 @@ class GameNotifier extends Notifier<GameState> {
       if (!ref.mounted) return null;
       state = state.copyWith(status: 'already_played', gonderiliyor: false);
       return null;
-    } catch (e) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.hamle);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return gonderimHataMesaji;

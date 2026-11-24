@@ -19,6 +19,8 @@ class SahteOyunDeposu implements OyunDeposu {
 
   String tarih = '2026-10-23';
   bool oyunYuklemeHataVerir = false;
+  // oyunAc'ın fırlatacağı hata (ör. sunucunun PostgrestException'ı); null: hata yok
+  Object? oyunAcHatasi;
 
   // Kullanıcının o günkü kaydı: {'skor': int, 'durum': String}
   Map<String, dynamic>? kayit;
@@ -130,6 +132,7 @@ class SahteOyunDeposu implements OyunDeposu {
     istenenOyunTipleri.add(oyunTipi);
     acilisIstekleri.add((oyunTipi: oyunTipi, sure: sure));
     if (oyunYuklemeHataVerir) throw Exception('bağlantı yok');
+    if (oyunAcHatasi case final hata?) throw hata;
     final oyun = this.oyun;
     if (oyun == null) return OyunPaketi(durum: OyunPaketiDurumu.yok, tarih: tarih);
 

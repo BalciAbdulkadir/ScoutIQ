@@ -4,6 +4,7 @@ import '../models/oyuncu_oneri.dart';
 import '../models/top10.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/hata_kaydi.dart';
 import 'puan_provider.dart';
 import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
@@ -77,6 +78,13 @@ class Top10Notifier extends Notifier<Top10State> {
 
   late OyunDeposu _depo;
 
+  // Açılışta ya da hamlede gelen beklenmeyen hata Crashlytics'e gider (services/hata_kaydi.dart); kullanıcıya
+  // gösterilen mesaj değişmez. build'de alınır: hata geldiğinde ekran kapanmış olabilir.
+  late HataKaydi _hatalar;
+
+  void _hataKaydet(Object hata, StackTrace iz, OyunIslemi islem) =>
+      _hatalar.oyunHatasi(hata, iz, islem: islem, oyunTipi: oyunTipi, sure: null);
+
   // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
   late OyunOlaylari _olaylar;
   bool _oynaniyor = false;
@@ -109,6 +117,7 @@ class Top10Notifier extends Notifier<Top10State> {
   @override
   Top10State build() {
     _depo = ref.read(oyunDeposuProvider);
+    _hatalar = ref.read(hataKaydiProvider);
     // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
     _olaylariDinle();
     Future.microtask(_yukle);
@@ -158,7 +167,8 @@ class Top10Notifier extends Notifier<Top10State> {
         yanlisSayisi: yanlisSayisi,
         cevaplar: bitti ? cevaplar : const {},
       );
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.acilis);
       if (!ref.mounted) return;
       state = state.copyWith(durum: Top10Durumu.hata, hataMesaji: yuklemeHataMesaji);
     }
@@ -174,7 +184,8 @@ class Top10Notifier extends Notifier<Top10State> {
     Top10TahminSonucu sonuc;
     try {
       sonuc = await _depo.top10Tahmin(oyunId: state.oyunId!, oyuncuId: oyuncu.id);
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.hamle);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return gonderimHataMesaji;
@@ -212,7 +223,8 @@ class Top10Notifier extends Notifier<Top10State> {
 
     try {
       await _depo.top10PesEt(state.oyunId!);
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.pes);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return 'Bağlantı sorunu. İnternet bağlantını kontrol edip tekrar dene.';

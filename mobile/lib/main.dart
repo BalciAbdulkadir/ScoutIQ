@@ -13,6 +13,7 @@ import 'screens/guncelleme_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/analitik.dart';
+import 'services/hata_kaydi.dart';
 import 'services/hatirlatma.dart';
 import 'services/puanlama.dart';
 import 'theme/tema.dart';
@@ -32,6 +33,8 @@ void main() async {
 
   final firebaseAcik = await _firebaseBaslat();
   final Analitik analitik = firebaseAcik ? FirebaseAnalitik(FirebaseAnalytics.instance) : const BosAnalitik();
+  // Oyun açılırken ya da hamlede gelen beklenmeyen hatalar Crashlytics'e ölümcül olmayan hata olarak gider
+  final HataKaydi hataKaydi = firebaseAcik ? CrashlyticsHataKaydi(FirebaseCrashlytics.instance) : const BosHataKaydi();
 
   // Akşam hatırlatması. Bildirime dokunularak açılınca analitiğe bildirim_acildi gider.
   // Eklenti açılamazsa uygulama hatırlatmasız çalışır.
@@ -46,6 +49,7 @@ void main() async {
   runApp(ProviderScope(
     overrides: [
       analitikProvider.overrideWithValue(analitik),
+      hataKaydiProvider.overrideWithValue(hataKaydi),
       if (hatirlatma != null) hatirlatmaProvider.overrideWithValue(hatirlatma),
       puanlamaProvider.overrideWithValue(PuanlamaIstegi(YerelPuanlamaDeposu(), const PlayPuanlamaPenceresi())),
     ],
