@@ -5,6 +5,7 @@ import '../models/oyun_modu.dart';
 import '../models/puan.dart';
 import '../providers/hub_provider.dart';
 import '../screens/izgara_screen.dart';
+import '../screens/top10_screen.dart';
 import '../theme/renkler.dart';
 import '../theme/yazi.dart';
 import 'oyun_kurallari.dart';
@@ -109,6 +110,48 @@ Future<void> tekModluOyunuAc(
   ref.invalidate(bugunkuModProvider(oyunTipi));
 }
 
+// Ana menüde Top 10 kutucuğuna dokununca çağrılır.
+// - Bugün başlandıysa sorulmadan açılır: yarımsa kaldığı yerden (canlı ya da cansız, sunucudaki kayda göre), bittiyse
+//   sonucuyla.
+// - Yoksa kurallardan sonra mod seçilir: 3 canla (puanlı) ya da cansız (puansız, 045_top10_cansiz.sql).
+// Dönünce ana menü tazelenir.
+Future<void> top10Ac(BuildContext context, WidgetRef ref, OyunModu mod) async {
+  final oyunTipi = mod.tip!;
+  var cansiz = false;
+  bool baslandi;
+
+  ref.read(bugunProvider.notifier).kontrolEt();
+  try {
+    baslandi = await ref.read(bugunkuModProvider(oyunTipi).future) != null;
+  } catch (_) {
+    baslandi = false; // Bilinmiyorsa seçim gösterilir; başlanmış oyunda sunucudaki mod geçerli olur
+  }
+  if (!context.mounted) return;
+
+  if (!baslandi) {
+    final secim = await showModalBottomSheet<ZorlukSureSecimi>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => ZorlukSureSecimSayfasi(
+        oyunAdi: mod.baslik,
+        oyun: oyunTipi,
+        cizim: mod.cizim ?? TebesirCizimi.top10,
+        sureler: mod.sureSecenekleri,
+        onizleme: mod.onizleme,
+        canSecimi: true,
+      ),
+    );
+    if (secim == null || !context.mounted) return;
+    cansiz = secim.cansiz;
+  }
+
+  await Navigator.push(context, MaterialPageRoute(builder: (context) => Top10Screen(oyunTipi: oyunTipi, cansiz: cansiz)));
+  if (!context.mounted) return;
+  ref.invalidate(bugunOynananlarProvider);
+  ref.invalidate(bugunkuModProvider(oyunTipi));
+}
+
 // Ana menüde Izgara kutucuğuna dokununca çağrılır.
 // - Bugün bir tahtaya başlandıysa sorulmadan o tahta açılır: yarımsa kaldığı yerden (sunucudaki kalan süresiyle),
 //   bittiyse sonucuyla. Zorluklu oyunlarda günde tek zorluk oynanır, sunucu da buna izin vermez (019).
@@ -152,11 +195,13 @@ Future<void> izgaraAc(BuildContext context, WidgetRef ref) async {
   ref.invalidate(bugunkuIzgaraProvider);
 }
 
-// Seçim sayfasının sonucu: zorluğun sırası (0 kolay, 1 orta, 2 zor; zorluksuz oyunda null) ve süre
-typedef ZorlukSureSecimi = ({int? zorluk, OyunSuresi sure});
+// Seçim sayfasının sonucu: zorluğun sırası (0 kolay, 1 orta, 2 zor; zorluksuz oyunda null), süre ve Top 10'da cansız
+// mod (diğer oyunlarda false)
+typedef ZorlukSureSecimi = ({int? zorluk, OyunSuresi sure, bool cansiz});
 
 // Oyun başlamadan açılan alt sayfa. Önizleme verildiyse önce oyunun kuralları gösterilir.
 // Zorluklu oyunda sonra 3 zorluktan biri, ardından süre seçilir. Zorluksuz oyunda (Bingo) sadece süre seçilir.
+// canSecimi (Top 10): kurallardan sonra 3 can (puanlı) ya da cansız (puansız) seçilir.
 class ZorlukSureSecimSayfasi extends StatefulWidget {
   final String oyunAdi;
   final String? oyun; // kesisim, bonservis, izgara, bingo: seçime göre en yüksek puanı yazmak için
@@ -164,6 +209,7 @@ class ZorlukSureSecimSayfasi extends StatefulWidget {
   final List<({String ad, String aciklama})>? zorluklar; // null: zorluksuz oyun
   final List<OyunSuresi> sureler; // Seçilebilen süreler
   final OyunOnizlemesi? onizleme; // Doluysa sayfa kurallarla açılır
+  final bool canSecimi; // Top 10: canlı ya da cansız oynama seçimi
 
   const ZorlukSureSecimSayfasi({
     super.key,
@@ -173,6 +219,7 @@ class ZorlukSureSecimSayfasi extends StatefulWidget {
     this.zorluklar,
     this.sureler = OyunSuresi.values,
     this.onizleme,
+    this.canSecimi = false,
   });
 
   @override
@@ -185,7 +232,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
   late bool _onizlemede = widget.onizleme != null;
 
   // Zorluk yok ve tek süre seçeneği var: kurallardan sonra seçim adımı gösterilmez
-  bool get _secimsiz => widget.zorluklar == null && widget.sureler.length == 1;
+  bool get _secimsiz => widget.zorluklar == null && widget.sureler.length == 1 && !widget.canSecimi;
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +250,9 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
             duration: const Duration(milliseconds: 200),
             child: _onizlemede
                 ? _onizlemeAdimi(widget.onizleme!)
-                : zorluksuz || zorluk != null
+                : widget.canSecimi
+                    ? _canAdimi()
+                    : zorluksuz || zorluk != null
                     ? _sureAdimi(zorluk)
                     : _zorlukAdimi(),
           ),
@@ -276,10 +325,16 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
           FilledButton(
             // Zorluk yok ve tek süre seçeneği varsa (Top 10) seçilecek bir şey kalmaz: oyun hemen açılır
             onPressed: _secimsiz
-                ? () => Navigator.pop(context, (zorluk: null, sure: widget.sureler.single))
+                ? () => Navigator.pop(context, (zorluk: null, sure: widget.sureler.single, cansiz: false))
                 : () => setState(() => _onizlemede = false),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-            child: Text(Yazi.buyuk(_secimsiz ? 'Anladım · başla' : zorluksuz ? 'Anladım · süre seç' : 'Anladım · zorluk seç')),
+            child: Text(Yazi.buyuk(_secimsiz
+                ? 'Anladım · başla'
+                : widget.canSecimi
+                    ? 'Anladım · mod seç'
+                    : zorluksuz
+                        ? 'Anladım · süre seç'
+                        : 'Anladım · zorluk seç')),
           ),
         ],
       ),
@@ -310,6 +365,40 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
   }
 
   static const _zorlukKodlari = ['kolay', 'orta', 'zor'];
+
+  // Top 10: 3 canla (puanlı) ya da cansız (puansız). Seçince oyun hemen açılır.
+  Widget _canAdimi() {
+    void sec(bool cansiz) => Navigator.pop(context, (zorluk: null, sure: widget.sureler.first, cansiz: cansiz));
+    return Column(
+      key: const ValueKey('can'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _baslik(aciklama: 'Nasıl oynamak istediğini seç.'),
+        _kurallaraDon(),
+        _adim('Mod seç'),
+        _SecimSatiri(
+          baslik: '3 Can',
+          aciklama: 'Listede olmayan oyuncu bir can götürür. Puan kazanırsın.',
+          carpan: 'puanlı',
+          onTap: () => sec(false),
+        ),
+        const SizedBox(height: 8),
+        _SecimSatiri(
+          baslik: 'Cansız',
+          aciklama: 'İstediğin kadar tahmin et, sadece eğlence için. Puan ve liderlik tablosu yok.',
+          carpan: 'puansız',
+          carpanRengi: Renkler.metinSoluk,
+          onTap: () => sec(true),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Başladıktan sonra bugün mod değiştirilemez.',
+          style: TextStyle(color: Renkler.metinSoluk, fontSize: 12.5, height: 1.35),
+        ),
+      ],
+    );
+  }
 
   // "En fazla 360 puan" ya da süresizde "Süresiz oyunlar tabloya girmez"
   String _puanOzeti(int? zorluk, OyunSuresi sure) {
@@ -433,7 +522,7 @@ class _ZorlukSureSecimSayfasiState extends State<ZorlukSureSecimSayfasi> {
           ),
           const SizedBox(height: 14),
           FilledButton(
-            onPressed: sure == null ? null : () => Navigator.pop(context, (zorluk: zorluk, sure: sure)),
+            onPressed: sure == null ? null : () => Navigator.pop(context, (zorluk: zorluk, sure: sure, cansiz: false)),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
             child: Text(
               sure == null
@@ -454,9 +543,16 @@ class _SecimSatiri extends StatelessWidget {
   final String baslik;
   final String aciklama;
   final String? carpan; // Puan çarpanı, ör. "×1.5"
+  final Color carpanRengi;
   final VoidCallback onTap;
 
-  const _SecimSatiri({required this.baslik, required this.aciklama, this.carpan, required this.onTap});
+  const _SecimSatiri({
+    required this.baslik,
+    required this.aciklama,
+    this.carpan,
+    this.carpanRengi = Renkler.vurgu,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -481,7 +577,7 @@ class _SecimSatiri extends StatelessWidget {
               ),
               if (carpan != null) ...[
                 const SizedBox(width: 10),
-                Text(carpan!, style: Yazi.tebesir(18, renk: Renkler.vurgu)),
+                Text(carpan!, style: Yazi.tebesir(18, renk: carpanRengi)),
               ],
               const SizedBox(width: 10),
               Text('→', style: Yazi.tebesir(20, renk: Renkler.metinIkincil)),

@@ -26,7 +26,8 @@ abstract class OyunDeposu {
   // Günün oyununu açar (040_oyun_ac.sql). Soru, kayıt ve süre tek adımda sunucuda açılır: kayıt yoksa açılır ve
   // seçilen süre (saniye; null: süresiz) aynı anda başlar. Kayıt varsa süre yok sayılır, oyun kaldığı yerden döner.
   // Kullanıcı bu oyunun bugün başka bir modunu açtıysa BaskaModOynandi fırlatır.
-  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure});
+  // cansiz: Top 10'u cansız (puansız) açar (045_top10_cansiz.sql). Kayıt varsa yok sayılır; oyunun modu pakette gelir.
+  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure, bool cansiz = false});
 
   // Bitmiş oyunun bütün soruları (042_bitmis_oyun_sorulari.sql): oyun id'siyle okunur, hiçbir şey açmaz ve süre
   // başlatmaz. Kullanıcının bu oyundaki kaydı bitmediyse null.
@@ -133,9 +134,14 @@ class SupabaseOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure}) async {
+  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure, bool cansiz = false}) async {
     try {
-      final sonuc = await _supabase.rpc('oyun_ac', params: {'p_oyun_tipi': oyunTipi, 'p_sure': sure});
+      // p_cansiz sadece cansız Top 10'da gönderilir: diğer oyunlar 045'ten önceki sunucuda da açılır
+      final sonuc = await _supabase.rpc('oyun_ac', params: {
+        'p_oyun_tipi': oyunTipi,
+        'p_sure': sure,
+        if (cansiz) 'p_cansiz': true,
+      });
       return OyunPaketi.fromJson(sonuc as Map<String, dynamic>);
     } on PostgrestException catch (e) {
       if (e.hint == 'oyun_gunde_bir') throw BaskaModOynandi();

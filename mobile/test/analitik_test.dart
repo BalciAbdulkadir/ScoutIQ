@@ -165,7 +165,7 @@ void main() {
   });
 
   test('Top 10: üçüncü yanlışta sebep "can_bitti"', () async {
-    final p = top10Provider('top10');
+    final p = top10Provider(const Top10Acilis());
     final depo = top10Deposu()
       ..oneriler = [
         for (var i = 0; i < 3; i++) OyuncuOneri(id: 'y-$i', isim: 'Yanlış $i'),

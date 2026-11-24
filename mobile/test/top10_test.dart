@@ -6,6 +6,10 @@ import 'package:mobile/models/top10.dart';
 import 'package:mobile/providers/top10_provider.dart';
 import 'package:mobile/screens/top10_screen.dart';
 import 'package:mobile/services/oyun_deposu.dart';
+import 'package:mobile/services/paylasim.dart';
+import 'package:mobile/widgets/izgara_zorluk_secimi.dart';
+import 'package:mobile/models/oyun_modu.dart';
+import 'package:mobile/widgets/tebesir.dart';
 
 import 'yardimcilar/sahte_oyun_deposu.dart';
 
@@ -35,7 +39,7 @@ Future<(ProviderContainer, SahteOyunDeposu)> oyunuAc([void Function(SahteOyunDep
 
   final container = ProviderContainer(overrides: [oyunDeposuProvider.overrideWithValue(depo)]);
   addTearDown(container.dispose);
-  final provider = top10Provider('top10');
+  final provider = top10Provider(const Top10Acilis());
   container.listen(provider, (_, _) {});
   for (var i = 0; i < 100 && container.read(provider).durum == Top10Durumu.yukleniyor; i++) {
     await Future<void>.delayed(Duration.zero);
@@ -43,8 +47,8 @@ Future<(ProviderContainer, SahteOyunDeposu)> oyunuAc([void Function(SahteOyunDep
   return (container, depo);
 }
 
-Top10State durum(ProviderContainer c) => c.read(top10Provider('top10'));
-Top10Notifier notifier(ProviderContainer c) => c.read(top10Provider('top10').notifier);
+Top10State durum(ProviderContainer c) => c.read(top10Provider(const Top10Acilis()));
+Top10Notifier notifier(ProviderContainer c) => c.read(top10Provider(const Top10Acilis()).notifier);
 
 void main() {
   group('Soru', () {
@@ -297,6 +301,113 @@ void main() {
       });
 
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('Cansız mod (045)', () {
+    const cansizAcilis = Top10Acilis(cansiz: true);
+
+    Future<(ProviderContainer, SahteOyunDeposu)> cansizAc([void Function(SahteOyunDeposu)? ayarla]) async {
+      final depo = top10Deposu()
+        ..oneriler = [
+          ...top10Deposu().oneriler,
+          for (var i = 1; i <= 4; i++) OyuncuOneri(id: 'yok-$i', isim: 'Listede Yok $i'),
+        ];
+      ayarla?.call(depo);
+      final container = ProviderContainer(overrides: [oyunDeposuProvider.overrideWithValue(depo)]);
+      addTearDown(container.dispose);
+      container.listen(top10Provider(cansizAcilis), (_, _) {});
+      for (var i = 0; i < 100 && container.read(top10Provider(cansizAcilis)).durum == Top10Durumu.yukleniyor; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      return (container, depo);
+    }
+
+    test('yeni oyun cansız açılır', () async {
+      final (c, depo) = await cansizAc();
+
+      expect(depo.acilisIstekleri.single.cansiz, isTrue);
+      expect(c.read(top10Provider(cansizAcilis)).cansiz, isTrue);
+    });
+
+    test('yanlış tahminler oyunu bitirmez', () async {
+      final (c, _) = await cansizAc();
+      final n = c.read(top10Provider(cansizAcilis).notifier);
+
+      for (var i = 1; i <= 4; i++) {
+        await n.tahminEt(OyuncuOneri(id: 'yok-$i', isim: 'Listede Yok $i'));
+      }
+
+      final s = c.read(top10Provider(cansizAcilis));
+      expect(s.durum, Top10Durumu.oynaniyor);
+      expect(s.canBitti, isFalse);
+      expect(s.sonTahmin?.kalanCan, isNull);
+    });
+
+    test('bugün canlı açılmış oyunda cansız seçimi yok sayılır', () async {
+      final (c, _) = await cansizAc((d) => d.kayit = {'skor': 0, 'durum': 'basladi'});
+
+      expect(c.read(top10Provider(cansizAcilis)).cansiz, isFalse);
+    });
+
+    test('canlı açılış cansız istemez', () async {
+      final (_, depo) = await oyunuAc();
+
+      expect(depo.acilisIstekleri.single.cansiz, isFalse);
+    });
+
+    testWidgets('ekranda kalp yerine cansız yazar', (tester) async {
+      final depo = top10Deposu();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [oyunDeposuProvider.overrideWithValue(depo)],
+        child: const MaterialApp(home: Top10Screen(cansiz: true)),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Top10Canlari), findsNothing);
+      await tester.scrollUntilVisible(find.textContaining('CANSIZ'), 200);
+      expect(find.textContaining('CANSIZ'), findsOneWidget);
+    });
+
+    testWidgets('kurallardan sonra 3 can ya da cansız seçilir', (tester) async {
+      final top10 = oyunModlari.firstWhere((m) => m.tip == 'top10');
+      ZorlukSureSecimi? secim;
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async => secim = await showModalBottomSheet<ZorlukSureSecimi>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => ZorlukSureSecimSayfasi(
+                oyunAdi: top10.baslik,
+                oyun: 'top10',
+                cizim: TebesirCizimi.top10,
+                sureler: top10.sureSecenekleri,
+                onizleme: top10.onizleme,
+                canSecimi: true,
+              ),
+            ),
+            child: const Text('aç'),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('aç'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('ANLADIM · MOD SEÇ'));
+      await tester.pumpAndSettle();
+      expect(find.text('3 CAN'), findsOneWidget);
+      await tester.tap(find.text('CANSIZ'));
+      await tester.pumpAndSettle();
+
+      expect(secim?.cansiz, isTrue);
+    });
+
+    test('paylaşımda cansız oyunun kalp satırı yazmaz', () {
+      final metin = top10Paylasimi(bulunanSiralar: {1, 2}, kalanCan: 3, cansiz: true);
+
+      expect(metin, isNot(contains('❤️')));
+      expect(metin, contains('2/10'));
     });
   });
 }

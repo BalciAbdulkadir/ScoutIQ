@@ -180,7 +180,7 @@ const List<OyunModu> oyunModlari = [
     renk: Renkler.top10,
     durum: OyunDurumu.aktif,
     maksimumSkor: 10,
-    // Zorluk modu ve süre yoktur: günde tek liste
+    // Zorluk modu ve süre yoktur: günde tek liste. Kurallardan sonra 3 canla ya da cansız oynama seçilir (045).
     sureSecenekleri: [OyunSuresi.suresiz],
     onizleme: OyunOnizlemesi(
       ozet: 'Ekranda bir liste başlığı var, ör. "Galatasaray\'ın en pahalı 10 transferi". Listedeki 10 oyuncuyu bul.',
@@ -188,9 +188,10 @@ const List<OyunModu> oyunModlari = [
         'Oyuncunun adını yaz ve listeden seç. Sırayı bilmen gerekmez, bulduğun oyuncu kendi sırasına yerleşir.',
         'Her satırda ipucu olarak oyuncunun uyruğunun bayrağı açık.',
         '3 canın var. Listede olmayan oyuncu bir can götürür; daha önce denediğin oyuncu sayılmaz, can da götürmez.',
+        'Sadece eğlenmek istersen cansız oyna: istediğin kadar tahmin edersin ama puan almazsın.',
         'Zorluk modu ve süre yok, herkes aynı listeyi oynar. Oyun 10 oyuncu bulununca, canların bitince ya da pes edince sona erer.',
       ],
-      puanlama: 'Her bulduğun oyuncu 10 puan. Hepsini bulursan kalan her can +10 puan.',
+      puanlama: 'Her bulduğun oyuncu 10 puan. Hepsini bulursan kalan her can +10 puan. Cansız oynarsan puan yok.',
     ),
   ),
 ];
