@@ -3,6 +3,7 @@ import '../models/bingo.dart';
 import '../models/oyun_paketi.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/hata_kaydi.dart';
 import 'puan_provider.dart';
 import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
@@ -118,6 +119,13 @@ class BingoNotifier extends Notifier<BingoState> {
 
   late OyunDeposu _depo;
 
+  // Açılışta ya da hamlede gelen beklenmeyen hata Crashlytics'e gider (services/hata_kaydi.dart); kullanıcıya
+  // gösterilen mesaj değişmez. build'de alınır: hata geldiğinde ekran kapanmış olabilir.
+  late HataKaydi _hatalar;
+
+  void _hataKaydet(Object hata, StackTrace iz, OyunIslemi islem) =>
+      _hatalar.oyunHatasi(hata, iz, islem: islem, oyunTipi: secim.oyunTipi, sure: secim.sure);
+
   // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
   late OyunOlaylari _olaylar;
   bool _oynaniyor = false;
@@ -150,6 +158,7 @@ class BingoNotifier extends Notifier<BingoState> {
   @override
   BingoState build() {
     _depo = ref.read(oyunDeposuProvider);
+    _hatalar = ref.read(hataKaydiProvider);
     // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
     _olaylariDinle();
     Future.microtask(_yukle);
@@ -211,7 +220,8 @@ class BingoNotifier extends Notifier<BingoState> {
         sureDoldu: paket.sureDoldu,
       );
       if (bitti) await _ornekCevaplariYukle();
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.acilis);
       if (!ref.mounted) return;
       state = state.copyWith(durum: BingoDurumu.hata, hataMesaji: yuklemeHataMesaji);
     }
@@ -235,7 +245,8 @@ class BingoNotifier extends Notifier<BingoState> {
     BingoHamleSonucu sonuc;
     try {
       sonuc = await _depo.bingoHamle(oyunId: state.oyunId!, sira: state.hamleSayisi + 1, hucre: hucre);
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.hamle);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return gonderimHataMesaji;
@@ -289,7 +300,8 @@ class BingoNotifier extends Notifier<BingoState> {
 
     try {
       await _depo.bingoPesEt(state.oyunId!);
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.pes);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return 'Bağlantı sorunu. İnternet bağlantını kontrol edip tekrar dene.';

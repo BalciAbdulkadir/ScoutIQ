@@ -45,6 +45,8 @@ dependencies:
   # 23.x Android SDK 37 ve Android Gradle eklentisi 9.1 istiyor (projede 9.0.1): Gradle yükseltilene kadar 22.x
   flutter_local_notifications: ^22.3.3
   timezone: ^0.11.2
+  # Bağlantı hatalarını sunucu hatalarından ayırmak için (services/hata_kaydi.dart); supabase zaten kullanıyor
+  http: ^1.6.0
   shared_preferences: ^2.5.6
   share_plus: ^13.3.1
   in_app_review: ^2.0.12

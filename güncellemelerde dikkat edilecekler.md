@@ -89,6 +89,21 @@ Bazı SQL dosyaları, telefonlardaki eski sürümün yaptığı bir şeyi yasakl
 - Günde tek mod kuralı (`oyun_gunde_bir`), tipin alt çizgiden önceki kısmına bakar (`kesisim_kolay` → `kesisim`). Yeni tipin adı bu düzene uygun seçilir.
 - Tarihler Türkiye saatiyledir: `public.bugunun_tarihi()` ya da `(now() at time zone 'Europe/Istanbul')::date`.
 
+**Süre seçeneği değişirken (044):**
+- Şu dört yer **birlikte** değişir:
+  1. `oyun_ac`'taki süre kontrolü (son hâli 043'te)
+  2. `puan_hesapla`'daki süre çarpanı (son hâli 043'te)
+  3. `kullanici_oyun_gecmisi_sure_saniye_check` kısıtı (son hâli 044'te)
+  4. `izgara_sureleri_sure_saniye_check` kısıtı (son hâli 044'te)
+- Eski seçenek listeden çıkarılmaz: eski kayıtlar ve eski uygulama sürümü onu kullanır (30 saniye bu yüzden duruyor).
+- 043 sadece `oyun_ac`'ı değiştirdi, kısıtlar 40'ı reddetti ve 40 saniyelik oyunlar açılmadı. Uygulamanın testleri bunu yakalamaz, çünkü sahte depo veritabanı kısıtlarını bilmez. SQL'i çalıştırdıktan sonra yeni süreyle bir oyun gerçekten açılarak denenir.
+- Kontrol:
+  ```sql
+  select conname, pg_get_constraintdef(oid)
+  from pg_constraint
+  where conname in ('kullanici_oyun_gecmisi_sure_saniye_check', 'izgara_sureleri_sure_saniye_check');
+  ```
+
 ## 5. Soru verisinin biçimi değişirken
 
 - Eski günlerin oyunları veritabanında eski biçimle durur. Örnekler:
@@ -115,6 +130,7 @@ Kurulum ve dağıtım: `backend/CLOUD_RUN.md`.
 - **Firebase:** `mobile/android/app/google-services.json` repoda yok. Dosya yoksa debug derleme sadece uyarı verir ve uygulama Firebase'siz çalışır: Crashlytics ve Analytics veri toplamaz. Release paketi dosya yoksa derlenmez.
 - **Sürüm numarası:** Her Play yüklemesinde `mobile/pubspec.yaml`'daki sürümün `+` işaretinden sonraki sayısı (`1.0.0+1` → `1.0.0+2`) bir artırılır. Aynı sayıyla ikinci yükleme kabul edilmez.
 - **Analitik:** Kişisel veri ve oyuncu ismi gönderilmez. Yeni olay eklemeden önce `CLAUDE.md` madde 18'e bakılır.
+- **Sunucu hataları (044):** Oyun açılırken, hamlede ya da pes ederken gelen beklenmeyen hata kullanıcıya "Bağlantı sorunu" olarak görünür ve Crashlytics'e ölümcül olmayan hata olarak gider (`mobile/lib/services/hata_kaydi.dart`): sunucunun hata kodu ve mesajı, işlem, oyun tipi ve süre. `PostgrestException`'ın `details` alanı gönderilmez, çünkü kısıt hatalarında satırın tamamını (kullanıcı id'si dahil) taşır. İnternet bağlantısı hataları gönderilmez. Debug derlemede hiçbir şey gönderilmez. Yeni bir oyun ya da hamle fonksiyonu eklenirse `catch` bloğunda `_hataKaydet` çağrılır.
 - **Gizlilik politikası ve hesap silme sayfası:** Repo kökündeki `web_sitesi/` klasöründedir (`https://footylore.web.app`, Firebase Hosting, `footylore` sitesi). Uygulama yeni bir veri toplamaya başlarsa (yeni tablo, yeni analitik olayı, yeni hizmet sağlayıcı) ya da hesap silme adımları değişirse `web_sitesi/gizlilik.html` ve `web_sitesi/hesap-silme.html` aynı PR'da güncellenir, sayfalardaki "Son güncelleme" tarihi değişir. Sitede JavaScript, çerez ve dış kaynak olmaz (`mobile/test/web_sitesi_test.dart`).
 - **Reklam kimliği:** Uygulamada reklam yok. `AD_ID` ve `ACCESS_ADSERVICES_*` izinleri `AndroidManifest.xml`'de `tools:node="remove"` ile çıkarılır, Analytics reklam kimliği toplamaz (`google_analytics_adid_collection_enabled = false`). Play Console'daki reklam kimliği beyanı "kullanılmıyor"dur. Yeni bir eklenti bu izinleri tekrar eklerse birleştirilmiş manifest'e bakılır (`gradlew :app:processDebugMainManifest`).
 

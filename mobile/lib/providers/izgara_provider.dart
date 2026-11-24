@@ -4,6 +4,7 @@ import '../models/oyun_paketi.dart';
 import '../models/oyuncu_oneri.dart';
 import '../services/gunluk_oyun.dart';
 import '../services/analitik.dart';
+import '../services/hata_kaydi.dart';
 import 'puan_provider.dart';
 import '../services/oyun_sonu.dart';
 import '../services/oyun_deposu.dart';
@@ -87,6 +88,13 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
 
   late OyunDeposu _depo;
 
+  // Açılışta ya da hamlede gelen beklenmeyen hata Crashlytics'e gider (services/hata_kaydi.dart); kullanıcıya
+  // gösterilen mesaj değişmez. build'de alınır: hata geldiğinde ekran kapanmış olabilir.
+  late HataKaydi _hatalar;
+
+  void _hataKaydet(Object hata, StackTrace iz, OyunIslemi islem) =>
+      _hatalar.oyunHatasi(hata, iz, islem: islem, oyunTipi: acilis.zorluk.oyunTipi, sure: acilis.sure);
+
   // Analitik olaylar (services/analitik.dart): başladı, bitti, yarıda bırakıldı
   late OyunOlaylari _olaylar;
   bool _oynaniyor = false;
@@ -119,6 +127,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
   @override
   IzgaraState build() {
     _depo = ref.read(oyunDeposuProvider);
+    _hatalar = ref.read(hataKaydiProvider);
     // Veriyi build bittikten sonra yüklüyoruz: build'in döndürdüğü başlangıç durumu sonucun üzerine yazmasın
     _olaylariDinle();
     Future.microtask(_yukle);
@@ -172,7 +181,8 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
         tahminSayisi: tahminler.length,
       );
       if (bitti) await _ornekCevaplariYukle();
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.acilis);
       if (!ref.mounted) return;
       state = state.copyWith(durum: IzgaraDurumu.hata, hataMesaji: yuklemeHataMesaji);
     }
@@ -188,7 +198,8 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
     IzgaraTahminSonucu sonuc;
     try {
       sonuc = await _depo.izgaraTahmin(oyunId: state.oyunId!, oyuncuId: oyuncu.id);
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.hamle);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return gonderimHataMesaji;
@@ -221,7 +232,8 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
 
     try {
       await _depo.izgaraPesEt(state.oyunId!);
-    } catch (_) {
+    } catch (e, iz) {
+      _hataKaydet(e, iz, OyunIslemi.pes);
       if (!ref.mounted) return null;
       state = state.copyWith(gonderiliyor: false);
       return 'Bağlantı sorunu. İnternet bağlantını kontrol edip tekrar dene.';
