@@ -3,7 +3,7 @@
 // (039_puan_her_dogruya.sql). Her doğru ve her dolu kutu puan getirir. Süresiz oyun puansızdır, Top 10 hariç.
 // Not: services/puanlama.dart "uygulamayı puanla" (Play değerlendirmesi) içindir, bu dosyayla ilgisi yoktur.
 
-// Sunucudaki puan_detay jsonb'si. puan null ise oyun puansızdır (sebep 'suresiz').
+// Sunucudaki puan_detay jsonb'si. puan null ise oyun puansızdır (sebep 'suresiz' ya da cansız Top 10'da 'cansiz').
 class PuanDetayi {
   final int? puan;
   final String? sebep;
@@ -44,6 +44,7 @@ class PuanDetayi {
 
   bool get puansiz => puan == null;
   bool get suresiz => sebep == 'suresiz';
+  bool get cansiz => sebep == 'cansiz';
 }
 
 class LiderlikSatiri {

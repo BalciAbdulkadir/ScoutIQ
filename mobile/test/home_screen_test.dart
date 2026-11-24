@@ -201,7 +201,7 @@ void main() {
     expect(ekran.zorluk, IzgaraZorlugu.orta);
     expect(ekran.sure, 60);
     // Süre tahtayla aynı çağrıda sunucuda başlatıldı
-    expect(depo.acilisIstekleri, [(oyunTipi: 'izgara_orta', sure: 60)]);
+    expect(depo.acilisIstekleri, [(oyunTipi: 'izgara_orta', sure: 60, cansiz: false)]);
     expect(find.text('1:00'), findsOneWidget);
     await ekraniKapat(tester);
   });

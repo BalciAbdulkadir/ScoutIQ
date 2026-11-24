@@ -11,6 +11,21 @@ import '../services/oyun_deposu.dart';
 
 enum Top10Durumu { yukleniyor, oynaniyor, bitti, oyunYok, hata }
 
+// Ekranın açılış isteği. cansiz: oyun yeni açılacaksa cansız (puansız) açılsın (045_top10_cansiz.sql). Bugün açılmış
+// oyunda yok sayılır: oyunun modu sunucudan gelir (Top10State.cansiz).
+class Top10Acilis {
+  final String oyunTipi;
+  final bool cansiz;
+
+  const Top10Acilis({this.oyunTipi = 'top10', this.cansiz = false});
+
+  @override
+  bool operator ==(Object other) => other is Top10Acilis && other.oyunTipi == oyunTipi && other.cansiz == cansiz;
+
+  @override
+  int get hashCode => Object.hash(oyunTipi, cansiz);
+}
+
 class Top10State {
   final Top10Durumu durum;
   final Top10Sorusu? soru;
@@ -22,6 +37,7 @@ class Top10State {
   final String? hataMesaji; // durum 'hata' iken gösterilir
   final Top10TahminSonucu? sonTahmin; // Arama kutusunun altında gösterilen son tahminin sonucu
   final Map<int, Top10Oyuncusu> cevaplar; // Oyun bitince bütün liste (bulunamayanlar dahil)
+  final bool cansiz; // Cansız (puansız) oyun: yanlış tahmin can götürmez, oyun canla bitmez (045)
 
   const Top10State({
     this.durum = Top10Durumu.yukleniyor,
@@ -34,12 +50,16 @@ class Top10State {
     this.hataMesaji,
     this.sonTahmin,
     this.cevaplar = const {},
+    this.cansiz = false,
   });
 
   // Her bulunan oyuncu 1 puan
   int get skor => bulunanlar.length;
 
+  // Cansız oyunda kullanılmaz
   int get kalanCan => (top10Can - yanlisSayisi).clamp(0, top10Can);
+
+  bool get canBitti => !cansiz && kalanCan == 0;
 
   Top10State copyWith({
     Top10Durumu? durum,
@@ -52,6 +72,7 @@ class Top10State {
     String? hataMesaji,
     Top10TahminSonucu? sonTahmin,
     Map<int, Top10Oyuncusu>? cevaplar,
+    bool? cansiz,
   }) {
     return Top10State(
       durum: durum ?? this.durum,
@@ -64,6 +85,7 @@ class Top10State {
       hataMesaji: hataMesaji ?? this.hataMesaji,
       sonTahmin: sonTahmin ?? this.sonTahmin,
       cevaplar: cevaplar ?? this.cevaplar,
+      cansiz: cansiz ?? this.cansiz,
     );
   }
 }
@@ -71,10 +93,13 @@ class Top10State {
 // Top 10 oyunu. Tahminler sunucuda tutulur: yarıda bırakılan oyun tekrar açılınca kaldığı yerden devam eder.
 // Süre yoktur. 3 can vardır: listede olmayan oyuncuyu tahmin etmek bir can götürür.
 // Oyun 10 oyuncu bulununca, canlar bitince ya da pes edilince biter. Canlar sunucuda, yanlış tahminlerden hesaplanır.
+// Cansız oyunda (045) can yoktur ve puan yazılmaz: oyun 10 oyuncu bulununca ya da pes edilince biter.
 class Top10Notifier extends Notifier<Top10State> {
-  final String oyunTipi;
+  final Top10Acilis acilis;
 
-  Top10Notifier(this.oyunTipi);
+  Top10Notifier(this.acilis);
+
+  String get oyunTipi => acilis.oyunTipi;
 
   late OyunDeposu _depo;
 
@@ -99,7 +124,7 @@ class Top10Notifier extends Notifier<Top10State> {
       _oynaniyor = simdiki.durum == Top10Durumu.oynaniyor;
       // Oynanırken bitti (bitmiş oyunu açmak sayılmaz)
       if (onceki != null && onceki.durum == Top10Durumu.oynaniyor && simdiki.durum == Top10Durumu.bitti) {
-        final sebep = _pesEdildi ? BitisSebebi.pes : simdiki.kalanCan == 0 ? BitisSebebi.canBitti : BitisSebebi.tamamlandi;
+        final sebep = _pesEdildi ? BitisSebebi.pes : simdiki.canBitti ? BitisSebebi.canBitti : BitisSebebi.tamamlandi;
         // oyun_bitti puan sunucudan okununca gider (puansız oyunda puan parametresi yok)
         ref.read(puan.notifier).yukle().then((p) => _olaylar.bitti(skor: simdiki.skor, sebep: sebep, puan: p?.puan));
         ref.read(oyunSonuProvider).oyunBitti(gunlukOyunTipi: _olaylar.gunlukOyunTipi, skor: simdiki.skor);
@@ -132,8 +157,8 @@ class Top10Notifier extends Notifier<Top10State> {
       }
 
       // Soru ve kayıt tek çağrıyla açılır (040_oyun_ac.sql). Top 10 süresizdir. Kayıt varsa (devam eden ya da bitmiş)
-      // liste tahminlerden kurulur.
-      final paket = await _depo.oyunAc(oyunTipi);
+      // liste tahminlerden kurulur; canlı ya da cansız olduğu kayıttan gelir (045).
+      final paket = await _depo.oyunAc(oyunTipi, cansiz: acilis.cansiz);
       final soru = Top10Sorusu.oku(paket.soruVerisi);
       if (!ref.mounted) return;
       if (paket.durum == OyunPaketiDurumu.yok || paket.oyunId == null || soru == null) {
@@ -148,7 +173,7 @@ class Top10Notifier extends Notifier<Top10State> {
       final yanlisSayisi = tahminler.where((t) => t.sira == null).length;
       final bitti = paket.bitti ||
           tahminler.where((t) => t.sira != null).length >= top10Boyu ||
-          yanlisSayisi >= top10Can;
+          (!paket.cansiz && yanlisSayisi >= top10Can);
 
       // Bulunanların değerleri (ve oyun bittiyse bütün liste) sunucudan gelir
       final cevaplar = tahminler.any((t) => t.sira != null) || bitti ? await _depo.top10Cevaplar(oyunId) : <int, Top10Oyuncusu>{};
@@ -166,6 +191,7 @@ class Top10Notifier extends Notifier<Top10State> {
         denenenler: {for (final t in tahminler) t.oyuncuIsim},
         yanlisSayisi: yanlisSayisi,
         cevaplar: bitti ? cevaplar : const {},
+        cansiz: paket.cansiz,
       );
     } catch (e, iz) {
       _hataKaydet(e, iz, OyunIslemi.acilis);
@@ -197,7 +223,7 @@ class Top10Notifier extends Notifier<Top10State> {
       bulunanlar[sonuc.sira!] = Top10Oyuncusu(isim: sonuc.oyuncuIsim, fotoUrl: sonuc.fotoUrl ?? oyuncu.fotoUrl, deger: sonuc.deger);
     }
 
-    // Kalan can sunucudan gelir; göndermeyen eski sunucuda yanlış tahmin burada sayılır
+    // Kalan can sunucudan gelir; göndermeyen eski sunucuda ve cansız oyunda yanlış tahmin burada sayılır
     final yanlisSayisi = sonuc.kalanCan != null
         ? top10Can - sonuc.kalanCan!
         : state.yanlisSayisi + (!sonuc.dogru && !sonuc.tekrar ? 1 : 0);
@@ -246,4 +272,4 @@ class Top10Notifier extends Notifier<Top10State> {
   }
 }
 
-final top10Provider = NotifierProvider.autoDispose.family<Top10Notifier, Top10State, String>(Top10Notifier.new);
+final top10Provider = NotifierProvider.autoDispose.family<Top10Notifier, Top10State, Top10Acilis>(Top10Notifier.new);

@@ -17,6 +17,7 @@ class OyunPaketi {
   final int? soruSayisi; // Kesişim ve Bonservis'in toplam soru sayısı
   final int? siradaki; // Bingo'da sıradaki oyuncunun destedeki sırası (1'den)
   final Object? soruVerisi;
+  final bool cansiz; // Top 10 cansız (puansız) açıldı (045); 045'ten önceki sunucu göndermez
 
   const OyunPaketi({
     required this.durum,
@@ -31,6 +32,7 @@ class OyunPaketi {
     this.soruSayisi,
     this.siradaki,
     this.soruVerisi,
+    this.cansiz = false,
   });
 
   bool get bitti => durum == OyunPaketiDurumu.bitti;
@@ -53,6 +55,7 @@ class OyunPaketi {
       soruSayisi: (json['soru_sayisi'] as num?)?.toInt(),
       siradaki: (json['siradaki'] as num?)?.toInt(),
       soruVerisi: json['soru_verisi'],
+      cansiz: json['cansiz'] == true,
     );
   }
 }

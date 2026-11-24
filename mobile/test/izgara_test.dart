@@ -218,7 +218,7 @@ void main() {
     test('yeni tahtada seçilen süre sunucuda başlatılır', () async {
       final (c, depo) = await tahtayiAc(null, 60);
 
-      expect(depo.acilisIstekleri, [(oyunTipi: 'izgara_kolay', sure: 60)]);
+      expect(depo.acilisIstekleri, [(oyunTipi: 'izgara_kolay', sure: 60, cansiz: false)]);
       expect(depo.izgaraSureToplam, 60);
       expect(durum(c).sureSaniye, 60);
       final kalan = durum(c).bitisZamani!.difference(DateTime.now()).inSeconds;

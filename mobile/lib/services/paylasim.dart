@@ -85,12 +85,20 @@ String bingoPaylasimi({required Set<int> doluKutular, int? sure, int? seri, int?
     );
 
 // Top 10: 1'den 10'a satırlar bulundu 🟩 / bulunamadı ⬛ (beşerli iki satır), skor ve kalan canlar ❤️ (giden 🤍)
-String top10Paylasimi({required Set<int> bulunanSiralar, required int kalanCan, int toplamCan = 3, int? seri, int? puan}) {
+// Cansız oyunda (045) kalp satırı yazılmaz
+String top10Paylasimi({
+  required Set<int> bulunanSiralar,
+  required int kalanCan,
+  int toplamCan = 3,
+  bool cansiz = false,
+  int? seri,
+  int? puan,
+}) {
   String satir(int bas) => [for (var s = bas; s < bas + 5; s++) bulunanSiralar.contains(s) ? _dogru : _bos].join();
   final canlar = '${'❤️' * kalanCan}${'🤍' * (toplamCan - kalanCan).clamp(0, toplamCan)}';
   return _metin(
     paylasimBasligi(oyunAdi: 'Top 10'),
-    [satir(1), '${satir(6)}   ${bulunanSiralar.length}/10', canlar],
+    [satir(1), '${satir(6)}   ${bulunanSiralar.length}/10', if (!cansiz) canlar],
     seri,
     puan,
   );

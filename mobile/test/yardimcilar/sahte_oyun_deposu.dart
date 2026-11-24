@@ -113,9 +113,11 @@ class SahteOyunDeposu implements OyunDeposu {
   List<Top10Tahmini> top10TahminListesi = [];
   bool top10TahminHataVerir = false;
   int top10PesSayisi = 0;
+  // Kayıt cansız açıldı (045): yanlış tahmin can götürmez, kalan can null döner. oyunAc yeni kayıtta yazar.
+  bool top10Cansiz = false;
 
   // Çağrı kayıtları
-  final List<({String oyunTipi, int? sure})> acilisIstekleri = []; // oyunAc çağrıları
+  final List<({String oyunTipi, int? sure, bool cansiz})> acilisIstekleri = []; // oyunAc çağrıları
   int kayitAcSayisi = 0; // oyunAc'ın açtığı yeni kayıtlar
   int cevapKontrolSayisi = 0;
   final List<String> arananlar = [];
@@ -128,9 +130,9 @@ class SahteOyunDeposu implements OyunDeposu {
   Future<String> oyunTarihi() async => tarih;
 
   @override
-  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure}) async {
+  Future<OyunPaketi> oyunAc(String oyunTipi, {int? sure, bool cansiz = false}) async {
     istenenOyunTipleri.add(oyunTipi);
-    acilisIstekleri.add((oyunTipi: oyunTipi, sure: sure));
+    acilisIstekleri.add((oyunTipi: oyunTipi, sure: sure, cansiz: cansiz));
     if (oyunYuklemeHataVerir) throw Exception('bağlantı yok');
     if (oyunAcHatasi case final hata?) throw hata;
     final oyun = this.oyun;
@@ -144,6 +146,7 @@ class SahteOyunDeposu implements OyunDeposu {
       acilanKayitTipleri.add(oyunTipi);
       kayit = {'skor': 0, 'durum': 'basladi'};
       yeni = true;
+      if (cansiz) top10Cansiz = true;
       // Süre kayıtla aynı anda başlar
       if (sure != null && izgara) {
         izgaraSureToplam = sure;
@@ -193,6 +196,7 @@ class SahteOyunDeposu implements OyunDeposu {
       soruSayisi: soruSayisi,
       siradaki: siradaki,
       soruVerisi: veri,
+      cansiz: top10Cansiz,
     );
   }
 
@@ -490,20 +494,21 @@ class SahteOyunDeposu implements OyunDeposu {
   Future<List<Top10Tahmini>> top10Tahminleri(String oyunId) async => List.of(top10TahminListesi);
 
   int get _top10KalanCan => top10Can - top10TahminListesi.where((t) => t.sira == null).length;
+  int? get _top10KalanCanCevabi => top10Cansiz ? null : _top10KalanCan;
 
   // 031_top10_can.sql'deki top10_tahmin fonksiyonunun basit bir kopyası: isim eşleşmesi, tekrar sayılmaz ve can götürmez,
-  // yanlış tahmin bir can götürür; 10 bulununca ya da canlar bitince biter
+  // yanlış tahmin bir can götürür; 10 bulununca ya da canlar bitince biter. Cansız oyunda (045) can yoktur.
   @override
   Future<Top10TahminSonucu> top10Tahmin({required String oyunId, required String oyuncuId}) async {
     if (top10TahminHataVerir) throw Exception('bağlantı yok');
     final isim = oneriler.firstWhere((o) => o.id == oyuncuId, orElse: () => OyuncuOneri(id: oyuncuId, isim: oyuncuId)).isim;
     if (top10TahminListesi.any((t) => t.oyuncuIsim == isim)) {
       return Top10TahminSonucu(
-          dogru: false, tekrar: true, oyuncuIsim: isim, skor: _top10Skoru, kalanCan: _top10KalanCan, bitti: false);
+          dogru: false, tekrar: true, oyuncuIsim: isim, skor: _top10Skoru, kalanCan: _top10KalanCanCevabi, bitti: false);
     }
     final bulunan = top10Listesi.entries.where((e) => e.value.$2.isim == isim).map((e) => e.key).firstOrNull;
     top10TahminListesi.add(Top10Tahmini(oyuncuIsim: isim, sira: bulunan));
-    final bitti = _top10Skoru == top10Boyu || _top10KalanCan <= 0;
+    final bitti = _top10Skoru == top10Boyu || (!top10Cansiz && _top10KalanCan <= 0);
     kayit = {...?kayit, 'skor': _top10Skoru, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return Top10TahminSonucu(
       dogru: bulunan != null,
@@ -511,7 +516,7 @@ class SahteOyunDeposu implements OyunDeposu {
       deger: bulunan == null ? null : top10Listesi[bulunan]!.$2.deger,
       oyuncuIsim: isim,
       skor: _top10Skoru,
-      kalanCan: _top10KalanCan,
+      kalanCan: _top10KalanCanCevabi,
       bitti: bitti,
     );
   }

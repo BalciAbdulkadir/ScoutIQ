@@ -103,6 +103,9 @@ class _PuanKartiState extends ConsumerState<PuanKarti> {
   }
 }
 
-// Puansız bitişin açıklaması (039'dan sonra puansız olan tek oyun süresiz oynanan oyundur)
-String puansizMetni(PuanDetayi puan) =>
-    puan.suresiz ? 'Süresiz oynadın, bu oyun tabloya girmez.' : 'Bu oyundan puan alamadın.';
+// Puansız bitişin açıklaması: süresiz oyun ya da cansız Top 10 (045)
+String puansizMetni(PuanDetayi puan) => puan.suresiz
+    ? 'Süresiz oynadın, bu oyun tabloya girmez.'
+    : puan.cansiz
+        ? 'Cansız oynadın, bu oyun tabloya girmez.'
+        : 'Bu oyundan puan alamadın.';

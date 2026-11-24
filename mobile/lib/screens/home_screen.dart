@@ -21,7 +21,6 @@ import 'bonservis_screen.dart';
 import 'game_screen.dart';
 import 'liderlik_screen.dart';
 import 'profil_screen.dart';
-import 'top10_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -32,10 +31,11 @@ class HomeScreen extends ConsumerWidget {
       'kesisim' => (oyunTipi, sure) => GameScreen(oyunTipi: oyunTipi, sure: sure),
       'bonservis' => (oyunTipi, sure) => BonservisScreen(oyunTipi: oyunTipi, sure: sure),
       'bingo' => (oyunTipi, sure) => BingoScreen(oyunTipi: oyunTipi, sure: sure),
-      'top10' => (oyunTipi, sure) => Top10Screen(oyunTipi: oyunTipi, sure: sure),
       _ => null,
     };
     if (mod.tip == 'izgara') return izgaraAc(context, ref);
+    // Top 10'da kurallardan sonra canlı ya da cansız oynama seçilir
+    if (mod.tip == 'top10') return top10Ac(context, ref, mod);
     if (ekran != null) {
       return mod.zorluklu ? zorlukluOyunuAc(context, ref, mod, ekran) : tekModluOyunuAc(context, ref, mod, ekran);
     }

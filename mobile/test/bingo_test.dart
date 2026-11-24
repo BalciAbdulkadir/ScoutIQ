@@ -306,7 +306,7 @@ void main() {
     test('yeni oyunda seçilen süre sunucuda başlatılır', () async {
       final (c, depo) = await kartiAc(null, 60);
 
-      expect(depo.acilisIstekleri, [(oyunTipi: testOyunTipi, sure: 60)]);
+      expect(depo.acilisIstekleri, [(oyunTipi: testOyunTipi, sure: 60, cansiz: false)]);
       expect(depo.oyunSureToplam, 60);
       expect(durum(c, 60).sureSaniye, 60);
       expect(durum(c, 60).bitisZamani, isNotNull);

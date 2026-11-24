@@ -81,7 +81,7 @@ void main() {
     test('kayıt, süre ve soru tek çağrıyla açılır', () async {
       final (_, depo) = await oyunuBaslat(null, 60);
 
-      expect(depo.acilisIstekleri, [(oyunTipi: testOyunTipi, sure: 60)]);
+      expect(depo.acilisIstekleri, [(oyunTipi: testOyunTipi, sure: 60, cansiz: false)]);
     });
 
     test('bugün başka bir zorluk oynandıysa oyun açılmaz, nedeni söylenir', () async {

@@ -23,12 +23,16 @@ class Top10Screen extends ConsumerWidget {
   final String oyunTipi;
   // Top 10'da süre yoktur; ana menünün ortak açılışı için tutulur
   final int? sure;
+  // Oyun yeni açılacaksa cansız (puansız) açılsın (045). Bugün açılmış oyunun modu sunucudan gelir.
+  final bool cansiz;
 
-  const Top10Screen({super.key, this.oyunTipi = 'top10', this.sure});
+  const Top10Screen({super.key, this.oyunTipi = 'top10', this.sure, this.cansiz = false});
+
+  Top10Acilis get _acilis => Top10Acilis(oyunTipi: oyunTipi, cansiz: cansiz);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(top10Provider(oyunTipi));
+    final state = ref.watch(top10Provider(_acilis));
     final oynaniyor = state.durum == Top10Durumu.oynaniyor;
 
     return Scaffold(
@@ -77,7 +81,7 @@ class Top10Screen extends ConsumerWidget {
     );
     if (onay != true) return;
 
-    final hata = await ref.read(top10Provider(oyunTipi).notifier).pesEt();
+    final hata = await ref.read(top10Provider(_acilis).notifier).pesEt();
     if (hata != null && context.mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -94,7 +98,7 @@ class Top10Screen extends ConsumerWidget {
           ikon: Icons.wifi_off_rounded,
           baslik: 'Bağlantı sorunu',
           aciklama: state.hataMesaji ?? 'Lütfen biraz sonra tekrar dene.',
-          onTekrarDene: () => ref.invalidate(top10Provider(oyunTipi)),
+          onTekrarDene: () => ref.invalidate(top10Provider(_acilis)),
         );
       case Top10Durumu.oyunYok:
         return const OyunMesajKarti(
@@ -110,7 +114,7 @@ class Top10Screen extends ConsumerWidget {
   }
 
   Widget _oyun(BuildContext context, WidgetRef ref, Top10State state) {
-    final notifier = ref.read(top10Provider(oyunTipi).notifier);
+    final notifier = ref.read(top10Provider(_acilis).notifier);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -126,9 +130,17 @@ class Top10Screen extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         Top10Listesi(state: state),
-        // Canlar listeyle yazma alanının arasında; yazma alanı listenin altında
+        // Canlar listeyle yazma alanının arasında; yazma alanı listenin altında. Cansız oyunda kalp yerine mod yazar.
         const SizedBox(height: 14),
-        Top10Canlari(kalan: state.kalanCan),
+        if (state.cansiz)
+          Center(
+            child: Text(
+              Yazi.buyuk('Cansız · puansız'),
+              style: Yazi.etiket(renk: Renkler.metinSoluk),
+            ),
+          )
+        else
+          Top10Canlari(kalan: state.kalanCan),
         const SizedBox(height: 6),
         OyuncuArama(
           renk: Renkler.top10,
@@ -139,17 +151,17 @@ class Top10Screen extends ConsumerWidget {
           kullanildiEtiketi: 'denendi',
         ),
         const SizedBox(height: 12),
-        _SonTahmin(sonuc: state.sonTahmin),
+        _SonTahmin(sonuc: state.sonTahmin, cansiz: state.cansiz),
       ],
     );
   }
 
   // Tahmini gönderir: daha önce denenmiş oyuncu sayılmaz, alan sessizce temizlenir
   Future<TahminSonucu> _tahminEt(WidgetRef ref, OyuncuOneri oyuncu) async {
-    final hata = await ref.read(top10Provider(oyunTipi).notifier).tahminEt(oyuncu);
+    final hata = await ref.read(top10Provider(_acilis).notifier).tahminEt(oyuncu);
     if (hata != null) throw TahminHatasi(hata);
 
-    return switch (ref.read(top10Provider(oyunTipi)).sonTahmin) {
+    return switch (ref.read(top10Provider(_acilis)).sonTahmin) {
       Top10TahminSonucu(tekrar: true) || null => TahminSonucu.notr,
       Top10TahminSonucu(dogru: true) => TahminSonucu.dogru,
       _ => TahminSonucu.yanlis,
@@ -187,7 +199,7 @@ class Top10Screen extends ConsumerWidget {
         Text(
           tam
               ? 'Yeni liste gece yarısı açılıyor.'
-              : '${state.kalanCan == 0 ? 'Canların bitti. ' : ''}Bulamadığın oyuncular kırmızıyla gösteriliyor.',
+              : '${state.canBitti ? 'Canların bitti. ' : ''}Bulamadığın oyuncular kırmızıyla gösteriliyor.',
           textAlign: TextAlign.center,
           style: const TextStyle(color: Renkler.metinSoluk, fontSize: 14),
         ),
@@ -205,6 +217,7 @@ class Top10Screen extends ConsumerWidget {
             bulunanSiralar: state.bulunanlar.keys.toSet(),
             kalanCan: state.kalanCan,
             toplamCan: top10Can,
+            cansiz: state.cansiz,
             seri: seri,
             puan: puan,
           ),
@@ -277,24 +290,30 @@ class Top10Canlari extends StatelessWidget {
 // Son tahminin sonucu: "Doğru · Arda Güler → 3. sıra"
 class _SonTahmin extends StatelessWidget {
   final Top10TahminSonucu? sonuc;
+  final bool cansiz;
 
-  const _SonTahmin({required this.sonuc});
+  const _SonTahmin({required this.sonuc, required this.cansiz});
 
   @override
   Widget build(BuildContext context) {
     final s = sonuc;
     if (s == null) {
-      return const Text(
+      return Text(
         'Listedeki oyuncuları bul. Her satırda oyuncunun uyruğunun bayrağı var; bulduğun oyuncu kendi sırasına yerleşir. '
-        'Listede olmayan oyuncu bir can götürür.',
-        style: TextStyle(color: Renkler.metinSoluk, fontSize: 13, height: 1.4),
+        '${cansiz ? 'Cansız oynuyorsun: istediğin kadar tahmin edebilirsin.' : 'Listede olmayan oyuncu bir can götürür.'}',
+        style: const TextStyle(color: Renkler.metinSoluk, fontSize: 13, height: 1.4),
       );
     }
 
     final (ikon, renk, baslik, ayrinti) = switch (s) {
       Top10TahminSonucu(tekrar: true) => (Icons.info_rounded, Renkler.orta, 'Zaten denedin', '${s.oyuncuIsim} daha önce denendi'),
       Top10TahminSonucu(dogru: true, sira: final sira?) => (Icons.check_circle_rounded, Renkler.basari, 'Doğru', '${s.oyuncuIsim} → $sira. sıra'),
-      _ => (Icons.cancel_rounded, Renkler.hata, 'Listede değil', '${s.oyuncuIsim} bu listede yok · bir can gitti'),
+      _ => (
+          Icons.cancel_rounded,
+          Renkler.hata,
+          'Listede değil',
+          '${s.oyuncuIsim} bu listede yok${cansiz ? '' : ' · bir can gitti'}',
+        ),
     };
 
     return AnimatedSwitcher(

@@ -99,7 +99,7 @@ void main() {
     });
 
     test('Top 10 (süresiz)', () async {
-      final p = top10Provider('top10');
+      final p = top10Provider(const Top10Acilis());
       final (c, k) =
           await ac(top10Deposu()..oyunAcHatasi = kisitHatasi, p, (Top10State s) => s.durum == Top10Durumu.yukleniyor);
 
