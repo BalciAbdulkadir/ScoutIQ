@@ -13,7 +13,8 @@ namespace ScoutIQ.API.Oyunlar
     // oyuncu destenin sonuna gider ve sırası gelince tekrar gelir.
     // Kulüp kategorileri büyük kulüplerdir; kartta en fazla MaxBasAltiKulup baş altı kulüp olur.
     // Deste ünlü ağırlıklıdır: her kutuya ayrı bir ünlü oyuncu (12; kart böylece her zaman doldurulabilir),
-    // en az bir kutuya uyan EkUyanSayisi oyuncu ve hiçbir kutuya uymayan UymayanSayisi oyuncu. Ek oyuncuların çoğu
+    // en az bir kutuya uyan EkUyanSayisi oyuncu (kutulara dengeli dağıtılır: en az oyuncusu olan kutuya önce) ve hiçbir
+    // kutuya uymayan UymayanSayisi oyuncu. Ek oyuncuların çoğu
     // ünlüdür (EkUyanUnluSayisi, UymayanUnluSayisi); kalanı bilinen kademesinin üst sıralarındandır (EkOyuncuSiraSiniri).
     // Kulüp ve lig kategorilerinde oyuncu, kulüpte en az KariyerGecmisi.MinSoruMaci maça çıkmışsa desteye girer.
     // Hepsi karıştırılır.
@@ -176,10 +177,39 @@ namespace ScoutIQ.API.Oyunlar
                 if (Ekle(unluler[hucre], 1) != 0) return null;
             }
 
-            // Ek oyuncular en az bir kutuya uyar
-            List<string> Uyanlar(Dictionary<Aday, List<string>> oyuncular) =>
-                hucreler.SelectMany(h => oyuncular[h]).Distinct().OrderBy(o => o, StringComparer.Ordinal).ToList();
-            if (!EkOyuncular(Uyanlar(unluler), Uyanlar(bilinenler), EkUyanSayisi, EkUyanUnluSayisi)) return null;
+            // Ek oyuncular en az bir kutuya uyar ve kutulara dengeli dağıtılır: kalabalık kategoriler (Premier Lig,
+            // Şampiyonlar Ligi gibi) ek oyuncuların çoğunu almasın, o kutular erken dolunca oyuncular boşa düşmesin.
+            // Kapsama: destede kutuya uyan (kabul edilen cevaplara göre) oyuncu sayısı.
+            var kapsama = hucreler.Select(h => deste.Count(h.Oyuncular.Contains)).ToArray();
+
+            // Her adımda, havuzunda kullanılmamış oyuncu kalan kutulardan kapsaması en az olanlardan rastgele biri seçilir,
+            // ona uyan rastgele bir oyuncu eklenir. Yetmezse eksik kalan sayıyı döndürür.
+            int DengeliEkle(Dictionary<Aday, List<string>> oyuncular, int adet)
+            {
+                for (; adet > 0; adet--)
+                {
+                    var uygun = Enumerable.Range(0, HucreSayisi)
+                        .Where(h => oyuncular[hucreler[h]].Any(o => !kullanilan.Contains(o)))
+                        .ToList();
+                    if (uygun.Count == 0) break;
+                    int enAz = uygun.Min(h => kapsama[h]);
+                    var enAzlar = uygun.Where(h => kapsama[h] == enAz).ToList();
+                    var hucre = enAzlar[_random.Next(enAzlar.Count)];
+                    var oyuncu = RastgeleOyuncu(oyuncular[hucreler[hucre]], kullanilan)!;
+                    kullanilan.Add(oyuncu);
+                    deste.Add(oyuncu);
+                    for (int h = 0; h < HucreSayisi; h++)
+                    {
+                        if (hucreler[h].Oyuncular.Contains(oyuncu)) kapsama[h]++;
+                    }
+                }
+                return adet;
+            }
+
+            // Önce ünlüler, kalanı bilinenler; biri yetmezse eksik diğerinden tamamlanır (EkOyuncular gibi)
+            int eksikUyan = DengeliEkle(unluler, EkUyanUnluSayisi);
+            eksikUyan = DengeliEkle(bilinenler, EkUyanSayisi - EkUyanUnluSayisi + eksikUyan);
+            if (DengeliEkle(unluler, eksikUyan) != 0) return null;
 
             // Hiçbir kutuya uymayan oyuncular: kabul edilen cevaplara (Oyuncular) bakılır, yeterince maça çıkmamış olsa da uyan sayılır
             bool Uymaz(string o) => !hucreler.Any(h => h.Oyuncular.Contains(o));
