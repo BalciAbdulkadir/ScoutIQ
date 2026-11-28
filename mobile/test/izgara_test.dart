@@ -276,6 +276,84 @@ void main() {
     });
   });
 
+  group('Kutu seçimi', () {
+    // Arda Güler 1. ve 4. kutulara uyuyor
+    void ikiKutu(SahteOyunDeposu d) => d.izgaraCokluHucreler = {'o-1': [4, 1]};
+
+    test('birden fazla kutuya uyan oyuncuda kutu sorulur, tahmin sayılmaz', () async {
+      final (c, depo) = await tahtayiAc(ikiKutu);
+
+      await notifier(c).tahminEt(dogruOyuncu);
+
+      expect(durum(c).kutuSecimi?.hucreler, {1, 4});
+      expect(durum(c).kutuSecimi?.oyuncu.isim, 'Arda Güler');
+      expect(durum(c).tahminSayisi, 0);
+      expect(durum(c).hucreler, isEmpty);
+      expect(depo.izgaraTahminListesi, isEmpty);
+      expect(depo.izgaraGonderilenler.single, ('o-1', null));
+    });
+
+    test('seçilen kutuya yerleşir, tahmin bir kez sayılır', () async {
+      final (c, depo) = await tahtayiAc(ikiKutu);
+
+      await notifier(c).tahminEt(dogruOyuncu);
+      await notifier(c).kutuSec(1);
+
+      expect(durum(c).hucreler[1]?.isim, 'Arda Güler');
+      expect(durum(c).hucreler.containsKey(4), isFalse);
+      expect(durum(c).skor, 1);
+      expect(durum(c).tahminSayisi, 1);
+      expect(durum(c).kutuSecimi, isNull);
+      expect(depo.izgaraGonderilenler.last, ('o-1', 1));
+    });
+
+    test('vurgulanmayan kutuya dokunmak bir şey yapmaz', () async {
+      final (c, depo) = await tahtayiAc(ikiKutu);
+
+      await notifier(c).tahminEt(dogruOyuncu);
+      await notifier(c).kutuSec(7);
+
+      expect(durum(c).hucreler, isEmpty);
+      expect(durum(c).kutuSecimi?.hucreler, {1, 4});
+      expect(depo.izgaraGonderilenler, hasLength(1));
+    });
+
+    test('vazgeçince oyuncu yerleşmez, tahmin sayılmaz', () async {
+      final (c, depo) = await tahtayiAc(ikiKutu);
+
+      await notifier(c).tahminEt(dogruOyuncu);
+      notifier(c).kutuSecimindenVazgec();
+
+      expect(durum(c).kutuSecimi, isNull);
+      expect(durum(c).hucreler, isEmpty);
+      expect(durum(c).tahminSayisi, 0);
+      expect(depo.izgaraTahminListesi, isEmpty);
+    });
+
+    test('uyduğu kutulardan biri doluysa kalan tek kutuya kendiliğinden yerleşir', () async {
+      final (c, _) = await tahtayiAc((d) {
+        ikiKutu(d);
+        d.izgaraTahminListesi = [const IzgaraTahmini(sira: 1, oyuncuIsim: 'Başka Oyuncu', hucre: 4)];
+      });
+
+      await notifier(c).tahminEt(dogruOyuncu);
+
+      expect(durum(c).kutuSecimi, isNull);
+      expect(durum(c).hucreler[1]?.isim, 'Arda Güler');
+      expect(durum(c).skor, 2);
+    });
+
+    test('pes edince kutu seçimi temizlenir', () async {
+      final (c, _) = await tahtayiAc(ikiKutu);
+
+      await notifier(c).tahminEt(dogruOyuncu);
+      await notifier(c).pesEt();
+
+      expect(durum(c).durum, IzgaraDurumu.bitti);
+      expect(durum(c).kutuSecimi, isNull);
+    });
+  });
+
   group('Ekran', () {
     Future<SahteOyunDeposu> ekraniAc(WidgetTester tester, [void Function(SahteOyunDeposu)? ayarla, int? sure]) async {
       tester.view.physicalSize = const Size(1080, 2400);
@@ -353,6 +431,51 @@ void main() {
       // Sonuç satırında ve tahtadaki kutuda
       expect(find.text('Arda Güler'), findsOneWidget);
       expect(find.textContaining('Real Madrid × Fransa'), findsOneWidget);
+    });
+
+    testWidgets('birden fazla kutuya uyan oyuncuda iki "+" görünür, birine dokununca oraya yerleşir', (tester) async {
+      await ekraniAc(tester, (d) => d.izgaraCokluHucreler = {'o-1': [4, 1]});
+
+      await tester.enterText(find.byType(TextField), 'ar');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      await tester.tap(find.text('Arda Güler'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'GÖNDER'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.add_rounded), findsNWidgets(2));
+      expect(find.textContaining('birden fazla kutuya uyuyor'), findsOneWidget);
+      expect(find.text('0 tahmin'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.add_rounded).first);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.add_rounded), findsNothing);
+      expect(find.text('1 tahmin'), findsOneWidget);
+      expect(find.text('1/9 kutu'), findsOneWidget);
+      // İlk "+" 1. kutudadır (Galatasaray × Fransa)
+      expect(find.textContaining('Galatasaray × Fransa'), findsOneWidget);
+    });
+
+    testWidgets('kutu seçiminde "Vazgeç" vurguyu kaldırır', (tester) async {
+      await ekraniAc(tester, (d) => d.izgaraCokluHucreler = {'o-1': [4, 1]});
+
+      await tester.enterText(find.byType(TextField), 'ar');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      await tester.tap(find.text('Arda Güler'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'GÖNDER'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Vazgeç'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.add_rounded), findsNothing);
+      expect(find.text('0 tahmin'), findsOneWidget);
     });
 
     testWidgets('tahtaya konmuş oyuncu listede soluk durur ve seçilemez', (tester) async {

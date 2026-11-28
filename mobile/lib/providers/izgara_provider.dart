@@ -26,6 +26,7 @@ class IzgaraState {
   final int? sureSaniye; // Süreli tahtada seçilen toplam süre; süresizse null
   final DateTime? bitisZamani; // Süreli tahtada sürenin dolacağı an (cihaz saatine göre)
   final bool sureDoldu; // Oyun süre dolduğu için bitti
+  final IzgaraKutuSecimi? kutuSecimi; // Oyuncu birden fazla boş kutuya uyuyor: kullanıcının seçmesi bekleniyor
 
   const IzgaraState({
     this.durum = IzgaraDurumu.yukleniyor,
@@ -40,6 +41,7 @@ class IzgaraState {
     this.sureSaniye,
     this.bitisZamani,
     this.sureDoldu = false,
+    this.kutuSecimi,
   });
 
   // Skor dolu hücre sayısıdır
@@ -58,6 +60,7 @@ class IzgaraState {
     int? sureSaniye,
     DateTime? bitisZamani,
     bool? sureDoldu,
+    IzgaraKutuSecimi? Function()? kutuSecimi, // null'a çekmek için: kutuSecimi: () => null
   }) {
     return IzgaraState(
       durum: durum ?? this.durum,
@@ -72,6 +75,7 @@ class IzgaraState {
       sureSaniye: sureSaniye ?? this.sureSaniye,
       bitisZamani: bitisZamani ?? this.bitisZamani,
       sureDoldu: sureDoldu ?? this.sureDoldu,
+      kutuSecimi: kutuSecimi != null ? kutuSecimi() : this.kutuSecimi,
     );
   }
 }
@@ -191,20 +195,30 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
   Future<List<OyuncuOneri>> oyuncuAra(String metin) => _depo.oyuncuAra(metin);
 
   // Seçilen oyuncuyu sunucuya gönderir. Hata olursa mesajını döndürür, başarılıysa null.
-  Future<String?> tahminEt(OyuncuOneri oyuncu) async {
+  // hucre: kutu seçiminde kullanıcının dokunduğu kutu. Oyuncu birden fazla boş kutuya uyuyorsa sunucu kayıt yapmaz,
+  // uyduğu kutuları döndürür: tahmin sayılmaz, kutuSecimi dolar ve kullanıcı birini seçer (kutuSec).
+  Future<String?> tahminEt(OyuncuOneri oyuncu, {int? hucre}) async {
     if (state.durum != IzgaraDurumu.oynaniyor || state.gonderiliyor) return null;
     state = state.copyWith(gonderiliyor: true);
 
     IzgaraTahminSonucu sonuc;
     try {
-      sonuc = await _depo.izgaraTahmin(oyunId: state.oyunId!, oyuncuId: oyuncu.id);
+      sonuc = await _depo.izgaraTahmin(oyunId: state.oyunId!, oyuncuId: oyuncu.id, hucre: hucre);
     } catch (e, iz) {
       _hataKaydet(e, iz, OyunIslemi.hamle);
       if (!ref.mounted) return null;
-      state = state.copyWith(gonderiliyor: false);
+      state = state.copyWith(gonderiliyor: false, kutuSecimi: () => null);
       return gonderimHataMesaji;
     }
     if (!ref.mounted) return null;
+
+    if (sonuc.secim && !sonuc.bitti) {
+      state = state.copyWith(
+        gonderiliyor: false,
+        kutuSecimi: () => IzgaraKutuSecimi(oyuncu: oyuncu, hucreler: sonuc.secenekler.toSet()),
+      );
+      return null;
+    }
 
     final hucreler = {...state.hucreler};
     if (sonuc.dogru && sonuc.hucre != null) {
@@ -218,10 +232,24 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
       sonTahmin: sonuc,
       gonderiliyor: false,
       sureDoldu: sonuc.sureDoldu,
+      kutuSecimi: () => null,
     );
 
     if (sonuc.bitti) await _ornekCevaplariYukle();
     return null;
+  }
+
+  // Kutu seçiminde vurgulanan kutulardan birine dokunuldu: oyuncu o kutuyla gönderilir. Vurgulu olmayan kutu bir şey yapmaz.
+  Future<String?> kutuSec(int hucre) async {
+    final secim = state.kutuSecimi;
+    if (secim == null || !secim.hucreler.contains(hucre)) return null;
+    return tahminEt(secim.oyuncu, hucre: hucre);
+  }
+
+  // Kutu seçiminden vazgeçildi: oyuncu yerleşmez, tahmin sayılmaz
+  void kutuSecimindenVazgec() {
+    if (state.kutuSecimi == null) return;
+    state = state.copyWith(kutuSecimi: () => null);
   }
 
   // Oyunu o anki skorla bitirir
@@ -240,7 +268,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
     }
     if (!ref.mounted) return null;
 
-    state = state.copyWith(durum: IzgaraDurumu.bitti, gonderiliyor: false);
+    state = state.copyWith(durum: IzgaraDurumu.bitti, gonderiliyor: false, kutuSecimi: () => null);
     await _ornekCevaplariYukle();
     return null;
   }
@@ -258,7 +286,7 @@ class IzgaraNotifier extends Notifier<IzgaraState> {
     }
     if (!ref.mounted) return;
 
-    state = state.copyWith(durum: IzgaraDurumu.bitti, gonderiliyor: false, sureDoldu: true);
+    state = state.copyWith(durum: IzgaraDurumu.bitti, gonderiliyor: false, sureDoldu: true, kutuSecimi: () => null);
     await _ornekCevaplariYukle();
   }
 

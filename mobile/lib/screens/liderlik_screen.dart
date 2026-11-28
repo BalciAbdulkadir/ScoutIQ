@@ -165,33 +165,145 @@ class _DonemSekmeleri extends StatelessWidget {
   }
 }
 
-class _OyunFiltresi extends StatelessWidget {
+// Oyun filtresi çipleri. Seçili çipin sarı çerçevesi çiplerden ayrı tek bir katmandır; seçim değişince yeni çipe
+// "uzayarak" kayar: gidilen yöndeki kenar önce varır, arkadaki kenar sonra toparlanır.
+class _OyunFiltresi extends StatefulWidget {
   final String? secili;
   final ValueChanged<String?> onSec;
 
   const _OyunFiltresi({required this.secili, required this.onSec});
 
   @override
+  State<_OyunFiltresi> createState() => _OyunFiltresiState();
+}
+
+class _OyunFiltresiState extends State<_OyunFiltresi> with SingleTickerProviderStateMixin {
+  final _satirAnahtari = GlobalKey();
+  final _cipAnahtarlari = [for (final _ in liderlikOyunlari) GlobalKey()];
+  late final AnimationController _kayma;
+
+  // Çiplerin satır içindeki yerleri; ilk çizimden sonra ölçülür
+  List<Rect>? _yerler;
+  // Geçiş başlarken çerçevenin bulunduğu yer (yarım kalan geçişte o anki ara yer)
+  Rect? _baslangic;
+  late int _hedef = _sira(widget.secili);
+
+  static const _sure = Duration(milliseconds: 420);
+
+  @override
+  void initState() {
+    super.initState();
+    _kayma = AnimationController(vsync: this, duration: _sure, value: 1);
+  }
+
+  @override
+  void dispose() {
+    _kayma.dispose();
+    super.dispose();
+  }
+
+  int _sira(String? kod) {
+    final i = liderlikOyunlari.indexWhere((o) => o.kod == kod);
+    return i < 0 ? 0 : i;
+  }
+
+  @override
+  void didUpdateWidget(covariant _OyunFiltresi eski) {
+    super.didUpdateWidget(eski);
+    final yeni = _sira(widget.secili);
+    if (yeni == _hedef) return;
+    // O anki yerden (yarım kalan geçişin ortasındaysa oradan) yeni çipe
+    _baslangic = _cerceve();
+    _hedef = yeni;
+    _kayma.forward(from: 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _cipAnahtarlari[yeni].currentContext;
+      if (!mounted || ctx == null) return;
+      Scrollable.ensureVisible(ctx, alignment: 0.5, duration: _sure, curve: Curves.easeOutCubic);
+    });
+  }
+
+  // Çerçevenin şu anki yeri: geçiş sürerken başlangıçla hedef arası
+  Rect? _cerceve() {
+    final yerler = _yerler;
+    if (yerler == null) return null;
+    final hedef = yerler[_hedef];
+    final bas = _baslangic;
+    final t = _kayma.value;
+    if (bas == null || t >= 1) return hedef;
+    final on = Curves.easeOutCubic.transform((t / 0.6).clamp(0.0, 1.0));
+    final arka = Curves.easeInOutCubic.transform(((t - 0.3) / 0.7).clamp(0.0, 1.0));
+    final saga = hedef.center.dx >= bas.center.dx;
+    final sol = lerpDouble(bas.left, hedef.left, saga ? arka : on);
+    final sag = lerpDouble(bas.right, hedef.right, saga ? on : arka);
+    return Rect.fromLTRB(sol, lerpDouble(bas.top, hedef.top, t), sag, lerpDouble(bas.bottom, hedef.bottom, t));
+  }
+
+  static double lerpDouble(double a, double b, double t) => a + (b - a) * t;
+
+  void _olc() {
+    if (!mounted) return;
+    final satir = _satirAnahtari.currentContext?.findRenderObject() as RenderBox?;
+    if (satir == null || !satir.hasSize) return;
+    final yerler = <Rect>[];
+    for (final anahtar in _cipAnahtarlari) {
+      final kutu = anahtar.currentContext?.findRenderObject() as RenderBox?;
+      if (kutu == null || !kutu.hasSize) return;
+      yerler.add(kutu.localToGlobal(Offset.zero, ancestor: satir) & kutu.size);
+    }
+    final eski = _yerler;
+    if (eski != null && eski.length == yerler.length && List.generate(yerler.length, (i) => eski[i] == yerler[i]).every((e) => e)) {
+      return;
+    }
+    setState(() => _yerler = yerler);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _olc());
     // Altı çip var: hepsi kurulur, sığmayanlar yana kaydırılır
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
+      child: Stack(
         children: [
-          for (final (i, oyun) in liderlikOyunlari.indexed) ...[
-            if (i > 0) const SizedBox(width: 8),
-            _cip(oyun),
-          ],
+          Row(
+            key: _satirAnahtari,
+            children: [
+              for (final (i, oyun) in liderlikOyunlari.indexed) ...[
+                if (i > 0) const SizedBox(width: 8),
+                _cip(i, oyun),
+              ],
+            ],
+          ),
+          if (_yerler != null)
+            AnimatedBuilder(
+              animation: _kayma,
+              builder: (context, _) => Positioned.fromRect(
+                rect: _cerceve()!,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: Renkler.vurgu.withValues(alpha: 0.08),
+                      border: Border.all(color: Renkler.vurgu, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _cip(({String? kod, String ad}) oyun) {
-    final secilmis = oyun.kod == secili;
+  Widget _cip(int i, ({String? kod, String ad}) oyun) {
+    final secilmis = oyun.kod == widget.secili;
+    // Ölçüm gelene kadar (ilk kare) seçili çip kendi sarı çerçevesini taşır, boş kare görünmesin
+    final kendiCercevesi = secilmis && _yerler == null;
     return InkWell(
-      onTap: () => onSec(oyun.kod),
+      key: _cipAnahtarlari[i],
+      onTap: () => widget.onSec(oyun.kod),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         height: 36,
@@ -199,16 +311,18 @@ class _OyunFiltresi extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          color: secilmis ? Renkler.vurgu.withValues(alpha: 0.08) : null,
-          border: Border.all(color: secilmis ? Renkler.vurgu : Renkler.kenar, width: 1.5),
+          color: kendiCercevesi ? Renkler.vurgu.withValues(alpha: 0.08) : null,
+          border: Border.all(color: kendiCercevesi ? Renkler.vurgu : Renkler.kenar, width: 1.5),
         ),
-        child: Text(
-          oyun.ad,
+        child: AnimatedDefaultTextStyle(
+          duration: _sure,
+          curve: Curves.easeOut,
           style: TextStyle(
             color: secilmis ? Renkler.vurgu : Renkler.metinIkincil,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
+          child: Text(oyun.ad),
         ),
       ),
     );

@@ -114,6 +114,10 @@ public class BingoSoruSeciciTests
         // Kutuya uymayan oyuncu az: tam UymayanSayisi kadar
         Assert.Equal(UymayanSayisi, kart.Eslesmeler.Count(e => e.Length == 0));
 
+        // Ek oyuncular kutulara dengeli dağılır: her kutuya destede en az 2 oyuncu uyar
+        for (int h = 0; h < HucreSayisi; h++)
+            Assert.True(kart.Eslesmeler.Count(e => e.Contains(h)) >= 2, $"{h}. kutuya destede 2'den az oyuncu uyuyor");
+
         // Kart doldurulabilir: her kutuya desteden ayrı bir oyuncu atanabilir, sadece ünlü oyuncularla bile
         Assert.True(TamEslesmeVar(kart), "Kart desteden doldurulamıyor");
         Assert.True(TamEslesmeVar(kart, o => veri.Kademeler[kart.Deste[o]] == Kademe.Unlu), "Kart ünlü oyuncularla doldurulamıyor");
@@ -267,5 +271,34 @@ public class BingoSoruSeciciTests
         v.OyuncuEkle(20, Kademe.Bilinen, true, kategoriler.ToArray());
 
         Assert.Null(v.Sec(1));
+    }
+
+    [Fact]
+    public void Sec_KalabalikKategori_EkOyunculariToplamaz()
+    {
+        // Lig kategorilerinden biri 200 ünlüyle çok kalabalık; diğer kategorilerde 4 ünlü + 2 bilinen.
+        // Ek oyuncular rastgele seçilseydi çoğu o lige düşerdi; dengeli dağıtımda o kutuya en fazla 4 oyuncu uyar.
+        var v = new TestVerisi();
+        var kalabalik = v.Kategori(KategoriTipi.Lig, "kalabalik");
+        var digerleri = new List<Kategori> { v.Kategori(KategoriTipi.Lig, "lig") };
+        // Kartın istediğinden birer fazla kategori: karta girmeyenlerin oyuncuları kutuya uymayan oyuncu olur
+        foreach (var (tip, adet) in KartDagilimi.Where(k => k.Key != KategoriTipi.Lig))
+            for (int i = 0; i <= adet; i++) digerleri.Add(v.Kategori(tip, $"{tip}{i}"));
+        v.OyuncuEkle(200, Kademe.Unlu, true, kalabalik);
+        foreach (var k in digerleri)
+        {
+            v.OyuncuEkle(4, Kademe.Unlu, true, k);
+            v.OyuncuEkle(2, Kademe.Bilinen, true, k);
+        }
+
+        for (int tohum = 0; tohum < 30; tohum++)
+        {
+            var kart = v.Sec(tohum);
+            Assert.NotNull(kart);
+            int h = kart!.Hucreler.IndexOf(kalabalik);
+            Assert.True(h >= 0, "Kalabalık lig kartta yok");
+            int uyan = kart.Eslesmeler.Count(e => e.Contains(h));
+            Assert.True(uyan <= 4, $"Tohum {tohum}: kalabalık lig kutusuna destede {uyan} oyuncu uyuyor");
+        }
     }
 }

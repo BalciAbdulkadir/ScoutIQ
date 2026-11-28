@@ -139,7 +139,8 @@ const List<OyunModu> oyunModlari = [
       ozet: '3x3 tahtada her kutu bir satır ve bir sütun başlığının kesiştiği yerdir. '
           'Kutuya, iki başlığa da uyan bir oyuncu gerekir.',
       kurallar: [
-        'Oyuncunun adını yaz ve listeden seç. Kutu seçmene gerek yok, doğru oyuncu uyduğu kutuya kendisi yerleşir.',
+        'Oyuncunun adını yaz ve listeden seç. Tek kutuya uyan oyuncu oraya kendisi yerleşir; birden fazla kutuya uyuyorsa '
+            'uyduğu kutular sarı yanar, koymak istediğine dokunursun.',
         'Başlıklar kulüp ya da milli takım olabilir. Orta ve Zor tahtada milli takımlar da gelir.',
         'Tahmin hakkın sınırsız. Aynı oyuncuyu iki kez kullanamazsın.',
         'Oyun dokuz kutu dolunca, pes edince ya da süre bitince sona erer.',
@@ -164,8 +165,9 @@ const List<OyunModu> oyunModlari = [
       kurallar: [
         'Gelen oyuncuyu kariyerine uyan kutuya dokunarak yerleştir. Uyan kutu yoksa pas geç.',
         'Yanlış kutuya dokunursan oyuncu gitmez, başka kutu deneyebilirsin. Süreli oyunda her yanlış kutu 2 saniye götürür.',
-        'Pas sınırsız. Pas geçtiğin oyuncu sırası gelince tekrar gelir; kutuya yerleşen oyuncu bir daha gelmez.',
-        'Arada hiçbir kutuya uymayan oyuncular da gelir, onları pas geç. Kart her zaman tamamen doldurulabilir.',
+        'Pas sınırsız. Pas geçtiğin oyuncu, boş kutulardan birine uyduğu sürece sırası gelince tekrar gelir; kutuya '
+            'yerleşen oyuncu bir daha gelmez.',
+        'Arada hiçbir kutuya uymayan birkaç oyuncu da gelir, onları pas geç. Kart her zaman tamamen doldurulabilir.',
         'Zorluk modu yok, herkes aynı kartı oynar. Oyun kart dolunca, pes edince ya da süre bitince sona erer.',
       ],
       puanlama: 'Her dolu kutu 8 puan, kart dolarsa +4. Kısa süre puanı artırır. Süresiz oynarsan puan yok.',

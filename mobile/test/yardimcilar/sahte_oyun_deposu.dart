@@ -70,6 +70,11 @@ class SahteOyunDeposu implements OyunDeposu {
 
   // Izgara: oyuncu ID'si -> yerleşeceği hücre. Listede olmayan oyuncu yanlış sayılır.
   Map<String, int> izgaraHucreleri = {'o-1': 4};
+  // Birden fazla hücreye uyan oyuncular: oyuncu ID'si -> uyduğu hücreler (izgaraHucreleri'nin yerine geçer).
+  // Sunucu gibi: birden fazla boş hücreye uyuyorsa kutu sorulur, seçilen hücre gönderilince oraya yerleşir.
+  Map<String, List<int>> izgaraCokluHucreler = {};
+  // Gönderilen tahminler: (oyuncu ID'si, seçilen hücre)
+  final List<(String, int?)> izgaraGonderilenler = [];
   // Sunucudaki tahminler (uygulama yeniden açılınca okunur)
   List<IzgaraTahmini> izgaraTahminListesi = [];
   bool izgaraTahminHataVerir = false;
@@ -346,8 +351,9 @@ class SahteOyunDeposu implements OyunDeposu {
   Future<List<IzgaraTahmini>> izgaraTahminleri(String oyunId) async => izgaraTahminListesi;
 
   @override
-  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId}) async {
+  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId, int? hucre}) async {
     if (izgaraTahminHataVerir) throw Exception('bağlantı yok');
+    izgaraGonderilenler.add((oyuncuId, hucre));
     final isim = oneriler.firstWhere((o) => o.id == oyuncuId).isim;
     final dolu = izgaraTahminListesi.where((t) => t.hucre != null).length;
 
@@ -362,18 +368,31 @@ class SahteOyunDeposu implements OyunDeposu {
         dogru: false, tekrar: true, oyuncuIsim: isim, skor: dolu, bitti: false);
     }
 
-    final hucre = izgaraHucreleri[oyuncuId];
-    final bos = hucre != null && !izgaraTahminListesi.any((t) => t.hucre == hucre);
+    // Oyuncunun uyduğu boş hücreler
+    final uyanlar = izgaraCokluHucreler[oyuncuId] ??
+        [if (izgaraHucreleri[oyuncuId] != null) izgaraHucreleri[oyuncuId]!];
+    final boslar = uyanlar.where((h) => !izgaraTahminListesi.any((t) => t.hucre == h)).toList();
+    int? yer;
+    if (hucre != null) {
+      if (!boslar.contains(hucre)) throw Exception('Kutu uygun değil');
+      yer = hucre;
+    } else if (boslar.length > 1) {
+      return IzgaraTahminSonucu(
+          dogru: false, secim: true, secenekler: boslar, oyuncuIsim: isim, skor: dolu, bitti: false);
+    } else {
+      yer = boslar.isEmpty ? null : boslar.first;
+    }
+    final bos = yer != null;
     izgaraTahminListesi = [
       ...izgaraTahminListesi,
-      IzgaraTahmini(sira: izgaraTahminListesi.length + 1, oyuncuIsim: isim, hucre: bos ? hucre : null),
+      IzgaraTahmini(sira: izgaraTahminListesi.length + 1, oyuncuIsim: isim, hucre: yer),
     ];
     final skor = dolu + (bos ? 1 : 0);
     // Tahmin hakkı sınırı yoktur: oyun sadece dokuz kutu dolunca biter
     final bitti = skor == 9;
     kayit = {'skor': skor, 'durum': bitti ? 'tamamlandi' : 'basladi'};
     return IzgaraTahminSonucu(
-        dogru: bos, hucre: bos ? hucre : null, oyuncuIsim: isim, skor: skor, bitti: bitti);
+        dogru: bos, hucre: yer, oyuncuIsim: isim, skor: skor, bitti: bitti);
   }
 
   @override

@@ -149,7 +149,7 @@ class IzgaraScreen extends ConsumerWidget {
                 : SureSayaci(bitisZamani: state.bitisZamani!, onBitti: notifier.sureDoldu),
           ),
           const SizedBox(height: 16),
-          IzgaraTahtasiGorunumu(state: state),
+          IzgaraTahtasiGorunumu(state: state, kutuSec: (hucre) => _kutuSec(context, ref, hucre)),
           // Yazma alanı tahtanın altında; odaklanınca alan ekranın üstüne kayar, öneriler klavyenin üstünde kalır
           const SizedBox(height: 20),
           OyuncuArama(
@@ -160,7 +160,10 @@ class IzgaraScreen extends ConsumerWidget {
             kullanilanlar: {for (final o in state.hucreler.values) o.isim},
           ),
           const SizedBox(height: 12),
-          _SonTahmin(sonuc: state.sonTahmin, tahta: state.tahta!),
+          if (state.kutuSecimi case final secim?)
+            _KutuSecimi(oyuncuIsim: secim.oyuncu.isim, onVazgec: notifier.kutuSecimindenVazgec)
+          else
+            _SonTahmin(sonuc: state.sonTahmin, tahta: state.tahta!),
         ],
       ),
     );
@@ -171,11 +174,24 @@ class IzgaraScreen extends ConsumerWidget {
     final hata = await ref.read(izgaraProvider(_acilis).notifier).tahminEt(oyuncu);
     if (hata != null) throw TahminHatasi(hata);
 
-    return switch (ref.read(izgaraProvider(_acilis)).sonTahmin) {
+    // Oyuncu birden fazla kutuya uyuyor: kutu seçimi bekleniyor, doğru/yanlış animasyonu oynamaz
+    final state = ref.read(izgaraProvider(_acilis));
+    if (state.kutuSecimi != null) return TahminSonucu.notr;
+    return switch (state.sonTahmin) {
       IzgaraTahminSonucu(tekrar: true) || IzgaraTahminSonucu(sureDoldu: true) || null => TahminSonucu.notr,
       IzgaraTahminSonucu(dogru: true) => TahminSonucu.dogru,
       _ => TahminSonucu.yanlis,
     };
+  }
+
+  // Kutu seçiminde vurgulanan kutuya dokunuldu
+  Future<void> _kutuSec(BuildContext context, WidgetRef ref, int hucre) async {
+    final hata = await ref.read(izgaraProvider(_acilis).notifier).kutuSec(hucre);
+    if (hata != null && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(hata)));
+    }
   }
 
   Widget _bitis(BuildContext context, IzgaraState state) {
@@ -275,7 +291,8 @@ class _SonTahmin extends StatelessWidget {
     final s = sonuc;
     if (s == null) {
       return const Text(
-        'Satır ve sütundaki iki takımda da oynamış oyuncuları bul. Oyuncu uyduğu kutuya kendiliğinden yerleşir.',
+        'Satır ve sütundaki iki takımda da oynamış oyuncuları bul. Oyuncu tek kutuya uyuyorsa oraya kendiliğinden '
+        'yerleşir; birden fazla kutuya uyuyorsa hangisine koyacağını sen seçersin.',
         style: TextStyle(color: Renkler.metinSoluk, fontSize: 13, height: 1.4),
       );
     }
@@ -324,11 +341,55 @@ class _SonTahmin extends StatelessWidget {
   }
 }
 
-// 3x3 tahta: üstte sütun başlıkları, solda satır başlıkları
+// Kutu seçimi beklenirken yazma alanının altındaki satır: açıklama ve "Vazgeç"
+class _KutuSecimi extends StatelessWidget {
+  final String oyuncuIsim;
+  final VoidCallback onVazgec;
+
+  const _KutuSecimi({required this.oyuncuIsim, required this.onVazgec});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.touch_app_rounded, color: Renkler.vurgu, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(
+            TextSpan(children: [
+              const TextSpan(text: 'Kutuyu seç', style: TextStyle(color: Renkler.vurgu, fontWeight: FontWeight.w700)),
+              TextSpan(
+                text: '  ·  $oyuncuIsim birden fazla kutuya uyuyor. Koymak istediğin sarı kutuya dokun.',
+                style: const TextStyle(color: Renkler.metinIkincil),
+              ),
+            ]),
+            style: const TextStyle(fontSize: 14, height: 1.3),
+          ),
+        ),
+        const SizedBox(width: 4),
+        TextButton(
+          onPressed: onVazgec,
+          style: TextButton.styleFrom(
+            foregroundColor: Renkler.metinIkincil,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            minimumSize: const Size(0, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text('Vazgeç'),
+        ),
+      ],
+    );
+  }
+}
+
+// 3x3 tahta: üstte sütun başlıkları, solda satır başlıkları.
+// Kutu seçimi beklenirken (state.kutuSecimi) oyuncunun uyduğu kutular vurgulanır, dokununca kutuSec çağrılır.
 class IzgaraTahtasiGorunumu extends StatelessWidget {
   final IzgaraState state;
+  final ValueChanged<int>? kutuSec;
 
-  const IzgaraTahtasiGorunumu({super.key, required this.state});
+  const IzgaraTahtasiGorunumu({super.key, required this.state, this.kutuSec});
 
   static const _bosluk = 6.0;
 
@@ -366,6 +427,9 @@ class IzgaraTahtasiGorunumu extends StatelessWidget {
                 [
                   for (var t = 0; t < izgaraBoyutu; t++)
                     _Hucre(
+                      secilebilir: state.durum == IzgaraDurumu.oynaniyor &&
+                          (state.kutuSecimi?.hucreler.contains(s * izgaraBoyutu + t) ?? false),
+                      onSec: kutuSec == null || state.gonderiliyor ? null : () => kutuSec!(s * izgaraBoyutu + t),
                       oyuncu: state.hucreler[s * izgaraBoyutu + t],
                       ornekCevap: state.ornekCevaplar[s * izgaraBoyutu + t],
                       yeni: state.durum == IzgaraDurumu.oynaniyor &&
@@ -419,12 +483,35 @@ class _Hucre extends StatelessWidget {
   final IzgaraOyuncusu? ornekCevap; // Oyun bitince boş kalan kutuda gösterilen doğru cevap
 
   final bool yeni; // Son doğru tahminle dolan kutu: kısa bir an sarı parlar ki oyuncu nereye yerleştiği görülsün
+  // Kutu seçiminde oyuncunun uyduğu kutu: sarı kalın çerçeve, hafif sarı dolgu, ortada "+"; dokununca onSec
+  final bool secilebilir;
+  final VoidCallback? onSec;
 
-  const _Hucre({this.oyuncu, this.ornekCevap, this.yeni = false});
+  const _Hucre({this.oyuncu, this.ornekCevap, this.yeni = false, this.secilebilir = false, this.onSec});
 
   @override
   Widget build(BuildContext context) {
     final dolu = oyuncu != null;
+    if (secilebilir && !dolu) {
+      return Semantics(
+        button: true,
+        label: 'Oyuncuyu bu kutuya koy',
+        child: GestureDetector(
+          onTap: onSec,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            decoration: BoxDecoration(
+              color: Renkler.vurgu.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Renkler.vurgu, width: 3),
+              boxShadow: [BoxShadow(color: Renkler.vurgu.withValues(alpha: 0.35), blurRadius: 10)],
+            ),
+            child: const Center(child: Icon(Icons.add_rounded, color: Renkler.vurgu, size: 30)),
+          ),
+        ),
+      );
+    }
 
     return TweenAnimationBuilder<double>(
       key: ValueKey((oyuncu?.isim, yeni)),
