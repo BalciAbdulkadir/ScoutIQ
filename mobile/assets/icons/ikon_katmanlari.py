@@ -45,9 +45,12 @@ merkez = (N - 1) / 2
 guvenli_yaricap = N * 66 / 108 / 2
 
 # Ön katman: çizim güvenli dairenin içine sığacak şekilde ölçeklenir, tam ortaya konur.
-# Kutunun köşeleri boş olduğu için yarı köşegen güvenli yarıçapı biraz aşabilir.
+# Kutunun köşeleri boş olduğu için kutunun köşegenine değil, çizimin kutu merkezine en uzak gerçek pikseline bakılır;
+# o piksel güvenli dairenin %98'ine gelir.
 h, w = icerik_alfa.shape
-olcek = guvenli_yaricap * 0.70 * 1.12 / (np.hypot(w, h) / 2)
+iy, ix = np.where(icerik_alfa > 40 / 255)
+cizim_yaricapi = float(np.sqrt((ix - (w - 1) / 2) ** 2 + (iy - (h - 1) / 2) ** 2).max())
+olcek = guvenli_yaricap * 0.98 / cizim_yaricapi
 yw, yh = int(w * olcek), int(h * olcek)
 rgba = np.dstack([icerik_renk, icerik_alfa * 255]).astype(np.uint8)
 kucuk = Image.fromarray(rgba, 'RGBA').resize((yw, yh), Image.LANCZOS)
