@@ -1,3 +1,5 @@
+import 'oyuncu_oneri.dart';
+
 // 3x3 Izgara oyununun verileri. Tahta oyun_ac'ın soru verisinden okunur (biçim: 011_izgara.sql, 040_oyun_ac.sql).
 
 const izgaraBoyutu = 3;
@@ -96,6 +98,9 @@ class IzgaraTahminSonucu {
   final int? hucre;
   final bool tekrar; // Oyuncu bu tahtada zaten kullanılmış: tahmin sayılmadı
   final bool sureDoldu; // Süre dolduğu için tahmin kabul edilmedi, oyun bitti
+  // Oyuncu birden fazla boş kutuya uyuyor: kayıt yapılmadı, kullanıcı secenekler'den birini seçer (046)
+  final bool secim;
+  final List<int> secenekler;
   final String oyuncuIsim;
   final String? fotoUrl;
   final int skor;
@@ -106,6 +111,8 @@ class IzgaraTahminSonucu {
     this.hucre,
     this.tekrar = false,
     this.sureDoldu = false,
+    this.secim = false,
+    this.secenekler = const [],
     required this.oyuncuIsim,
     this.fotoUrl,
     required this.skor,
@@ -118,10 +125,20 @@ class IzgaraTahminSonucu {
       hucre: (json['hucre'] as num?)?.toInt(),
       tekrar: json['tekrar'] == true,
       sureDoldu: json['sure_doldu'] == true,
+      secim: json['secim'] == true,
+      secenekler: [for (final h in (json['hucreler'] as List<dynamic>? ?? const [])) (h as num).toInt()],
       oyuncuIsim: json['oyuncu_isim'] as String,
       fotoUrl: json['foto_url'] as String?,
       skor: (json['skor'] as num).toInt(),
       bitti: json['bitti'] == true,
     );
   }
+}
+
+// Birden fazla boş kutuya uyan oyuncu: kullanıcı vurgulanan kutulardan birine dokunarak yerleştirir
+class IzgaraKutuSecimi {
+  final OyuncuOneri oyuncu;
+  final Set<int> hucreler;
+
+  const IzgaraKutuSecimi({required this.oyuncu, required this.hucreler});
 }

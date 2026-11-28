@@ -60,7 +60,8 @@ abstract class OyunDeposu {
   Future<List<IzgaraTahmini>> izgaraTahminleri(String oyunId);
 
   // Oyuncuyu uygun boş hücreye yerleştirmeyi dener
-  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId});
+  // hucre: kullanıcının seçtiği kutu. Boşsa ve oyuncu birden fazla boş kutuya uyuyorsa sunucu kutuyu sorar (secim, 046).
+  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId, int? hucre});
 
   // Oyunu o anki skorla bitirir, skoru döndürür
   Future<int> izgaraPesEt(String oyunId);
@@ -229,8 +230,13 @@ class SupabaseOyunDeposu implements OyunDeposu {
   }
 
   @override
-  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId}) async {
-    final sonuc = await _supabase.rpc('izgara_tahmin', params: {'p_oyun_id': oyunId, 'p_oyuncu_id': oyuncuId});
+  Future<IzgaraTahminSonucu> izgaraTahmin({required String oyunId, required String oyuncuId, int? hucre}) async {
+    final sonuc = await _supabase.rpc('izgara_tahmin', params: {
+      'p_oyun_id': oyunId,
+      'p_oyuncu_id': oyuncuId,
+      'p_hucre': hucre,
+      'p_kutu_sor': true,
+    });
     return IzgaraTahminSonucu.fromJson(sonuc as Map<String, dynamic>);
   }
 
